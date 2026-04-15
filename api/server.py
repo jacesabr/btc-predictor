@@ -29,7 +29,8 @@ from config import Config
 from data.collector import BinanceCollector
 from data.dashboard_signals import fetch_dashboard_signals, extract_signal_directions
 from data.features import FeatureEngine
-from data.storage_file import Storage
+from data.storage_file import Storage as FileStorage
+from data.storage_mongo import Storage as MongoStorage
 from deepseek.predictor import DeepSeekPredictor
 from deepseek.specialists import run_specialists, SPECIALIST_KEYS
 from deepseek.pattern_analyst import run_pattern_analyst
@@ -178,8 +179,21 @@ config = Config()
 collector = BinanceCollector(
     poll_interval=config.poll_interval_seconds,
 )
-storage = Storage(uri=config.mongodb_uri, db_name=config.mongodb_db)
-logger.info("MongoDB storage connected: %s / %s", config.mongodb_uri.split("@")[-1], config.mongodb_db)
+def _init_storage():
+    if config.mongodb_uri:
+        try:
+            s = MongoStorage(uri=config.mongodb_uri, db_name=config.mongodb_db)
+            # Quick ping to confirm connection works
+            s.client.admin.command("ping")
+            logger.info("Storage: MongoDB connected (%s)", config.mongodb_uri.split("@")[-1])
+            return s
+        except Exception as exc:
+            logger.warning("Storage: MongoDB failed (%s) — falling back to file storage", exc)
+    else:
+        logger.info("Storage: no MONGODB_URI set — using file storage")
+    return FileStorage()
+
+storage = _init_storage()
 ensemble = EnsemblePredictor(config.initial_weights)
 lr_strategy = LinearRegressionChannel()
 feature_engine = FeatureEngine()
