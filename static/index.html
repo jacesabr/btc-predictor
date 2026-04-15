@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BTC Oracle Predictor</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #F9F8F6; color: #1A1A1A; font-family: monospace; }
+    #root { min-height: 100vh; }
+    #error-box { display:none; padding: 24px; color: #ef4444; font-size: 13px; white-space: pre-wrap; }
+
+    /* ── Wide, obvious scrollbars ─────────────────────────────── */
+    ::-webkit-scrollbar { width: 12px; height: 12px; }
+    ::-webkit-scrollbar-track { background: #E6E4DF; border-radius: 8px; }
+    ::-webkit-scrollbar-thumb {
+      background: #A09D99;
+      border-radius: 8px;
+      border: 3px solid #E6E4DF;
+      min-height: 48px;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: #6B6866; }
+    ::-webkit-scrollbar-corner { background: #E6E4DF; }
+    /* Firefox */
+    * { scrollbar-width: auto; scrollbar-color: #A09D99 #E6E4DF; }
+  </style>
+
+  <!-- All deps served locally — no CDN needed -->
+  <script src="/static/react.development.js"></script>
+  <script src="/static/react-dom.development.js"></script>
+  <script src="/static/babel.min.js"></script>
+
+  <script>
+    // Surface JS errors visibly so a black screen has a readable cause
+    window.onerror = function(msg, src, line, col, err) {
+      var box = document.getElementById('error-box');
+      if (box) { box.style.display = 'block'; box.textContent = 'JS ERROR: ' + msg + '\n' + (err ? err.stack : '') + '\n' + src + ':' + line; }
+    };
+  </script>
+</head>
+<body>
+  <div id="root"></div>
+  <div id="error-box"></div>
+  <!-- data-presets="react" + pragma in app.jsx forces classic createElement runtime -->
+  <script type="text/babel" data-presets="react" src="/static/app.jsx"></script>
+</body>
+</html>

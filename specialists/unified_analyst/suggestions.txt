@@ -1,0 +1,693 @@
+[2026-04-14 13:45:35 UTC] Include the 1-minute RSI(14) and/or MACD values to quickly assess momentum divergence and overbought/oversold conditions.
+[2026-04-14 13:46:03 UTC] Include the cumulative delta (bid vs ask volume) for each bar, not just BuyVol%, to see aggressive bid/ask stacking in real-time.
+[2026-04-14 13:46:33 UTC] Include the 1-minute RSI(14) and Stochastic values to quickly gauge overbought/oversold conditions within the scalping context.
+[2026-04-14 13:47:04 UTC] Include the VWAP for the session to assess if price is accelerating away from or reverting to the mean volume-weighted price.
+[2026-04-14 13:47:34 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the strong trend.
+[2026-04-14 13:48:06 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the strong trend.
+[2026-04-14 13:48:34 UTC] Include the VWAP for the session to better gauge if price is overextended above or below mean value.
+[2026-04-14 13:49:05 UTC] Include the cumulative delta (bid vs ask volume flow) for each bar to better distinguish aggressive buying/selling from passive absorption.
+[2026-04-14 13:49:37 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to more directly gauge aggressive buy/sell pressure beyond just the percentage.
+[2026-04-14 13:50:10 UTC] Include the VWAP for the session to better gauge if price is trading above/below mean value and to identify potential magnet levels during consolidation.
+[2026-04-14 13:50:40 UTC] Include the cumulative volume delta (CVD) or net taker volume for each bar to more precisely gauge aggressive order flow beyond just BuyVol%.
+[2026-04-14 13:51:13 UTC] Include the VWAP for the session to better distinguish between value-based buying and speculative FOMO.
+[2026-04-14 13:51:42 UTC] Include the cumulative delta (CVD) or net taker buy/sell volume in USDT for each bar to better distinguish between aggressive and passive absorption.
+[2026-04-14 13:52:14 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the frameworks.
+[2026-04-14 13:52:42 UTC] Include the 5-minute RSI and Stochastic values to better gauge momentum exhaustion within the compressed range.
+[2026-04-14 13:53:13 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 13:53:43 UTC] Include the VWAP for the session to assess if price is trading as a strong premium/discount to mean.
+[2026-04-14 13:54:14 UTC] Include the 5-minute close and VWAP for the corresponding period to filter 1m noise against higher-timeframe structure.
+[2026-04-14 13:54:47 UTC] Include the cumulative delta (bid vs ask volume) for each bar, not just BuyVol%, to better distinguish aggressive vs passive order flow.
+[2026-04-14 13:55:20 UTC] Include the cumulative delta (bid vs ask volume) for each bar, not just BuyVol%, to better distinguish between aggressive and passive order flow.
+[2026-04-14 13:55:53 UTC] Include the 5-minute RSI and/or Stochastic values for the corresponding period to gauge momentum exhaustion more precisely.
+[2026-04-14 13:56:24 UTC] Include the VWAP for the session to better gauge if price is trading above/below the volume-weighted average and assess traction.
+[2026-04-14 13:56:54 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the trend.
+[2026-04-14 13:57:24 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the frameworks.
+[2026-04-14 13:57:55 UTC] Include the 5-minute RSI(14) and Stochastic values for immediate overbought/oversold context on the higher timeframe.
+[2026-04-14 13:58:29 UTC] Include the VWAP for the session to assess if price is trading above/below this key institutional benchmark for intraday momentum.
+[2026-04-14 13:59:00 UTC] Include the 5-minute RSI(14) and MACD(12,26,9) values for the corresponding period to gauge momentum divergence on a higher timeframe.
+[2026-04-14 13:59:33 UTC] Include the net position change in USDT for large traders over the last 5-10 bars to gauge if absorption is by smart money or retail.
+[2026-04-14 14:00:05 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe acceptance of price levels.
+[2026-04-14 14:00:37 UTC] Include the 1-minute RSI(14) and/or Stochastic values to quickly assess overbought/oversold conditions within the scalping context.
+[2026-04-14 14:01:10 UTC] Include the VWAP for the session to better gauge if price is trending above/below the volume-weighted average and identify potential mean reversion targets.
+[2026-04-14 14:01:44 UTC] Include net delta (BuyVol - SellVol) in USDT terms, not just %, to gauge true aggressive order flow magnitude.
+[2026-04-14 14:02:55 UTC] Include a column for cumulative delta (bid vs ask volume) or net taker buy volume in USDT to better quantify aggressive order flow.
+[2026-04-14 14:03:28 UTC] Include the 5-minute RSI and Stochastic values for immediate momentum context alongside 1m data.
+[2026-04-14 14:03:58 UTC] Include the VWAP for the session to better gauge if price is overextended relative to mean.
+[2026-04-14 14:04:26 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for each bar to quickly assess momentum and divergence.
+[2026-04-14 14:04:57 UTC] Include the 5-minute RSI and/or Stochastic to gauge short-term momentum exhaustion more precisely alongside volume.
+[2026-04-14 14:05:27 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe acceptance of price levels.
+[2026-04-14 14:05:55 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values for each bar to better gauge short-term momentum exhaustion.
+[2026-04-14 14:06:25 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for the last bar to quickly assess momentum divergence and overbought/oversold conditions.
+[2026-04-14 14:06:55 UTC] Include the VWAP for the session to assess if price is consolidating above or below this key dynamic level.
+[2026-04-14 14:07:22 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the frameworks.
+[2026-04-14 14:07:51 UTC] Include the 1-minute RSI(14) and/or Stochastic values to more quickly identify momentum divergences and overbought/oversold conditions within the scalping context.
+[2026-04-14 14:08:18 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term overbought/oversold conditions within the trend.
+[2026-04-14 14:08:46 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better distinguish between aggressive and passive order flow.
+[2026-04-14 14:09:15 UTC] Include the cumulative delta (CVD) for the period to directly see net taker buy/sell pressure alongside BuyVol%.
+[2026-04-14 14:09:46 UTC] Include net delta (BuyVol - SellVol) in USDT terms, not just %, to gauge absolute buying/selling pressure.
+[2026-04-14 14:10:15 UTC] Include the 5-minute RSI(14) and Stoch(5,3) values for the current and prior bar to gauge momentum exhaustion.
+[2026-04-14 14:10:46 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to directly see aggressive order flow imbalance beyond just BuyVol%.
+[2026-04-14 14:11:16 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better distinguish between aggressive buying/selling and passive absorption.
+[2026-04-14 14:11:49 UTC] Include the 5-minute RSI(14) and Stochastic values for immediate momentum confirmation alongside 1m data.
+[2026-04-14 14:12:18 UTC] Include the net delta (BuyVol - SellVol in BTC) for each bar to more precisely quantify aggressive order flow imbalance.
+[2026-04-14 14:12:46 UTC] Include the 1-minute ATR for the last 20 bars to better gauge the significance of recent candle ranges and stop distances.
+[2026-04-14 14:13:13 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the frameworks.
+[2026-04-14 14:13:41 UTC] Include the cumulative delta (CVD) or net taker volume in USDT to better gauge aggressive order flow alongside BuyVol%.
+[2026-04-14 14:14:08 UTC] Include the VWAP for the session to better gauge if price breaks are above/below mean and to identify potential magnet levels.
+[2026-04-14 14:14:37 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values for each bar to quickly assess momentum and overbought/oversold conditions within the scalping context.
+[2026-04-14 14:15:08 UTC] Include the VWAP for the session to better gauge if price is overextended relative to mean value.
+[2026-04-14 14:15:36 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term overbought/oversold conditions within the scalping context.
+[2026-04-14 14:16:06 UTC] Include a column for cumulative delta (bid vs ask volume) for more precise tape reading.
+[2026-04-14 14:16:35 UTC] Include the VWAP for the session to better gauge if price is trading at a premium or discount to mean value.
+[2026-04-14 14:17:02 UTC] Include the VWAP for the session to better gauge if price action is occurring above/below the volume-weighted average and assess true institutional buying/selling pressure.
+[2026-04-14 14:17:31 UTC] Include the VWAP for the session to better gauge if price moves are above/below the volume-weighted average and identify potential mean reversion targets.
+[2026-04-14 14:17:59 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 14:18:24 UTC] Include the 1-minute RSI(14) and/or Stochastic values to quickly identify overbought/oversold conditions within the scalping context.
+[2026-04-14 14:18:53 UTC] Include the VWAP for the session to better gauge if price is trading above/below the volume-weighted fair value.
+[2026-04-14 14:19:25 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values for each bar to quickly identify momentum divergences and overbought/oversold conditions within the scalping frame.
+[2026-04-14 14:19:57 UTC] Include a column for cumulative delta (buy volume - sell volume) to directly visualize aggressive order flow imbalance.
+[2026-04-14 14:20:29 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to directly quantify aggressive buy/sell pressure beyond just BuyVol%.
+[2026-04-14 14:20:57 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to directly see aggressive order flow imbalance beyond just BuyVol%.
+[2026-04-14 14:21:26 UTC] Include the VWAP for the session to better gauge if price moves are above/below the value anchor for scalping.
+[2026-04-14 14:21:56 UTC] Include the VWAP for the session to better gauge if price moves are above/below the mean acceptance price for scalping.
+[2026-04-14 14:22:25 UTC] Include the net delta (BuyVol% * Volume) as a separate column for faster absorption/aggression analysis.
+[2026-04-14 14:22:57 UTC] Include the 1-minute RSI(14) and/or Stochastic values to quickly identify overbought/oversold conditions within the scalping context.
+[2026-04-14 14:23:26 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for each bar to quickly assess momentum divergence and overbought/oversold states.
+[2026-04-14 14:23:55 UTC] Include the 1-minute ATR value for the last bar to better gauge the significance of candle ranges and stop distances.
+[2026-04-14 14:24:24 UTC] Include the cumulative delta (CVD) or net taker buy/sell volume in USDT for each bar to directly see aggressive order flow imbalance.
+[2026-04-14 14:24:52 UTC] Include the VWAP for the session to gauge if price is rejecting a key mean level.
+[2026-04-14 14:25:19 UTC] Include the VWAP for the session to assess if price is acting as support/resistance relative to the session's volume-weighted average.
+[2026-04-14 14:25:49 UTC] Include the VWAP for the session to better gauge if price action is occurring above/below mean value and to identify potential rejection levels.
+[2026-04-14 14:26:18 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to quickly gauge overbought/oversold conditions within the scalping context.
+[2026-04-14 14:26:46 UTC] Include the 1-minute RSI(14) and Stoch(5,3,3) values for the last bar to quickly gauge overbought/oversold conditions within the scalping context.
+[2026-04-14 14:27:17 UTC] Include the VWAP for the session to better gauge if breakouts are occurring above/below mean price.
+[2026-04-14 14:27:47 UTC] Include the VWAP for the session to better gauge if price moves are above/below the volume-weighted average and identify potential mean reversion targets.
+[2026-04-14 14:28:17 UTC] Include the VWAP for the session to better gauge if price is trading in strong vs. weak territory.
+[2026-04-14 14:28:45 UTC] Include the VWAP for the session to better gauge if price moves are above/below the volume-weighted fair value.
+[2026-04-14 14:29:13 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 14:29:40 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the five frameworks.
+[2026-04-14 14:30:06 UTC] Include the VWAP for the session to better distinguish between price trading in strong vs. weak hands during consolidation.
+[2026-04-14 14:30:33 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better identify overbought/oversold conditions within the scalping context.
+[2026-04-14 14:30:59 UTC] Include the 5-minute high/low of the current candle's parent 5m bar to assess if we are breaking a higher timeframe structure.
+[2026-04-14 14:31:27 UTC] Include the 5-minute RSI and Stochastic values to gauge overbought/oversold conditions within the 1-minute trend.
+[2026-04-14 14:31:56 UTC] Include the 1-minute RSI(14) value to quickly identify overbought/oversold conditions within the scalping context.
+[2026-04-14 14:32:23 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values to quickly assess momentum divergence and overbought/oversold conditions.
+[2026-04-14 14:32:50 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion alongside volume.
+[2026-04-14 14:33:16 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term overbought/oversold conditions within the trend.
+[2026-04-14 14:33:42 UTC] Include the VWAP for the session to better gauge if price is stretched above a mean.
+[2026-04-14 14:34:09 UTC] Include the cumulative delta (CVD) or net taker buy/sell volume for each bar to better distinguish between aggressive and passive order flow.
+[2026-04-14 14:34:41 UTC] Include the net position change in futures open interest for the corresponding period to distinguish between spot accumulation and leveraged speculation.
+[2026-04-14 14:35:09 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to directly quantify aggressive buy/sell pressure beyond just the percentage.
+[2026-04-14 14:35:40 UTC] Include a column for cumulative delta (CVD) or net taker buy/sell volume in USDT to directly quantify aggressive order flow imbalance.
+[2026-04-14 14:36:11 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion alongside volume analysis.
+[2026-04-14 14:36:40 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 14:37:08 UTC] Include the 1-minute RSI (or similar momentum oscillator) value for each bar to more easily spot hidden divergences.
+[2026-04-14 14:37:37 UTC] Include the VWAP level for the session to better gauge intraday value and mean reversion signals.
+[2026-04-14 14:38:08 UTC] Include the cumulative delta (net buy-sell volume in BTC) for each bar to directly quantify aggressive taker flow beyond the percentage.
+[2026-04-14 14:38:40 UTC] Include the VWAP for the session to better gauge if price moves are above/below the volume-weighted fair value for scalping.
+[2026-04-14 14:39:07 UTC] Include the cumulative delta (net buy-sell volume) for each bar to directly see aggressive taker flow imbalance beyond the percentage.
+[2026-04-14 14:39:36 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better distinguish between aggressive buying/selling and passive absorption.
+[2026-04-14 14:40:06 UTC] Include the 5-minute RSI(14) and MACD(12,26,9) values for the corresponding period to gauge momentum divergence on a higher timeframe.
+[2026-04-14 14:40:35 UTC] Include the 5-minute VWAP and its slope for the session to gauge if price is trending relative to mean value.
+[2026-04-14 14:41:03 UTC] Include the cumulative volume delta (CVD) for the period to better distinguish between aggressive taker buying/selling and passive absorption.
+[2026-04-14 14:41:31 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better gauge aggressive taker flow pressure.
+[2026-04-14 14:41:59 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe structure and value.
+[2026-04-14 14:42:28 UTC] Include the VWAP for the session to better gauge if price is under sustained selling pressure or just mean-reverting.
+[2026-04-14 14:42:58 UTC] Include the cumulative delta (net taker buy volume) for each bar to more precisely gauge aggressive order flow.
+[2026-04-14 14:43:26 UTC] Include the VWAP for the session to gauge if price is being rejected from a key intraday level.
+[2026-04-14 14:43:59 UTC] Include the cumulative delta (bid vs ask volume per bar) to better distinguish between aggressive buying/selling at key levels versus passive absorption.
+[2026-04-14 14:46:20 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better gauge aggressive order flow imbalance.
+[2026-04-14 14:46:52 UTC] Include the VWAP for the session to better gauge whether price is trading in strong vs. weak territory relative to average cost.
+[2026-04-14 14:47:26 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion alongside volume.
+[2026-04-14 14:48:00 UTC] Include the 1-minute RSI(14) and ATR(14) values for each bar to quantify momentum exhaustion and volatility contraction more precisely.
+[2026-04-14 14:49:09 UTC] Include the cumulative delta (bid vs ask volume per bar) or a VWAP line to better distinguish between aggressive buying/selling and passive absorption.
+[2026-04-14 14:49:43 UTC] Include the 5-minute RSI and/or MACD to confirm momentum divergence on the higher timeframe.
+[2026-04-14 14:50:14 UTC] Flag or annotate bars with extremely low volume (e.g., < 1 BTC) as they can distort minute-level indicators and are often outliers or errors.
+[2026-04-14 14:50:48 UTC] Include the VWAP for the session to better gauge if price is stretched relative to mean value.
+[2026-04-14 14:51:15 UTC] Flag or filter out bars with volume anomalies (e.g., volume < 1% of 10-bar average) to prevent distorted analysis.
+[2026-04-14 14:51:45 UTC] Include the 1-minute RSI (or another momentum oscillator) value for each bar to quickly identify hidden divergences and overbought/oversold conditions within the scalping frame.
+[2026-04-14 14:52:14 UTC] Include a "Cumulative Delta" column (sum of (BuyVol%*Volume)/100 - ((100-BuyVol%)*Volume)/100) to directly visualize net aggressive order flow.
+[2026-04-14 14:52:49 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just BuyVol%, to better gauge actual buying/selling pressure in dollar terms.
+[2026-04-14 14:53:20 UTC] Include the 1-minute RSI (or similar momentum) value for the last 5 bars to confirm overbought/oversold conditions at key levels.
+[2026-04-14 14:53:55 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just BuyVol%, to better gauge the actual dollar commitment of aggressive buyers/sellers.
+[2026-04-14 14:54:28 UTC] Include the VWAP for the session to better gauge if price is being accepted above or below the volume-weighted average.
+[2026-04-14 14:55:03 UTC] Include the VWAP for the session to better gauge if price is trading at a premium or discount to the mean, aiding absorption analysis.
+[2026-04-14 14:55:32 UTC] Include the VWAP for the session to better gauge if price is absorbing above or below the mean acceptance level.
+[2026-04-14 14:56:03 UTC] Include the cumulative delta (net buy-sell volume) for each bar to better distinguish between aggressive takers and passive absorption.
+[2026-04-14 14:56:32 UTC] Include the net delta (BuyVol - SellVol) for each bar to more precisely gauge aggressive order flow imbalance.
+[2026-04-14 14:57:02 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better quantify momentum extremes like oversold/overbought conditions.
+[2026-04-14 14:57:32 UTC] Include the net delta (BuyVol% * Volume) for each bar to quantify aggressive buyer/seller USD flow more intuitively than percentage alone.
+[2026-04-14 14:58:05 UTC] Include the 5-minute high/low for the current candle's parent period to gauge if we are at a significant structural level on a higher timeframe.
+[2026-04-14 14:58:37 UTC] Include the 5-minute high/low for the current candle's session to identify if key daily levels are being tested.
+[2026-04-14 14:59:07 UTC] Include the 1-minute ATR value for the last 20 bars to better gauge the significance of recent price ranges and wicks.
+[2026-04-14 14:59:35 UTC] Include the 1-minute RSI and/or Stochastic values to better gauge oversold/overbought conditions for scalping.
+[2026-04-14 15:00:03 UTC] Include the VWAP for the session to better gauge if price is under sustained distribution pressure relative to mean price.
+[2026-04-14 15:00:33 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at key levels like 75000.
+[2026-04-14 15:01:00 UTC] Include the VWAP for the session to better gauge if price is stretched relative to mean acceptance.
+[2026-04-14 15:01:29 UTC] Include the 5-minute and 15-minute high/low for the corresponding period to better judge the significance of 1-minute swings within the higher-timeframe structure.
+[2026-04-14 15:02:00 UTC] Include the 5-minute RSI(14) and MACD(12,26,9) values for the corresponding period to quickly gauge momentum divergence against 1m structure.
+[2026-04-14 15:02:30 UTC] Include the VWAP for the session to better gauge if price is deviating from mean value on these low-volume moves.
+[2026-04-14 15:03:00 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 15:03:28 UTC] Include the VWAP for the session to gauge if price is deviating significantly from the mean and to identify potential mean-reversion targets.
+[2026-04-14 15:03:59 UTC] Include the VWAP for the session to better gauge if price is stretched relative to mean acceptance.
+[2026-04-14 15:04:28 UTC] Include the VWAP for the session to better gauge if price is under/over the mean and to identify potential mean reversion targets.
+[2026-04-14 15:04:58 UTC] Include the cumulative volume delta (CVD) or net taker buy/sell volume for each bar to better quantify aggressive order flow.
+[2026-04-14 15:05:26 UTC] Include the VWAP for the session to better gauge if price is stretched relative to mean value.
+[2026-04-14 15:05:55 UTC] Include the 1-minute RSI(14) and/or Stochastic values to quickly gauge momentum extremes and potential divergences.
+[2026-04-14 15:06:25 UTC] Include the 1-minute RSI(14) and/or Stochastic value to quickly gauge oversold/overbought conditions within the micro-trend.
+[2026-04-14 15:06:54 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for the last bar to quickly assess momentum divergence and overbought/oversold conditions.
+[2026-04-14 15:07:25 UTC] Include the 5-minute high/low of the current session to better define the day's range and key swing points for Fibonacci and Dow Theory.
+[2026-04-14 15:07:55 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at key levels.
+[2026-04-14 15:08:23 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better quantify aggressive order flow.
+[2026-04-14 15:08:51 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better identify momentum exhaustion at micro-levels.
+[2026-04-14 15:09:19 UTC] Include the VWAP for the session to better gauge if price is under sustained distribution or testing a key mean level.
+[2026-04-14 15:09:48 UTC] Include the cumulative volume delta (CVD) or net taker buy/sell volume for each bar to directly quantify aggressive order flow.
+[2026-04-14 15:10:15 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the broader trend.
+[2026-04-14 15:10:45 UTC] Include the net position change (delta) of the last 5-10 bars to quantify aggressive taker buying/selling pressure more precisely than BuyVol% alone.
+[2026-04-14 15:11:17 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 15:11:49 UTC] Include the VWAP for the session to better gauge if price is deviating from mean value during these absorption/volatility spikes.
+[2026-04-14 15:12:22 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 15:12:55 UTC] Include the VWAP for the session to better gauge if price is under/over the mean and to identify potential mean reversion targets.
+[2026-04-14 15:13:28 UTC] Include the VWAP for the session to gauge if price is under/over this key institutional benchmark.
+[2026-04-14 15:14:02 UTC] Include the VWAP for the session to better gauge if price is stretched relative to mean value for absorption signals.
+[2026-04-14 15:14:34 UTC] Include the net position change of futures open interest for the corresponding bars to gauge if moves are driven by new longs/shorts or liquidation.
+[2026-04-14 15:15:45 UTC] Include the VWAP for the session to better gauge if price is under/over a key dynamic level for scalps.
+[2026-04-14 15:16:18 UTC] Include the cumulative delta (bid vs ask volume) for each bar to better distinguish between passive and aggressive order flow.
+[2026-04-14 15:16:51 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for each bar to quickly assess momentum divergence and overbought/oversold conditions.
+[2026-04-14 15:17:24 UTC] Include the cumulative volume delta (CVD) for the period to directly see net buying/selling pressure alongside the BuyVol%.
+[2026-04-14 15:17:56 UTC] Include the VWAP for the session to better gauge if price is under/over the mean and to identify potential mean reversion targets.
+[2026-04-14 15:19:04 UTC] Include the 1-minute RSI(14) and ATR(14) values for each bar to quantify momentum exhaustion and volatility compression more precisely.
+[2026-04-14 15:19:37 UTC] Include the VWAP for the session to gauge if price is under the mean and if the coil is forming relative to it.
+[2026-04-14 15:20:09 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better distinguish between aggressive buying/selling and passive absorption.
+[2026-04-14 15:20:45 UTC] Include the VWAP for the session to better gauge if price is under sustained distribution or testing a mean reversion level.
+[2026-04-14 15:21:16 UTC] Include the VWAP for the session to better gauge if price is being accepted above or below the average traded price.
+[2026-04-14 15:21:46 UTC] Include the 1-minute RSI(14) and Stochastic values to quickly gauge overbought/oversold conditions within the scalping context.
+[2026-04-14 15:22:18 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for each bar to quickly gauge momentum extremes and divergences.
+[2026-04-14 15:22:49 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to directly quantify aggressive buyer/seller pressure beyond just the percentage.
+[2026-04-14 15:23:18 UTC] Include the 5-minute RSI(14) and MACD(12,26,9) values for the corresponding 5-minute bars to assess higher-timeframe momentum confluence.
+[2026-04-14 15:23:49 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just BuyVol%, to better gauge the actual buying/selling pressure in dollar terms.
+[2026-04-14 15:24:18 UTC] Include the net position change in USDT for large traders over the period to gauge if compression is accumulation or distribution.
+[2026-04-14 15:24:47 UTC] Include the 5-minute close price for the corresponding period to assess higher-timeframe structure and key levels.
+[2026-04-14 15:25:15 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better distinguish between aggressive buying/selling and passive absorption.
+[2026-04-14 15:25:47 UTC] Include the cumulative volume delta (CVD) or net taker buy/sell volume in USDT for each bar to better quantify aggressive order flow.
+[2026-04-14 15:26:16 UTC] Include the 1-minute RSI(14) and/or Stochastic values to quickly gauge momentum extremes and confirm oversold/bought conditions.
+[2026-04-14 15:26:45 UTC] Include the cumulative delta (net buy-sell volume) for each bar, as it's more precise for scalping than just BuyVol%.
+[2026-04-14 15:27:17 UTC] Include the cumulative volume delta (CVD) for the period to directly quantify net buying/selling pressure alongside the BuyVol%.
+[2026-04-14 15:27:47 UTC] Include the net position change of major exchanges' BTC futures perpetual funding rate for the corresponding period to gauge leverage sentiment.
+[2026-04-14 15:28:17 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just %, to gauge the absolute capital commitment of aggressive buyers/sellers.
+[2026-04-14 15:28:47 UTC] Include the VWAP for the session to better gauge if price is being accepted above or below the volume-weighted average.
+[2026-04-14 15:29:15 UTC] Include the 1-minute RSI(14) and Stoch(5,3,3) values for each bar to quickly identify momentum divergences and overbought/oversold conditions within the scalping frame.
+[2026-04-14 15:29:46 UTC] Include the cumulative volume delta (CVD) for the period to directly visualize net buying/selling pressure alongside the A/D line.
+[2026-04-14 15:30:16 UTC] Include the cumulative delta (bid/ask volume flow) for each bar to better distinguish between aggressive buying and selling pressure within the range.
+[2026-04-14 15:30:48 UTC] Include the VWAP for the session to gauge if price is deviating from mean value for potential mean reversion scalps.
+[2026-04-14 15:31:16 UTC] Include the net position change of futures open interest for the corresponding bars to gauge if moves are driven by new shorts or long liquidation.
+[2026-04-14 15:31:44 UTC] Include the VWAP for the session to better gauge if price is under sustained selling pressure.
+[2026-04-14 15:32:13 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to directly see if large bids/asks are being filled passively.
+[2026-04-14 15:32:45 UTC] Include the VWAP for the session to better gauge if price is being accepted above or below the volume-weighted average.
+[2026-04-14 15:33:16 UTC] Include the net position change in USDT (QuoteVol * (BuyVol%-50%)/100) to quantify aggressive taker flow directly.
+[2026-04-14 15:33:45 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion alongside volume.
+[2026-04-14 15:34:11 UTC] Include the net position change of futures open interest for the corresponding period to gauge if moves are driven by new longs/shorts or just liquidation.
+[2026-04-14 15:34:39 UTC] Include the cumulative volume delta (CVD) or net taker buy/sell volume for each bar to directly quantify aggressive order flow imbalance.
+[2026-04-14 15:35:09 UTC] Include the VWAP for the session to better gauge if price is absorbing at a key value area.
+[2026-04-14 15:35:37 UTC] Include the VWAP for the session to better gauge if price is being accepted above or below the mean.
+[2026-04-14 15:36:07 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 15:36:35 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to directly see if aggressive orders are being absorbed.
+[2026-04-14 15:37:07 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better distinguish between high-volume absorption and high-volume churn.
+[2026-04-14 15:37:37 UTC] Include the 1-minute VWAP for the session to better gauge if price rallies are above/below mean and to identify exhaustion.
+[2026-04-14 15:38:09 UTC] Include the 5-minute RSI(14) and Stochastic values for immediate momentum confirmation alongside the 1m data.
+[2026-04-14 15:38:41 UTC] Include the VWAP for the session to better gauge if price is being rejected from or accepted at a key dynamic level.
+[2026-04-14 15:39:12 UTC] Include the 5-minute close and VWAP for the corresponding period to gauge higher-timeframe acceptance of price levels.
+[2026-04-14 15:39:42 UTC] Include the 1-minute RSI and/or MACD values to quickly confirm momentum divergences without manual calculation.
+[2026-04-14 15:40:10 UTC] Include the cumulative volume delta (CVD) or net taker volume for the period to quantify absorption more precisely.
+[2026-04-14 15:40:40 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better gauge aggressive order flow imbalance beyond just the percentage.
+[2026-04-14 15:41:10 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe structure and value.
+[2026-04-14 15:41:39 UTC] Include the net position change in USDT for large taker trades (e.g., >10 BTC) to better distinguish between aggressive absorption and passive liquidation.
+[2026-04-14 15:42:06 UTC] Include the net delta (BuyVol% * Volume) for each bar to more precisely quantify aggressive buyer/seller volume flow.
+[2026-04-14 15:42:34 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 15:43:03 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just BuyVol%, to better gauge aggressive order flow imbalance.
+[2026-04-14 15:43:32 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just BuyVol%, to better gauge aggressive taker flow magnitude.
+[2026-04-14 15:44:00 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe structure and value.
+[2026-04-14 15:44:28 UTC] Include the VWAP for the session to assess if price reactions are occurring relative to this key intraday benchmark.
+[2026-04-14 15:44:59 UTC] Include the 5-minute RSI(14) and MACD(12,26,9) values for the corresponding period to gauge momentum convergence/divergence on a higher timeframe.
+[2026-04-14 15:45:28 UTC] Include the cumulative delta (bid vs ask volume) for each bar, not just BuyVol%, to distinguish between aggressive and passive absorption.
+[2026-04-14 15:45:57 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe structure and value area.
+[2026-04-14 15:46:25 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to directly see aggressive order flow imbalance beyond just BuyVol%.
+[2026-04-14 15:46:56 UTC] Include the VWAP for the session to better gauge if price is trading above/below the mean acceptance price during this accumulation phase.
+[2026-04-14 15:47:25 UTC] Include the net position change of the top 5 perpetual futures traders over this period to gauge if the absorption is by whales or retail.
+[2026-04-14 15:47:53 UTC] Include the cumulative delta (CVD) or net taker buy/sell volume in USDT for each bar to directly see aggressive order flow imbalance beyond just the percentage.
+[2026-04-14 15:48:23 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just BuyVol%, to better gauge aggressive order flow imbalance.
+[2026-04-14 15:48:51 UTC] Include the net position change in USDT for large traders over the period (e.g., cumulative delta) to better distinguish between aggressive buying and selling.
+[2026-04-14 15:49:19 UTC] Include the net position change of futures open interest for the corresponding period to gauge if moves are driven by new leverage or spot flow.
+[2026-04-14 15:49:48 UTC] Include the 5-minute RSI and MACD values for the corresponding period to gauge higher-timeframe momentum confluence.
+[2026-04-14 15:50:21 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for each bar to quickly assess momentum divergence and overbought/oversold conditions.
+[2026-04-14 15:50:50 UTC] Include the net position change of futures open interest for the corresponding bars to distinguish between spot accumulation and leveraged speculation.
+[2026-04-14 15:51:20 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 15:51:48 UTC] Include the 5-minute RSI(14) and MACD(12,26,9) values for the corresponding period to gauge momentum convergence/divergence on a higher timeframe.
+[2026-04-14 15:52:17 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better distinguish between aggressive and passive absorption.
+[2026-04-14 15:52:50 UTC] Include the 5-minute RSI and MACD values for the corresponding period to gauge momentum divergence on a higher timeframe.
+[2026-04-14 15:53:18 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better gauge aggressive order flow imbalance.
+[2026-04-14 15:53:48 UTC] Include the VWAP for the session to better gauge if price is trading above/below the volume-weighted average and assess intraday trend bias.
+[2026-04-14 15:54:18 UTC] Include the VWAP for the session to gauge if price is trading above/below the volume-weighted average for additional confluence.
+[2026-04-14 15:54:48 UTC] Include the 5-minute VWAP level to assess if price is trading above/below this key intraday benchmark for scalpers.
+[2026-04-14 15:55:17 UTC] Include the VWAP for the session to better gauge if price is trading in strong vs. weak territory relative to mean value.
+[2026-04-14 15:55:46 UTC] Include the VWAP for the session to better gauge if price is trading above/below the volume-weighted average for intraday bias.
+[2026-04-14 15:56:18 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe structure and value.
+[2026-04-14 15:56:47 UTC] Include the VWAP for the session to better gauge if price is being accepted above or below the average traded price.
+[2026-04-14 15:57:16 UTC] Include the VWAP for the session to better gauge if price is being accepted above or below the volume-weighted average.
+[2026-04-14 15:57:45 UTC] Include the cumulative delta (net taker buy volume) for each bar to more directly gauge aggressive order flow alongside BuyVol%.
+[2026-04-14 15:59:21 UTC] Include the VWAP for the session to better gauge if price is pulling back to a key dynamic support level.
+[2026-04-14 15:59:55 UTC] Include the cumulative delta (net taker buy volume) for each bar to more precisely gauge aggressive order flow imbalance.
+[2026-04-14 16:00:27 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion at key levels.
+[2026-04-14 16:00:58 UTC] Include the VWAP for the session to better gauge if price moves are above/below the volume-weighted average and to identify potential mean reversion targets.
+[2026-04-14 16:01:28 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for each bar to quickly assess momentum divergence and overbought/oversold conditions within the scalping context.
+[2026-04-14 16:02:01 UTC] Include the 5-minute close and VWAP for the corresponding period to better contextualize the significance of 1m breakouts/consolidations.
+[2026-04-14 16:02:30 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better gauge aggressive taker flow pressure versus simple percentage.
+[2026-04-14 16:02:59 UTC] Include the cumulative delta (CVD) or net taker buy/sell volume in USDT for each bar to better quantify aggressive order flow beyond the percentage.
+[2026-04-14 16:03:27 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for each bar to quickly gauge momentum extremes and divergences.
+[2026-04-14 16:03:55 UTC] Include the 1-minute RSI(14) and ATR(14) values for each bar to quantify momentum and volatility compression more precisely.
+[2026-04-14 16:04:24 UTC] Include the 1-minute RSI(14) and/or Stochastic values to quickly gauge overbought/oversold conditions within the scalping context.
+[2026-04-14 16:04:52 UTC] Include the VWAP for the session to better gauge if price action is occurring relative to the volume-weighted average, a key scalping reference.
+[2026-04-14 16:05:24 UTC] Include the 1-minute RSI (or similar momentum oscillator) value for each bar to better identify overbought/oversold conditions within the scalping context.
+[2026-04-14 16:05:52 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the five frameworks.
+[2026-04-14 16:06:20 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the five frameworks.
+[2026-04-14 16:06:48 UTC] Include the VWAP for the session to better gauge if price is trading above/below mean and assess if high BuyVol% moves are happening at a premium or discount.
+[2026-04-14 16:07:18 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to better gauge short-term momentum exhaustion alongside volume.
+[2026-04-14 16:07:47 UTC] Include the 5-minute ATR value for the corresponding period to better gauge the significance of the current compression and projected breakout range.
+[2026-04-14 16:08:15 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 16:08:44 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better identify overbought/oversold conditions within the scalping context.
+[2026-04-14 16:09:13 UTC] Include the 1-minute ATR value for the last bar to better gauge the significance of the breakout range.
+[2026-04-14 16:09:43 UTC] Include the 1-minute ATR value for the last bar to better gauge the significance of the breakout range.
+[2026-04-14 16:10:13 UTC] Include the VWAP for the session to better gauge if price is overextended above a key intraday value anchor.
+[2026-04-14 16:10:43 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term overbought/oversold conditions within the trend.
+[2026-04-14 16:11:13 UTC] Include the 1-minute RSI(14) and/or Stochastic values to quickly assess overbought/oversold conditions within the scalping context.
+[2026-04-14 16:11:43 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for each bar to quickly assess momentum divergence and overbought/oversold conditions.
+[2026-04-14 16:12:12 UTC] Include VWAP and its deviation for the session to better gauge if spikes are above/below fair value.
+[2026-04-14 16:12:43 UTC] Include the net position change in USDT for futures (funding rate/long-short ratio) to gauge leveraged sentiment alongside spot BuyVol%.
+[2026-04-14 16:13:12 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 16:13:40 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe structure and mean reversion levels.
+[2026-04-14 16:14:09 UTC] Include the cumulative delta (net buy-sell volume) for each bar to more precisely gauge aggressive order flow beyond just BuyVol%.
+[2026-04-14 16:14:41 UTC] Include the 5-minute RSI(14) and MACD(12,26,9) values for the corresponding period to gauge momentum convergence/divergence on a higher timeframe.
+[2026-04-14 16:15:13 UTC] Include the 1-minute ATR value for the last 20 bars to better gauge the significance of wicks and current candle ranges.
+[2026-04-14 16:15:46 UTC] Include the 1-minute RSI(14) and/or Stochastic values to quickly gauge overbought/oversold conditions within the scalping context.
+[2026-04-14 16:16:20 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better gauge aggressive order flow imbalance.
+[2026-04-14 16:19:19 UTC] Include the 5-minute RSI and MACD values for higher-timeframe momentum context within the scalping window.
+[2026-04-14 16:19:55 UTC] Include the VWAP for the session to better gauge if price is being accepted above or below the mean.
+[2026-04-14 16:21:05 UTC] Include the VWAP for the session to gauge if price is reacting to this key institutional level.
+[2026-04-14 16:22:51 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better distinguish between aggressive buying/selling and passive absorption.
+[2026-04-14 16:23:27 UTC] Include the VWAP for the session to better gauge if price is under distribution or accumulation relative to mean value.
+[2026-04-14 16:24:34 UTC] Include the net delta (BuyVol - SellVol) in quote currency (USDT) to better gauge aggressive order flow imbalance.
+[2026-04-14 16:25:06 UTC] Include the 5-minute RSI and/or Stochastic values to better gauge short-term momentum exhaustion within the 1-minute scalping context.
+[2026-04-14 16:25:38 UTC] Include the net position change of the top 5 perpetual futures funding rates for this period to gauge leveraged sentiment.
+[2026-04-14 16:26:08 UTC] Include the VWAP for the session to better gauge if price is being accepted above or below the average traded price.
+[2026-04-14 16:26:39 UTC] Include the 5-minute RSI and/or Stochastic values for the corresponding period to gauge momentum divergence on a higher timeframe.
+[2026-04-14 16:27:10 UTC] Include the VWAP for the session to better gauge if price moves are occurring above/below the mean acceptance price for scalping.
+[2026-04-14 16:27:43 UTC] Include the VWAP for the session to better gauge if price is being rejected from a key intraday level.
+[2026-04-14 16:28:14 UTC] Include the 5-minute VWAP for the session to better gauge if price is trading above/below a key intraday equilibrium and to identify mean reversion targets.
+[2026-04-14 16:28:46 UTC] Include the VWAP for the session to assess if price is acting as support/resistance relative to the session's volume-weighted average.
+[2026-04-14 16:29:19 UTC] Include the cumulative delta (net buy-sell volume) for each bar to directly see aggressive vs. passive order flow imbalance.
+[2026-04-14 16:29:52 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 16:30:25 UTC] Include the VWAP for the session to better gauge if price is being accepted above or below the average traded price.
+[2026-04-14 16:30:59 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the scalping context.
+[2026-04-14 16:31:32 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the micro-trend.
+[2026-04-14 16:32:03 UTC] Include the VWAP for the session to better gauge if price is trading above/below the volume-weighted average and identify potential mean reversion targets.
+[2026-04-14 16:32:36 UTC] Include the net position change (delta) for each bar, calculated as (BuyVol% * Volume)/100 - ((100-BuyVol%)*Volume)/100, to quantify aggressive buying/selling pressure more precisely.
+[2026-04-14 16:33:08 UTC] Include the VWAP for the session to better gauge if price is trading above/below the volume-weighted average and assess absorption/acceptance levels.
+[2026-04-14 16:33:39 UTC] Include the cumulative delta (net buy-sell volume) for each bar to directly see aggressive taker flow beyond just the percentage.
+[2026-04-14 16:34:11 UTC] Include the VWAP for the session to better gauge if price is being rejected from or accepted at the mean.
+[2026-04-14 16:34:43 UTC] Include the 5-minute close and VWAP for the corresponding period to better contextualize the 1-minute noise versus higher-timeframe trend.
+[2026-04-14 16:35:16 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for each bar to quickly assess momentum divergence and overbought/oversold conditions.
+[2026-04-14 16:35:46 UTC] Include the 5-minute RSI and/or Stochastic values to better gauge short-term momentum exhaustion at key levels.
+[2026-04-14 16:36:18 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at key levels.
+[2026-04-14 16:36:45 UTC] Include the cumulative volume delta (CVD) or net taker volume for each bar to directly quantify aggressive buyer/seller imbalance beyond just BuyVol%.
+[2026-04-14 16:37:40 UTC] Include the cumulative delta (net buy-sell volume) for each bar to directly see aggressive order flow imbalance.
+[2026-04-14 16:38:07 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for each bar to quickly assess momentum divergence and overbought/oversold conditions.
+[2026-04-14 16:38:35 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 16:39:03 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for each bar to quickly assess momentum divergence and overbought/oversold conditions.
+[2026-04-14 16:39:34 UTC] Include the cumulative delta (sum of BuyVol - SellVol) for each bar to quantify net aggressive order flow more precisely than BuyVol% alone.
+[2026-04-14 16:40:07 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to more directly gauge aggressive order flow beyond just BuyVol%.
+[2026-04-14 16:40:41 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion at key levels.
+[2026-04-14 16:41:10 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better distinguish between aggressive and passive order flow.
+[2026-04-14 16:41:40 UTC] Include the VWAP for the session to better gauge if price is deviating from mean value during these low-volume tests.
+[2026-04-14 16:42:09 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better distinguish between aggressive and passive absorption.
+[2026-04-14 16:42:39 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the scalping context.
+[2026-04-14 16:43:09 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 16:43:38 UTC] Include the 5-minute RSI and/or Stochastic values to better gauge short-term momentum exhaustion within the 1m range.
+[2026-04-14 16:44:08 UTC] Include the cumulative volume delta (CVD) or net taker buy/sell volume for each bar to quantify aggressive order flow beyond the percentage.
+[2026-04-14 16:44:42 UTC] Include the VWAP and its slope for the session to better gauge intraday fair value and absorption/rejection levels.
+[2026-04-14 16:45:13 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to directly see aggressive order flow imbalance beyond just the BuyVol% snapshot.
+[2026-04-14 16:45:46 UTC] Include the 5-minute RSI and MACD values for the corresponding period to gauge higher-timeframe momentum confluence.
+[2026-04-14 16:46:17 UTC] Include the VWAP for the session to better gauge if price is stretched relative to mean value.
+[2026-04-14 16:46:50 UTC] Include the VWAP for the session to better gauge if price is deviating for a mean reversion scalp.
+[2026-04-14 16:47:21 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 16:47:51 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to better gauge short-term momentum exhaustion alongside volume analysis.
+[2026-04-14 16:48:18 UTC] Include the 1-minute RSI (or other momentum oscillator) value for each bar to more easily spot hidden divergences.
+[2026-04-14 16:48:46 UTC] Include the 1-minute RSI (or similar momentum oscillator) value for each bar to better identify hidden divergences and overbought/oversold conditions within the micro-structure.
+[2026-04-14 16:49:14 UTC] Include the VWAP for the session to gauge if price is significantly extended below it, adding context for mean reversion scalps.
+[2026-04-14 16:49:42 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at these extremes.
+[2026-04-14 16:50:09 UTC] Include the cumulative volume delta (CVD) or net taker buy/sell volume for each bar to better quantify aggressive order flow.
+[2026-04-14 16:50:37 UTC] Include the 1-minute RSI and/or Stochastic values to better gauge momentum exhaustion at extremes.
+[2026-04-14 16:51:03 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better distinguish between passive and aggressive order flow.
+[2026-04-14 16:51:29 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, as raw BuyVol% on high volume can mask whether aggressive buyers or sellers moved price more effectively.
+[2026-04-14 16:51:57 UTC] Include the 1-minute RSI and/or Stochastic values to better gauge short-term momentum exhaustion at key levels.
+[2026-04-14 16:52:22 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion alongside volume analysis.
+[2026-04-14 16:52:50 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at key levels.
+[2026-04-14 16:53:15 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to quickly gauge oversold/overbought conditions and momentum divergences on the micro-scale.
+[2026-04-14 16:53:43 UTC] Include the 1-minute RSI and/or Stochastic values to better quantify momentum extremes alongside volume/volatility compression.
+[2026-04-14 16:54:09 UTC] Include the 1-minute RSI(14) and/or Stochastic values to quickly gauge momentum extremes and confirm exhaustion signals.
+[2026-04-14 16:54:36 UTC] Include the 1-minute RSI(14) and/or Stochastic values to quickly gauge momentum exhaustion alongside volume signals.
+[2026-04-14 16:55:03 UTC] Include the 1-minute RSI and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 16:55:29 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe acceptance of these 1m reversal signals.
+[2026-04-14 16:55:59 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for each bar to quickly assess momentum divergence and overbought/oversold conditions.
+[2026-04-14 16:56:27 UTC] Include the 1-minute RSI(14) and/or MACD(12,26,9) values for each bar to quickly confirm momentum divergences.
+[2026-04-14 16:56:55 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at key lows.
+[2026-04-14 16:57:22 UTC] Include the cumulative delta (net buy-sell volume) for each bar to more precisely gauge aggressive taker flow beyond just the percentage.
+[2026-04-14 16:57:50 UTC] Include the cumulative volume delta (CVD) or net taker buy/sell volume for the period to quantify aggressive order flow imbalance more precisely.
+[2026-04-14 16:58:16 UTC] Include the 1-minute RSI (or another momentum oscillator) value for each bar to better gauge oversold/overbought conditions within the micro-trend.
+[2026-04-14 16:58:44 UTC] Include the net position change of futures open interest for the corresponding period to gauge if moves are driven by new shorts or long liquidations.
+[2026-04-14 16:59:10 UTC] Include the 1-minute RSI (or similar momentum oscillator) value for each bar to better identify hidden divergences and overbought/oversold conditions within the micro-trend.
+[2026-04-14 16:59:36 UTC] Include the 1-minute RSI(14) and/or Stochastic values to quickly gauge momentum extremes and potential divergences.
+[2026-04-14 17:00:03 UTC] Include the net delta (BuyVol% * Volume) for each bar to more easily quantify aggressive buyer/seller volume in USD terms.
+[2026-04-14 17:00:30 UTC] Include the cumulative volume delta (CVD) or net taker volume for each bar to better distinguish between aggressive absorption and passive selling.
+[2026-04-14 17:00:58 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better distinguish between aggressive buying and selling pressure within the candle.
+[2026-04-14 17:01:28 UTC] Include the cumulative volume delta (CVD) or net taker buy/sell volume for the period to better distinguish between aggressive and passive order flow.
+[2026-04-14 17:01:54 UTC] Include the 1-minute RSI value for each bar to quickly gauge momentum extremes and divergences.
+[2026-04-14 17:02:20 UTC] Include the net position change of futures open interest for the corresponding period to gauge if moves are driven by new leverage or spot.
+[2026-04-14 17:02:48 UTC] Include the cumulative volume delta (CVD) for the period to directly quantify net buying/selling pressure alongside the BuyVol%.
+[2026-04-14 17:03:17 UTC] Include the cumulative volume delta (CVD) or net taker volume for the period to better quantify aggressive order flow.
+[2026-04-14 17:03:44 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to quickly gauge momentum extremes and divergences.
+[2026-04-14 17:04:11 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe acceptance of price levels.
+[2026-04-14 17:04:40 UTC] Include the 1-minute RSI (or similar momentum oscillator) value for each bar to quickly identify hidden divergences.
+[2026-04-14 17:05:10 UTC] Include the 5-minute RSI and/or MACD values for the corresponding period to confirm momentum divergences more easily.
+[2026-04-14 17:05:41 UTC] Include the net position change in USDT for large perpetual futures swaps over this period to confirm if the absorption was by spot buyers or leveraged shorts.
+[2026-04-14 17:06:10 UTC] Include the net position change of futures open interest for the corresponding bars to gauge if moves are driven by new shorts/longs or closing of positions.
+[2026-04-14 17:06:41 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the frameworks.
+[2026-04-14 17:07:13 UTC] Include the cumulative volume delta (CVD) or net taker buy/sell volume for each bar to better quantify aggressive order flow alongside BuyVol%.
+[2026-04-14 17:07:45 UTC] Include the cumulative delta (CVD) or net taker buy/sell volume for each bar to better distinguish between aggressive and passive order flow.
+[2026-04-14 17:08:16 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for each bar to quickly assess momentum divergence and overbought/oversold conditions.
+[2026-04-14 17:08:46 UTC] Include a column for cumulative delta (bid vs ask volume) or net taker buy volume in USDT to better distinguish between genuine aggressive buying and spoofing.
+[2026-04-14 17:09:18 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to distinguish between high-percentage but low-volume spikes and high-volume absorption.
+[2026-04-14 17:09:47 UTC] Include the 5-minute high and low for the corresponding period to better identify true swing points and filter out 1-minute noise.
+[2026-04-14 17:10:49 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the defined ranges.
+[2026-04-14 17:11:24 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion alongside price action.
+[2026-04-14 17:11:55 UTC] Include the cumulative volume delta (CVD) for the period to directly visualize net order flow alongside the A/D line.
+[2026-04-14 17:12:26 UTC] Include the cumulative volume delta (CVD) or net taker buy/sell volume for each bar to better quantify aggressive order flow.
+[2026-04-14 17:12:56 UTC] Include the cumulative volume delta (CVD) for the period to clarify whether aggressive buying is actually moving price or just being absorbed.
+[2026-04-14 17:13:24 UTC] Include the net position change in USDT for large volume candles (e.g., Bar 46 sold ~$8.45M worth) to better gauge true selling pressure vs. absorption.
+[2026-04-14 17:13:54 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the micro-structure.
+[2026-04-14 17:14:23 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe structure and mean reversion levels.
+[2026-04-14 17:14:57 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to quickly gauge overbought/oversold conditions within the scalping context.
+[2026-04-14 17:15:29 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just %, to gauge the true aggressive buying/selling pressure in dollar terms.
+[2026-04-14 17:15:59 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just %, to better gauge the actual dollar commitment of aggressive buyers/sellers.
+[2026-04-14 17:16:29 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better distinguish between aggressive and passive order flow.
+[2026-04-14 17:17:03 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for the last 5 bars to quickly assess momentum divergence.
+[2026-04-14 17:17:32 UTC] Include the 1-minute RSI and/or Stochastic values to better gauge short-term momentum exhaustion at key levels.
+[2026-04-14 17:18:03 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe structure and mean reversion levels.
+[2026-04-14 17:18:34 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to better gauge short-term momentum exhaustion within the scalping context.
+[2026-04-14 17:19:08 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to better gauge short-term momentum exhaustion and overbought/oversold conditions within the range.
+[2026-04-14 17:19:38 UTC] Include the 5-minute RSI and Stochastic values to confirm momentum divergences on a higher timeframe.
+[2026-04-14 17:20:08 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the ranges.
+[2026-04-14 17:20:38 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values for each bar to better gauge short-term momentum exhaustion.
+[2026-04-14 17:21:13 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion alongside volume analysis.
+[2026-04-14 17:21:43 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to quickly gauge short-term momentum and overbought/oversold conditions within the compression.
+[2026-04-14 17:22:14 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the scalping context.
+[2026-04-14 17:22:45 UTC] Include the 5-minute VWAP for the session to gauge if price is acting as support/resistance relative to the session's true mean.
+[2026-04-14 17:23:19 UTC] Include the cumulative delta (bid vs ask volume) for each bar, not just the percentage, to better gauge aggressive order flow in real-time.
+[2026-04-14 17:23:50 UTC] Include the cumulative delta (CVD) or net taker buy/sell volume for each bar to directly see aggressive order flow imbalance.
+[2026-04-14 17:24:19 UTC] Include the 1-minute ATR value for the last 20 bars to better gauge the significance of bar 60's range and set precise stop-loss distances.
+[2026-04-14 17:24:50 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to better gauge short-term momentum exhaustion at key levels.
+[2026-04-14 17:25:23 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to better gauge short-term momentum exhaustion and overbought/oversold conditions within the scalping context.
+[2026-04-14 17:25:55 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 17:26:24 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the consolidation.
+[2026-04-14 17:26:54 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the coil.
+[2026-04-14 17:27:25 UTC] Include net delta (BuyVol - SellVol) in USDT terms to better quantify aggressive taker flow versus passive absorption.
+[2026-04-14 17:27:56 UTC] Include the 1-minute RSI (or similar momentum oscillator) value for each bar to more easily spot hidden divergences.
+[2026-04-14 17:28:25 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at key levels.
+[2026-04-14 17:28:55 UTC] Include the cumulative delta (bid vs ask volume) for each bar to better distinguish between aggressive buying and selling pressure beyond just BuyVol%.
+[2026-04-14 17:29:28 UTC] Include the net position change of futures open interest for the corresponding bars to gauge if moves are driven by new longs/shorts or just liquidation.
+[2026-04-14 17:29:56 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better gauge aggressive taker flow pressure.
+[2026-04-14 17:30:24 UTC] Include the VWAP for the session to better gauge if price is under/over a key dynamic value area for scalps.
+[2026-04-14 17:30:53 UTC] Include the net position change of futures open interest for the corresponding bars to distinguish between hedging and speculative flows.
+[2026-04-14 17:31:25 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion alongside volume analysis.
+[2026-04-14 17:31:57 UTC] Include the net position change of the Binance BTCUSDT perpetual funding rate for the corresponding bars to gauge leverage positioning.
+[2026-04-14 17:32:31 UTC] Include the 1-minute RSI and/or Stochastic values to better gauge short-term momentum exhaustion within the frameworks.
+[2026-04-14 17:33:02 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the compression.
+[2026-04-14 17:33:32 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion at key lows.
+[2026-04-14 17:34:03 UTC] Include the 1-minute RSI (or other momentum oscillator) value for each bar to more easily spot hidden divergences.
+[2026-04-14 17:34:34 UTC] Include the 1-minute RSI (or other momentum oscillator) value for each bar to quickly assess overbought/oversold conditions and momentum divergences.
+[2026-04-14 17:35:04 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion within the micro-structure.
+[2026-04-14 17:35:35 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to quickly gauge momentum exhaustion and overbought/oversold conditions within the scalping frame.
+[2026-04-14 17:36:06 UTC] Include the 1-minute RSI(14) and Stochastic values to quickly gauge momentum extremes and confirm divergences.
+[2026-04-14 17:36:35 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 17:37:04 UTC] Include the net position change in USDT for large traders over this period to confirm if the selling was driven by closing longs or opening new shorts.
+[2026-04-14 17:37:37 UTC] Include the cumulative delta (CVD) or net taker buy/sell volume for each bar to better distinguish between aggressive and passive order flow.
+[2026-04-14 17:38:08 UTC] Include the 1-minute RSI (or similar momentum oscillator) value for the last bar to confirm divergence more precisely.
+[2026-04-14 17:38:40 UTC] Include the 5-minute RSI(14) and MACD(12,26,9) values for the corresponding period to gauge momentum divergence on a higher timeframe.
+[2026-04-14 17:39:12 UTC] Include the net position change of futures funding rate for the corresponding period to gauge leveraged sentiment against spot flow.
+[2026-04-14 17:39:43 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion at key levels.
+[2026-04-14 17:40:13 UTC] Include the net position change in futures open interest for the corresponding period to gauge if moves are driven by new longs/shorts or just liquidation.
+[2026-04-14 17:40:45 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 17:41:13 UTC] Include the 5-minute high/low/close for the corresponding period to filter out noise and confirm key levels on a higher timeframe.
+[2026-04-14 17:41:44 UTC] Include the net position change in USDT futures open interest for the corresponding 1-minute bars to confirm if moves are driven by new leverage or spot flow.
+[2026-04-14 17:42:12 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, as raw BuyVol% on high-volume bars can mask whether large buyers were passive (absorbing) or aggressive (lifting).
+[2026-04-14 17:42:41 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 17:43:12 UTC] Include the net position change of large traders (e.g., aggregate taker buy/sell ratio for >10 BTC trades) to distinguish retail from institutional absorption.
+[2026-04-14 17:43:43 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for each bar to quickly assess momentum divergence and overbought/oversold conditions.
+[2026-04-14 17:44:12 UTC] Include the net position change in USDT for large trades (e.g., >10 BTC) to better identify block buyer/seller absorption.
+[2026-04-14 17:44:42 UTC] Include the net delta (BuyVol% * Volume) as a separate column for faster absorption/spoofing analysis.
+[2026-04-14 17:45:13 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just %, to better gauge aggressive order flow magnitude.
+[2026-04-14 17:45:42 UTC] Include the 5-minute close price at the time of the last 1-minute bar to assess higher-timeframe alignment and rejection levels.
+[2026-04-14 17:46:15 UTC] Include the net delta (BuyVol - SellVol) in USDT terms alongside BuyVol% to better gauge the actual dollar commitment of aggressive buyers/sellers.
+[2026-04-14 17:46:45 UTC] Include the cumulative delta (bid/ask volume flow) for each bar to better distinguish between aggressive buying and selling pressure beyond just BuyVol%.
+[2026-04-14 17:47:14 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for the last bar to quickly assess momentum divergence and overbought/oversold states.
+[2026-04-14 17:47:44 UTC] Include net delta (BuyVol - SellVol) in quote currency (USDT) to better gauge the true dollar commitment of aggressive buyers/sellers.
+[2026-04-14 17:48:19 UTC] Include the net position change of futures funding rate for the corresponding period to gauge leveraged sentiment alongside spot buying.
+[2026-04-14 17:48:50 UTC] Include the 1-minute RSI (or similar momentum oscillator) value for the last bar to gauge immediate overbought/oversold conditions.
+[2026-04-14 17:49:22 UTC] Include the net position change of the top 5 perpetual futures funding rate participants over this period to confirm if the absorption was driven by large players.
+[2026-04-14 17:49:53 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at key levels.
+[2026-04-14 17:50:22 UTC] Include the net position change in futures open interest for the corresponding bars to gauge if moves are driven by new positions or liquidation.
+[2026-04-14 17:50:53 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better quantify aggressive order flow beyond just the BuyVol% ratio.
+[2026-04-14 17:51:22 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 17:51:50 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at key levels.
+[2026-04-14 17:52:22 UTC] Include the 5-minute high/low of the current candle's parent 5-minute bar to assess if we are near a key structural level on the higher timeframe.
+[2026-04-14 17:52:52 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better identify momentum divergences and overbought/oversold conditions within the scalping context.
+[2026-04-14 17:53:21 UTC] Include the VWAP for the session to better gauge if price is being rejected from a key intraday level.
+[2026-04-14 17:53:50 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better gauge aggressive order flow imbalance.
+[2026-04-14 17:54:17 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better gauge aggressive order flow impact.
+[2026-04-14 17:54:45 UTC] Include net delta (BuyVol - SellVol) in USDT terms, not just %, to gauge actual buying/selling pressure magnitude.
+[2026-04-14 17:55:14 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the scalping context.
+[2026-04-14 17:55:43 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to directly see aggressive buyer/seller imbalances beyond just BuyVol%.
+[2026-04-14 17:56:13 UTC] Include the cumulative delta (net buy-sell volume) for each bar to directly see aggressive order flow imbalance.
+[2026-04-14 17:56:42 UTC] Include the 1-minute RSI and/or Stochastic values to better gauge short-term momentum exhaustion within the scalping context.
+[2026-04-14 17:57:10 UTC] Include the 5-minute RSI and/or Stochastic values to better gauge short-term momentum exhaustion within the 1-minute scalping context.
+[2026-04-14 17:57:41 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better quantify aggressive order flow imbalance.
+[2026-04-14 17:58:10 UTC] Include the cumulative delta (CVD) or net taker buy/sell volume for each bar to directly see aggressive order flow imbalance beyond just the percentage.
+[2026-04-14 17:58:44 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe acceptance of these 1m moves.
+[2026-04-14 17:59:15 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just %, to gauge the absolute capital commitment of aggressive buyers/sellers.
+[2026-04-14 17:59:45 UTC] Include the 5-minute close and VWAP for the corresponding 5-minute period to better contextualize the 1-minute scalps.
+[2026-04-14 18:00:16 UTC] Include the VWAP for the session to better gauge if price is trading above/below the mean acceptance level.
+[2026-04-14 18:00:48 UTC] Include the VWAP for the session to better gauge if breakouts are occurring above/below mean price.
+[2026-04-14 18:01:18 UTC] Include the cumulative delta (net taker buy volume in USDT) for each bar to quantify aggressive order flow more precisely than BuyVol% alone.
+[2026-04-14 18:01:49 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better gauge aggressive taker flow pressure.
+[2026-04-14 18:02:18 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just %, to gauge true aggressive order flow magnitude.
+[2026-04-14 18:02:50 UTC] Include the net position change of futures funding rate for the corresponding period to gauge leverage sentiment alongside spot buying.
+[2026-04-14 18:03:21 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values for each bar to better gauge momentum exhaustion and overbought/oversold conditions within the scalp.
+[2026-04-14 18:03:52 UTC] Include the net delta (BuyVol% * Volume) as a separate column for faster absorption/spike analysis.
+[2026-04-14 18:04:23 UTC] Include the 1-minute RSI (or similar momentum oscillator) value for each bar to better gauge overbought/oversold conditions within the scalping context.
+[2026-04-14 18:04:55 UTC] Include the 1-minute RSI (or another momentum oscillator) value for each bar to more easily spot momentum divergences.
+[2026-04-14 18:05:25 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just BuyVol%, to better gauge the actual dollar commitment of aggressive buyers/sellers.
+[2026-04-14 18:05:54 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just %, to gauge true aggressive volume weight.
+[2026-04-14 18:06:26 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better distinguish between aggressive buying/selling and passive absorption.
+[2026-04-14 18:06:58 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better identify momentum divergences and overbought/oversold conditions within the scalping context.
+[2026-04-14 18:07:27 UTC] Include the 1-minute RSI (or another momentum oscillator) value for each bar to quickly identify overbought/oversold conditions within the scalping context.
+[2026-04-14 18:07:56 UTC] Include the cumulative volume delta (CVD) or net taker volume for each bar to better quantify aggressive order flow beyond just BuyVol%.
+[2026-04-14 18:08:24 UTC] Include the VWAP for the session to better gauge if price is trading above/below the volume-weighted fair value during these compression phases.
+[2026-04-14 18:08:54 UTC] Include the net delta (BuyVol% * Volume) as a separate column for faster absorption/aggression analysis.
+[2026-04-14 18:09:23 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just percentage, to better gauge the actual buying/selling pressure in dollar terms.
+[2026-04-14 18:09:52 UTC] Include the net position change in futures open interest for the corresponding 1-minute bars to distinguish between spot absorption and leveraged positioning.
+[2026-04-14 18:10:20 UTC] Include the net position change in futures open interest for the corresponding 1-minute bars to distinguish between spot accumulation and leveraged speculation.
+[2026-04-14 18:10:51 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better distinguish between aggressive buying/selling and passive absorption.
+[2026-04-14 18:11:24 UTC] Include the cumulative delta (CVD) or net taker buy/sell volume for each bar to directly see aggressive order flow imbalance.
+[2026-04-14 18:11:55 UTC] Include the net delta (BuyVol% * Volume) for each bar to more easily visualize aggressive taker flow imbalance.
+[2026-04-14 18:12:27 UTC] Include the cumulative volume delta (CVD) for the period to better distinguish between aggressive taker buying and selling.
+[2026-04-14 18:12:57 UTC] Include the cumulative delta (net buy volume) for each bar to more directly gauge aggressive order flow imbalance.
+[2026-04-14 18:13:26 UTC] Include the net position change of futures open interest for the corresponding 1-minute bars to gauge if moves are driven by new longs/shorts or liquidation.
+[2026-04-14 18:13:55 UTC] Include the cumulative delta (net buy-sell volume) for each bar to more directly gauge aggressive order flow imbalance.
+[2026-04-14 18:14:25 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to directly see if large BuyVol% is actually leading to sustained buying pressure or just absorption.
+[2026-04-14 18:14:55 UTC] Include the 1-minute ATR value for the last 20 bars to objectively gauge the significance of recent candle ranges and compression.
+[2026-04-14 18:15:24 UTC] Include the net position change of futures open interest for the corresponding period to gauge if volume is hedging or directional.
+[2026-04-14 18:15:52 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the defined ranges.
+[2026-04-14 18:16:20 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to more directly gauge aggressive order flow imbalance.
+[2026-04-14 18:16:48 UTC] Include the net position change of futures open interest for the corresponding period to gauge if moves are driven by new leverage or spot flow.
+[2026-04-14 18:17:16 UTC] Include the VWAP for the session to better gauge if price is being accepted above or below the average traded price.
+[2026-04-14 18:17:44 UTC] Include the net position change in USDT for large traders over the period (e.g., cumulative delta) to distinguish between aggressive buying and selling more precisely.
+[2026-04-14 18:18:13 UTC] Include the net position change in USDT for large traders over this period to distinguish between aggressive buying for liquidation vs. genuine accumulation.
+[2026-04-14 18:18:42 UTC] Include the 5-minute RSI and Stochastic values to better gauge momentum exhaustion within the 1-minute compression.
+[2026-04-14 18:19:15 UTC] Include the net delta (BuyVol% * Volume) for each bar to quantify aggressive buyer/seller footprint more precisely.
+[2026-04-14 18:19:45 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better distinguish between aggressive buying/selling and passive absorption.
+[2026-04-14 18:20:14 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better gauge aggressive order flow pressure beyond just percentage.
+[2026-04-14 18:20:43 UTC] Include the net position change of the top 5 perpetual futures funding rates for the last hour to gauge leveraged sentiment.
+[2026-04-14 18:21:12 UTC] Include the net position change in futures open interest for the corresponding 1-minute bars to gauge leverage flow alongside spot volume.
+[2026-04-14 18:21:41 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the broader trend.
+[2026-04-14 18:22:13 UTC] Include the 1-minute RSI (or similar momentum oscillator) value for each bar to quickly identify overbought/oversold conditions within the scalping context.
+[2026-04-14 18:22:43 UTC] Include the 1-minute ATR value for the last 20 bars to objectively quantify compression/expansion thresholds.
+[2026-04-14 18:23:12 UTC] Include the net position change in futures open interest for the corresponding 1-minute bars to distinguish between spot accumulation and leveraged speculation.
+[2026-04-14 18:23:42 UTC] Include the 1-minute RSI(14) and/or Stochastic values to quickly gauge momentum extremes and potential divergences.
+[2026-04-14 18:24:10 UTC] Include the 1-minute RSI and/or Stochastic values to better gauge momentum exhaustion at key levels.
+[2026-04-14 18:24:37 UTC] Include the 1-minute RSI(14) and/or Stochastic values to quickly gauge momentum extremes and divergence.
+[2026-04-14 18:25:06 UTC] Include the 1-minute RSI(14) and Stochastic values to better identify momentum divergences and overbought/oversold conditions within the scalping context.
+[2026-04-14 18:25:36 UTC] Include the net position change of the top 5 perpetual futures funding rate recipients/payers over this period to gauge leveraged sentiment.
+[2026-04-14 18:26:05 UTC] Include the 5-minute RSI and a volume-weighted average price (VWAP) for the last hour to better gauge overbought/oversold conditions and value area.
+[2026-04-14 18:26:35 UTC] Include the net position change of futures open interest for the corresponding period to gauge if moves are driven by new longs/shorts or closing flows.
+[2026-04-14 18:27:01 UTC] Include the 5-minute close and VWAP for the corresponding period to better contextualize the 1-minute noise.
+[2026-04-14 18:27:28 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the frameworks.
+[2026-04-14 18:27:55 UTC] Include the VWAP for the session to better gauge if price is trading above/below the volume-weighted fair value.
+[2026-04-14 18:28:23 UTC] Include the 1-minute RSI (or similar momentum oscillator) value for each bar to quickly identify overbought/oversold conditions within the micro-structure.
+[2026-04-14 18:28:49 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion alongside volume.
+[2026-04-14 18:29:18 UTC] Include the net position change of futures open interest for the corresponding 1-minute bars to gauge if moves are driven by new longs/shorts or liquidation.
+[2026-04-14 18:29:45 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values for the last bar to quickly gauge momentum divergence.
+[2026-04-14 18:30:12 UTC] Include the cumulative delta (bid/ask volume flow) for each bar to better distinguish between aggressive buying and selling pressure within the volume.
+[2026-04-14 18:30:36 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion at key levels.
+[2026-04-14 18:31:02 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better gauge aggressive order flow imbalance.
+[2026-04-14 18:31:29 UTC] Include the VWAP for the session to better gauge if price is trading above/below the volume-weighted average and assess intraday trend strength.
+[2026-04-14 18:31:57 UTC] Include the VWAP for the session to better gauge if price is being accepted above or below the mean.
+[2026-04-14 18:32:26 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better distinguish between aggressive vs. passive order flow.
+[2026-04-14 18:32:57 UTC] Include the cumulative delta (CVD) or net taker buy/sell volume for each bar to better distinguish aggressive vs. passive order flow.
+[2026-04-14 18:33:25 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values for the last bar to quickly assess momentum exhaustion.
+[2026-04-14 18:33:54 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to quickly gauge momentum extremes and potential divergences.
+[2026-04-14 18:34:21 UTC] Include the net position change in USDT for large traders over this period to distinguish between retail absorption and institutional distribution.
+[2026-04-14 18:34:47 UTC] Include the 5-minute close and VWAP for the corresponding period to gauge higher-timeframe anchor points.
+[2026-04-14 18:35:13 UTC] Include the cumulative delta (bid vs ask volume) for each bar, not just BuyVol%, to see immediate aggressive order flow imbalance.
+[2026-04-14 18:35:40 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at key levels.
+[2026-04-14 18:36:07 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to better distinguish aggressive vs. passive order flow.
+[2026-04-14 18:36:33 UTC] Include the cumulative delta (bid vs ask volume) for each bar, not just the BuyVol% snapshot.
+[2026-04-14 18:36:59 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to directly see aggressive buy/sell pressure imbalance.
+[2026-04-14 18:37:26 UTC] Include the cumulative volume delta (CVD) for the period to see net aggressive buyer/seller pressure more clearly.
+[2026-04-14 18:37:50 UTC] Include the VWAP for the session to better gauge if price is under distributive or accumulative control.
+[2026-04-14 18:38:18 UTC] Include cumulative delta (CVD) or net taker volume for each bar to better distinguish aggressive vs. passive order flow.
+[2026-04-14 18:38:45 UTC] Include cumulative delta (CVD) or net taker volume for the bar to better distinguish between aggressive buy/sell pressure and passive absorption.
+[2026-04-14 18:39:13 UTC] Include the cumulative volume delta (CVD) for the period to clarify whether large volumes are net buyer- or seller-initiated beyond just BuyVol%.
+[2026-04-14 18:39:42 UTC] Include the net position change of the top 5 perpetual futures funding rates for the last hour to gauge leveraged sentiment.
+[2026-04-14 18:40:08 UTC] Include the cumulative volume delta (CVD) for the period to directly confirm aggressive buyer/seller absorption.
+[2026-04-14 18:40:36 UTC] Include the VWAP for the session to better gauge if price is being rejected from or accepted at the mean.
+[2026-04-14 18:41:06 UTC] Include the 5-minute high/low of the current session to better define the day's range for swing analysis.
+[2026-04-14 18:41:34 UTC] Include the VWAP for the session to better gauge if price is under distributive pressure.
+[2026-04-14 18:42:03 UTC] Include the net position change of futures funding rate for the period to gauge leveraged sentiment against spot flow.
+[2026-04-14 18:42:31 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to quickly gauge short-term momentum extremes.
+[2026-04-14 18:42:59 UTC] Include the net position change of the top 5 perpetual futures funding rate participants over this period to gauge if large players are fading these moves.
+[2026-04-14 18:43:30 UTC] Include the net delta (BuyVol% * Volume) as a separate column for faster identification of true buying/selling pressure extremes.
+[2026-04-14 18:43:58 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values to better gauge short-term momentum exhaustion.
+[2026-04-14 18:44:27 UTC] Include the VWAP for the session to better gauge if price is reacting to the mean.
+[2026-04-14 18:44:55 UTC] Include a column for cumulative delta (bid vs. ask volume) to directly confirm absorption vs. distribution.
+[2026-04-14 18:45:23 UTC] Include the VWAP for the session to better gauge if price is under distribution or accumulation relative to the session's mean.
+[2026-04-14 18:45:51 UTC] Include the 5-minute high/low of the current session to better contextualize the significance of 1-minute swing points.
+[2026-04-14 18:46:20 UTC] Include the 1-minute RSI and/or Stochastic values to better gauge short-term momentum exhaustion within the compression.
+[2026-04-14 18:46:46 UTC] Include the net position change of the top 5 perpetual futures funding rates for this period to gauge leveraged sentiment against price action.
+[2026-04-14 18:47:13 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum extremes.
+[2026-04-14 18:47:56 UTC] Include the 5-minute RSI and Stochastic values to better gauge momentum exhaustion at key levels.
+[2026-04-14 18:48:23 UTC] Include the 1-minute RSI(14) and Stochastic values to quickly gauge oversold/overbought conditions alongside volume.
+[2026-04-14 18:48:51 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at key turning points.
+[2026-04-14 18:49:17 UTC] Include the net position change of the top 5 perpetual futures funding rates for this period to gauge leveraged sentiment extremes.
+[2026-04-14 18:49:44 UTC] Include the 1-minute RSI and/or Stochastic values to better gauge short-term oversold/overbought conditions for exhaustion signals.
+[2026-04-14 18:50:14 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at key levels.
+[2026-04-14 18:50:46 UTC] Include the 1-minute RSI (or similar momentum oscillator) value for each bar to quickly assess overbought/oversold conditions within the scalping context.
+[2026-04-14 18:51:15 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just BuyVol%, to better gauge the absolute aggression of takers.
+[2026-04-14 18:51:44 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at swing points.
+[2026-04-14 18:52:12 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-14 18:52:40 UTC] Include the cumulative volume delta (CVD) for the period to directly see net buying/selling pressure alongside the A/D line.
+[2026-04-14 18:54:00 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at key levels.
+[2026-04-14 18:54:57 UTC] Include the 5-minute close and VWAP for the corresponding period to better distinguish between a true higher-timeframe reversal and a short-term retracement.
+[2026-04-14 18:55:16 UTC] Include the 5-minute VWAP level to assess if price is acting as resistance/support relative to the high-volume anchor period.
+[2026-04-14 19:00:00 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion at key levels.
+[2026-04-14 19:05:00 UTC] Include the cumulative volume delta (CVD) or net taker buy/sell volume for each bar to directly quantify aggressive order flow imbalance.
+[2026-04-14 19:10:00 UTC] Include the net delta (BuyVol - SellVol) in USDT terms for each bar to better distinguish between aggressive and passive absorption.
+[2026-04-14 19:15:00 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the scalping context.
+[2026-04-14 19:15:47 UTC] Include the 1-minute RSI(14) and MACD(12,26,9) values to quickly assess momentum and divergence without manual calculation.
+[2026-04-14 19:20:02 UTC] Include the 1-minute RSI(14) and Stoch(5,3) values for the last bar to quickly gauge momentum exhaustion.
+[2026-04-14 19:25:00 UTC] Include the net delta (BuyVol - SellVol) in USDT terms, not just %, to better gauge aggressive order flow magnitude.
+[2026-04-14 19:30:00 UTC] Include the cumulative delta (net buy-sell volume) for each bar to more precisely gauge aggressive order flow beyond just the BuyVol% ratio.
+[2026-04-14 19:35:00 UTC] Include the net delta (BuyVol - SellVol) in quote currency for more precise order flow pressure assessment.
+[2026-04-14 19:40:00 UTC] Include the VWAP for the session to better gauge if price is trading above/below the volume-weighted fair value.
+[2026-04-14 19:45:00 UTC] Include the cumulative volume delta (CVD) or net taker volume for each bar to directly quantify aggressive buyer/seller pressure beyond just the percentage.
+[2026-04-15 03:40:46 UTC] Include the cumulative delta (bid vs ask volume) for each bar, not just the BuyVol% aggregate, to see aggressive taker flow in real-time.
+[2026-04-15 03:42:56 UTC] Include net delta (BuyVol - SellVol) in quote currency (USDT) to better gauge aggressive order flow impact.
+[2026-04-15 03:45:00 UTC] Include the cumulative delta (net buy-sell volume) for each bar to more directly gauge aggressive order flow imbalance.
+[2026-04-15 03:49:20 UTC] Include the 5-minute close and VWAP for the corresponding period to gauge higher-timeframe acceptance of these 1m levels.
+[2026-04-15 03:50:00 UTC] Include the cumulative volume delta (CVD) or net taker buy/sell volume for each bar to better quantify aggressive order flow beyond just the BuyVol% ratio.
+[2026-04-15 03:55:00 UTC] Include the 5-minute VWAP and its distance from current price to gauge mean reversion pressure.
+[2026-04-15 04:05:00 UTC] Include the 5-minute high/low for the corresponding period to filter out noise and confirm swing points used in Dow/Fib analysis.
+[2026-04-15 04:10:00 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe structure and value.
+[2026-04-15 04:15:00 UTC] Include the VWAP for the session to better gauge if price action is occurring above/below the volume-weighted average and assess traction.
+[2026-04-15 04:20:00 UTC] Include cumulative delta (CVD) or net taker buy/sell volume in USDT to better distinguish aggressive vs passive flow.
+[2026-04-15 04:25:00 UTC] Include the 1-minute RSI (or similar momentum oscillator) value for each bar to quickly identify hidden bullish/bearish divergences.
+[2026-04-15 04:30:00 UTC] Include the cumulative volume delta (CVD) or net taker volume for each bar to more precisely gauge aggressive order flow imbalance.
+[2026-04-15 04:35:00 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe structure and value.
+[2026-04-15 04:40:00 UTC] Include the cumulative delta (net buy-sell volume) for each bar to more precisely gauge aggressive taker flow beyond just BuyVol%.
+[2026-04-15 04:45:00 UTC] Include the 1-minute RSI(14) and Stoch(5,3,3) values to quickly gauge overbought/oversold conditions within the scalping context.
+[2026-04-15 04:50:00 UTC] Include the VWAP for the session to better gauge if price is being accepted above or below the volume-weighted average.
+[2026-04-15 04:55:00 UTC] Include a column for cumulative delta (buy volume - sell volume) to instantly visualize aggressive order flow imbalance.
+[2026-04-15 05:00:00 UTC] Include the cumulative volume delta (CVD) for the period to clarify whether large volumes are primarily buyer- or seller-initiated beyond just BuyVol%.
+[2026-04-15 05:05:00 UTC] Include the VWAP for the session to better gauge if price action is occurring above/below the volume-weighted average and assess absorption quality.
+[2026-04-15 05:10:00 UTC] Include the cumulative volume delta (CVD) for the period to directly see net order flow alongside BuyVol%.
+[2026-04-15 05:15:00 UTC] Include the 5-minute close price for the corresponding period to filter out noise and confirm higher-timeframe structure.
+[2026-04-15 05:20:00 UTC] Include the net position change of futures open interest for the corresponding bars to gauge if moves are driven by new leverage or spot flow.
+[2026-04-15 05:25:00 UTC] Include the 5-minute close price for the corresponding period to filter out 1m noise and confirm higher-timeframe structure.
+[2026-04-15 05:30:00 UTC] Include the net position change of futures open interest for the corresponding period to distinguish between spot absorption and leveraged positioning.
+[2026-04-15 05:45:00 UTC] Include the cumulative volume delta (CVD) for the period to directly confirm the net buying/selling pressure indicated by the BuyVol% spikes.
+[2026-04-15 06:05:00 UTC] Include the 1-minute RSI value for the last bar to quickly gauge oversold/overbought conditions and confirm momentum divergences.
+[2026-04-15 06:10:00 UTC] Include the 1-minute RSI and/or Stochastic values to better gauge short-term momentum exhaustion at key levels.
+[2026-04-15 06:15:00 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-15 06:20:00 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe acceptance of these 1m levels.
+[2026-04-15 06:25:00 UTC] Include the 5-minute close and VWAP for the corresponding period to better contextualize the significance of 1-minute absorption signals.
+[2026-04-15 06:30:00 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe structure and value area.
+[2026-04-15 06:40:00 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the range.
+[2026-04-15 06:55:00 UTC] Include the cumulative delta (net buy-sell volume) for each bar to directly see aggressive order flow imbalance.
+[2026-04-15 07:00:00 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe structure and value.
+[2026-04-15 07:05:00 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe value and trend bias.
+[2026-04-15 07:10:00 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the scalping context.
+[2026-04-15 07:30:00 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe structure and value.
+[2026-04-15 07:35:00 UTC] Include the 5-minute close price and volume for the corresponding period to filter out noise and confirm 1m breakouts/breakdowns.
+[2026-04-15 07:40:00 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion within the broader trend.
+[2026-04-15 07:45:00 UTC] Include the 1-minute RSI and/or Stochastic values to better gauge short-term momentum exhaustion within the frameworks.
+[2026-04-15 07:50:00 UTC] Include the prior 60-bar high/low for immediate context of the current trading range.
+[2026-04-15 07:55:00 UTC] Include the 5-minute close price at the time of each 1-minute bar to better identify higher-timeframe support/resistance confluences.
+[2026-04-15 08:05:00 UTC] Include the VWAP for the session to better gauge if price action is above/below the mean acceptance price for high-conviction scalps.
+[2026-04-15 08:10:00 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to more directly see aggressive order flow imbalance.
+[2026-04-15 08:15:00 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-15 08:20:30 UTC] Include the 5-minute timeframe's VWAP and volume profile (POC) to contextualize whether these 1-minute high BuyVol% spikes are occurring at key value areas or in low-volume voids.
+[2026-04-15 08:25:00 UTC] Include the cumulative volume delta (CVD) for the period to directly visualize net taker buy/sell pressure alongside BuyVol%.
+[2026-04-15 08:35:00 UTC] Include the 5-minute close price for the corresponding period to better judge the significance of 1-minute breakouts.
+[2026-04-15 08:55:00 UTC] Include the 5-minute RSI and/or Stochastic values to better gauge overbought/oversold conditions within the 1-minute trend.
+[2026-04-15 09:00:00 UTC] Include the VWAP for the session to better gauge if price is trading above/below the volume-weighted fair value for scalping.
+[2026-04-15 09:15:00 UTC] Include the VWAP for the session to better gauge if price is being rejected from above or supported from below this key intraday level.
+[2026-04-15 09:20:00 UTC] Include the 5-minute close and VWAP for the corresponding period to better gauge higher-timeframe structure and mean reversion levels.
+[2026-04-15 11:12:24 UTC] Include the cumulative delta (CVD) or net taker volume for each bar to directly see aggressive order flow imbalance.
+[2026-04-15 11:15:00 UTC] Include the cumulative volume delta (CVD) for the bar to better distinguish between aggressive taker buys/sells and passive absorption.
+[2026-04-15 11:25:00 UTC] Include the cumulative volume delta (CVD) or net taker buy/sell volume for each bar to directly gauge aggressive order flow beyond just BuyVol%.
+[2026-04-15 11:30:00 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge momentum exhaustion at key levels.
+[2026-04-15 11:35:00 UTC] Include the net position change of futures open interest for the corresponding 1-minute bars to distinguish between aggressive new selling and long liquidation.
+[2026-04-15 11:40:00 UTC] Include the cumulative volume delta (CVD) or net taker volume for each bar to quantify aggressive buy/sell pressure more precisely than BuyVol% alone.
+[2026-04-15 11:45:00 UTC] Include the VWAP for the session to better gauge if price moves are occurring above/below the volume-weighted average and to identify potential mean reversion targets.
+[2026-04-15 11:50:00 UTC] Include the VWAP for the session to better gauge if price action is occurring above/below mean value and to identify potential rejection levels.
+[2026-04-15 11:55:00 UTC] Include the cumulative volume delta (CVD) or net taker buy/sell volume for each bar to more precisely gauge aggressive order flow alongside BuyVol%.
+[2026-04-15 12:00:00 UTC] Include the VWAP for the session to better distinguish between price acceptance above/below mean and to gauge the strength of pullbacks.
+[2026-04-15 12:15:00 UTC] Include the net delta (BuyVol - SellVol) for each bar to more precisely gauge aggressive taker flow imbalance.
+[2026-04-15 12:20:00 UTC] Include the VWAP for the session to better gauge if price is trading above/below the volume-weighted average and assess if pullbacks are healthy or weak.
+[2026-04-15 12:25:00 UTC] Include the VWAP for the session to better gauge if price is trading above/below mean value for high-volume absorption analysis.
+[2026-04-15 14:01:21 UTC] Include the net delta (BuyVol% * Volume) for each bar to quantify aggressive buyer/seller volume in USDT terms.
+[2026-04-15 14:04:25 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum extremes alongside volume signals.
+[2026-04-15 14:05:00 UTC] Include the net delta (BuyVol - SellVol) in USDT terms to better distinguish between high-volume absorption and genuine accumulation.
+[2026-04-15 14:10:00 UTC] Include the cumulative volume delta (CVD) for each bar to directly see net buying/selling pressure alongside BuyVol%.
+[2026-04-15 14:15:00 UTC] Include the VWAP for the session to better gauge if price is being bought or sold relative to the average participant's cost.
+[2026-04-15 14:30:00 UTC] Include the prior 1-hour high/low and VWAP for the session to better gauge the significance of current price levels and absorption signals.
+[2026-04-15 14:35:00 UTC] Include the VWAP for the session to better identify if price moves are above/below mean and to gauge exhaustion relative to it.
+[2026-04-15 14:40:00 UTC] Include the 1-minute RSI(14) and/or Stochastic values to quickly gauge momentum extremes and potential oversold/overbought conditions within the scalping context.
+[2026-04-15 14:45:00 UTC] Include the VWAP for the session to better gauge if price is deviating from mean value for a scalp.
+[2026-04-15 14:50:00 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better identify momentum exhaustion at key levels.
+[2026-04-15 15:00:00 UTC] Include the 5-minute RSI and ATR values for the corresponding period to better gauge momentum exhaustion and scale stop-losses.
+[2026-04-15 15:15:00 UTC] Include the 5-minute close price and volume for the corresponding period to filter out 1-minute noise and confirm higher-timeframe structure.
+[2026-04-15 15:20:00 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better identify momentum divergences at micro-scale.
+[2026-04-15 15:30:00 UTC] Include the 1-minute RSI(14) and/or Stochastic values to better gauge short-term momentum exhaustion.
+[2026-04-15 15:35:00 UTC] Include the 1-minute RSI(14) and ATR(14) values for the last bar to quantify momentum and volatility directly.
+[2026-04-15 15:40:00 UTC] Include the VWAP for the session to better gauge if price is under distributive or accumulative control.
+[2026-04-15 15:45:00 UTC] Include the 1-minute RSI and/or Stochastic values to better gauge momentum exhaustion on bounces.
+[2026-04-15 15:50:00 UTC] Include the 1-minute RSI(14) and Stochastic values to better gauge momentum exhaustion at key levels.

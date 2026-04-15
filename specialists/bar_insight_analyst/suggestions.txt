@@ -1,0 +1,4 @@
+[2026-04-14 19:40:00 UTC] Add volume delta or cumulative volume profile to CE description to distinguish “absorption” from distribution.
+[2026-04-15 05:25:00 UTC] Add a “Prior Bar Outcome” column—momentum shifts often follow 2+ same-direction bars.
+[2026-04-15 07:50:00 UTC] Add cumulative delta or net volume flow for each bar to quantify absorption claims.
+[2026-04-15 08:10:00 UTC] Add cumulative specialist accuracy per session to the bar record.

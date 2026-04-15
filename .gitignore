@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Data & logs (large files, machine-specific)
+results/
+data/local_data/
+data/btc_predictor.db
+*.log
+*.ndjson
+
+# Charts (regenerated at runtime)
+charts/
+
+# Secrets
+.env
+*.env
+
+# OS
+.DS_Store
+Thumbs.db
