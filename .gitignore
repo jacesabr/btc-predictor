@@ -21,6 +21,12 @@ data/btc_predictor.db
 # Charts (regenerated at runtime)
 charts/
 
+# Specialist runtime outputs (regenerated each bar)
+specialists/**/last_prompt.txt
+specialists/**/last_response.txt
+specialists/**/last_sent.txt
+specialists/**/suggestions.txt
+
 # Secrets
 .env
 *.env
