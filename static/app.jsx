@@ -2134,23 +2134,40 @@ function App() {
                         {bestIndicator?.best_indicator ? (() => {
                           const ranked = bestIndicator.ranked || [];
                           const topAcc = ranked[0]?.accuracy ?? 0;
-                          const tied = ranked.filter(r => r.accuracy === topAcc);
-                          return tied.map((r, i) => {
-                            const display = r.name.replace(/^strat:|^spec:|^dash:/,"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
-                            const acc = r.accuracy * 100;
-                            const sig = getBestSig(r.name);
-                            return (
-                              <div key={r.name} style={{ marginBottom: i < tied.length-1 ? 8 : 0 }}>
-                                {sig && sig !== "NEUTRAL" && sig !== "UNKNOWN"
-                                  ? <SignalRow sig={sig} conf={acc} />
-                                  : <div style={{ height:3, background:C.borderSoft, borderRadius:2, margin:"3px 0 6px" }} />
-                                }
-                                <div style={{ fontSize:9, color:C.indigo, fontWeight:700 }}>{display}</div>
-                                <AccuracyRow lbl="Accuracy (all-time)"
-                                  pct={acc} wins={r.wins} losses={r.losses} noData={false} />
-                              </div>
-                            );
-                          });
+                          // all indicators tied at the top accuracy (min 3 calls)
+                          const tied = ranked.filter(r => r.accuracy === topAcc && r.total >= 3);
+                          if (!tied.length) return <div style={{ fontSize:10, color:C.muted }}>No historical data</div>;
+
+                          // Combine signals: majority vote across all tied indicators
+                          const sigs = tied.map(r => getBestSig(r.name)).filter(s => s === "UP" || s === "DOWN");
+                          const upCount = sigs.filter(s => s === "UP").length;
+                          const downCount = sigs.filter(s => s === "DOWN").length;
+                          const sigTotal = upCount + downCount;
+                          let combinedSig = null, sigConf = 50;
+                          if (sigTotal > 0) {
+                            if (upCount > downCount)        { combinedSig = "UP";   sigConf = Math.round(upCount / sigTotal * 100); }
+                            else if (downCount > upCount)   { combinedSig = "DOWN"; sigConf = Math.round(downCount / sigTotal * 100); }
+                            else                            { combinedSig = null;   sigConf = 50; } // perfect split
+                          }
+
+                          // Display name
+                          const display = tied.length === 1
+                            ? tied[0].name.replace(/^strat:|^spec:|^dash:/,"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase())
+                            : `Top ${tied.length} Indicators`;
+
+                          // Accuracy — same for all tied
+                          const acc = topAcc * 100;
+                          const ref = tied[0]; // wins/losses from first (same % for all)
+
+                          return (<>
+                            {combinedSig
+                              ? <SignalRow sig={combinedSig} conf={sigConf} />
+                              : <div style={{ height:3, background:C.borderSoft, borderRadius:2, margin:"3px 0 6px" }} />
+                            }
+                            <div style={{ fontSize:9, color:C.indigo, fontWeight:700 }}>{display}</div>
+                            <AccuracyRow lbl="Accuracy (all-time)"
+                              pct={acc} wins={ref.wins} losses={ref.losses} noData={false} />
+                          </>);
                         })() : <div style={{ fontSize:10, color:C.muted }}>No historical data</div>}
                       </div>
 
