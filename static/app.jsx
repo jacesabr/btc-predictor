@@ -821,16 +821,23 @@ function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, ca, cz,
           const acc = microAcc[r.key];
           const accColor = !acc || acc.total < 3 ? C.muted : acc.accuracy >= 60 ? C.green : acc.accuracy >= 50 ? C.textSec : C.red;
           return (
-            <div key={r.key} style={{ ...card, flexShrink:0 }}>
+            <div key={r.key} style={{ ...card, flexShrink:0,
+              ...(r.dot==="err" ? { border:`1px solid ${C.red}88`, background:"#2a0a0a" } : {}) }}>
               <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-                <span style={{ fontSize:10, fontWeight:700, color:C.text, minWidth:90 }}>{r.name}</span>
+                <span style={{ fontSize:10, fontWeight:700, color:r.dot==="err"?C.red:C.text, minWidth:90 }}>{r.name}</span>
                 {sc && (
                   <span style={{ fontSize:8, fontWeight:700, padding:"1px 6px", borderRadius:3,
                     background:sc.bg, border:`1px solid ${sc.border}`, color:sc.color }}>
                     {r.signal}
                   </span>
                 )}
-                {acc && acc.total >= 3 && (
+                {r.dot==="err" && (
+                  <span style={{ fontSize:8, fontWeight:700, padding:"1px 6px", borderRadius:3,
+                    background:"#3a0a0a", border:`1px solid ${C.red}`, color:C.red }}>
+                    ✕ NO DATA
+                  </span>
+                )}
+                {acc && acc.total >= 3 && r.dot !== "err" && (
                   <span style={{ fontSize:9, fontWeight:700, color:accColor, marginLeft:2 }}>
                     {acc.accuracy.toFixed(0)}% <span style={{ color:C.muted, fontWeight:400 }}>({acc.correct}/{acc.total})</span>
                   </span>
@@ -2028,6 +2035,77 @@ function App() {
 
             {/* RIGHT: Predictions + DeepSeek + EV + Strategies */}
             <div style={{ flex:"0 0 54%", minWidth:0, display:"flex", flexDirection:"column", gap:5, overflowY:"auto", zoom:0.87 }}>
+
+              {/* ⓪ HISTORICAL PATTERN ANALYSIS + 1-LINE SUMMARY */}
+              {historicalAnalysis && (() => {
+                const pos  = historicalAnalysis.match(/\*\*POSITION:\s*(\w+)\*\*/i)?.[1]?.toUpperCase();
+                const conf = historicalAnalysis.match(/\*\*CONFIDENCE:\s*([\d]+)%\*\*/i)?.[1];
+                const lean = historicalAnalysis.match(/\*\*LEAN:\*\*\s*(.+)/i)?.[1]?.trim();
+                const posColor  = pos==="UP" ? C.green : pos==="DOWN" ? C.red : C.amber;
+                const posBg     = pos==="UP" ? C.greenBg : pos==="DOWN" ? C.redBg : C.amberBg;
+                const posBorder = pos==="UP" ? C.greenBorder : pos==="DOWN" ? C.redBorder : C.amberBorder;
+
+                function renderLine(line, i) {
+                  const stripped = line.replace(/\*\*(.*?)\*\*/g, "$1").replace(/^---+$/, "").trim();
+                  if (!stripped) return null;
+                  const isHeader = /^(POSITION|CONFIDENCE|LEAN|SUGGESTION|[0-9]+\.\s+[A-Z\s]+):?/.test(stripped);
+                  return (
+                    <div key={i} style={{ fontSize:11, color:isHeader?C.text:C.textSec, fontWeight:isHeader?700:400, lineHeight:1.65, marginBottom:isHeader?3:1 }}>
+                      <BoldAnalysis text={stripped} color={C.text} />
+                    </div>
+                  );
+                }
+
+                const barTimeStr  = winStartTime  ? fmtUtc(winStartTime)  : null;
+                const barPriceStr = winStartPrice ? "$"+winStartPrice.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}) : null;
+
+                return (<>
+                  {/* Full analysis box */}
+                  <div style={{ ...card, flexShrink:0 }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8, flexWrap:"wrap", gap:6 }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <span style={label}>Historical Pattern Analysis</span>
+                        {pos && (
+                          <span style={{ fontSize:10, fontWeight:800, padding:"2px 8px", borderRadius:4,
+                            color:posColor, background:posBg, border:`1px solid ${posBorder}` }}>
+                            {pos==="UP"?"▲ UP":pos==="DOWN"?"▼ DOWN":"— NEUTRAL"}{conf?` · ${conf}%`:""}
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        {barTimeStr && (
+                          <span style={{ fontSize:10, fontWeight:700, color:C.textSec, background:C.bg,
+                            border:`1px solid ${C.borderSoft}`, borderRadius:4, padding:"2px 8px" }}>
+                            ⏱ {barTimeStr}
+                          </span>
+                        )}
+                        {barPriceStr && (
+                          <span style={{ fontSize:13, fontWeight:900, color:C.text }}>{barPriceStr}</span>
+                        )}
+                      </div>
+                    </div>
+                    {historicalAnalysis.split("\n").map((line, i) => renderLine(line, i))}
+                  </div>
+
+                  {/* 1-line summary box */}
+                  {lean && (
+                    <div style={{ ...card, flexShrink:0, borderLeft:`3px solid ${posColor}`, padding:"8px 12px" }}>
+                      <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", gap:10 }}>
+                        <div style={{ flex:1 }}>
+                          <div style={{ ...label, marginBottom:4 }}>Historical Summary</div>
+                          <div style={{ fontSize:12, color:C.textSec, lineHeight:1.6 }}>
+                            <BoldAnalysis text={lean} color={C.text} />
+                          </div>
+                        </div>
+                        <div style={{ flexShrink:0, textAlign:"right" }}>
+                          {barTimeStr && <div style={{ fontSize:9, color:C.muted }}>{barTimeStr}</div>}
+                          {barPriceStr && <div style={{ fontSize:12, fontWeight:900, color:C.text }}>{barPriceStr}</div>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </>);
+              })()}
 
               {/* ① PREDICTION BAR — 4 columns, uniform layout */}
               {(() => {
