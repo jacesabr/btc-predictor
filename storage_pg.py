@@ -214,8 +214,11 @@ class StoragePG:
                     " strategy_votes, market_odds, ev, created_at) "
                     "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                     "ON CONFLICT (window_start) DO NOTHING",
-                    (window_start, window_end, start_price, signal, confidence,
-                     json.dumps(strategy_votes), market_odds, ev, time.time()),
+                    (float(window_start), float(window_end), float(start_price), signal, float(confidence),
+                     json.dumps(strategy_votes),
+                     float(market_odds) if market_odds is not None else None,
+                     float(ev) if ev is not None else None,
+                     time.time()),
                 )
             conn.commit()
         finally:
@@ -381,7 +384,9 @@ class StoragePG:
 
     # ── DeepSeek predictions ──────────────────────────────────────────────────
 
-    def store_deepseek_prediction(self, record: Dict):
+    def store_deepseek_prediction(self, record: Dict = None, **kwargs):
+        if record is None:
+            record = kwargs
         conn = _conn()
         try:
             with conn.cursor() as cur:
@@ -393,12 +398,18 @@ class StoragePG:
                     "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                     "ON CONFLICT (window_start) DO NOTHING",
                     (
-                        record.get("window_start"), record.get("window_end"),
-                        record.get("start_price"), record.get("signal"),
-                        record.get("confidence"), record.get("reasoning"),
-                        record.get("narrative"), record.get("free_observation"),
-                        record.get("data_received"), record.get("data_requests"),
-                        record.get("latency_ms"), record.get("window_count"),
+                        float(record.get("window_start") or 0),
+                        float(record.get("window_end") or 0),
+                        float(record.get("start_price") or 0),
+                        record.get("signal"),
+                        float(record.get("confidence") or 0),
+                        record.get("reasoning"),
+                        record.get("narrative"),
+                        record.get("free_observation"),
+                        record.get("data_received"),
+                        record.get("data_requests"),
+                        record.get("latency_ms"),
+                        record.get("window_count"),
                         time.time(),
                     ),
                 )
@@ -468,3 +479,34 @@ class StoragePG:
 
     def get_audit_records(self, n: int = 500) -> List[Dict]:
         return self.get_recent_deepseek_predictions(n)
+
+    def get_recent_predictions(self, n: int = 50) -> List[Dict]:
+        cutoff = get_reset_at()
+        conn = _conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT window_start, window_end, start_price, end_price, signal, "
+                    "confidence, actual_direction, correct, market_odds, ev, strategy_votes "
+                    "FROM predictions WHERE window_start >= %s "
+                    "ORDER BY window_start DESC LIMIT %s",
+                    (cutoff, n),
+                )
+                rows = []
+                for r in cur.fetchall():
+                    d = dict(r)
+                    if isinstance(d.get("strategy_votes"), str):
+                        try:
+                            d["strategy_votes"] = json.loads(d["strategy_votes"])
+                        except Exception:
+                            d["strategy_votes"] = {}
+                    rows.append(d)
+                return rows
+        finally:
+            _put(conn)
+
+    def get_prediction_history_with_indicators(self, n: int = 50) -> List[Dict]:
+        return self.get_recent_predictions(n)
+
+    def store_accuracy_snapshot(self, window_start: float, snapshot: Dict) -> None:
+        pass
