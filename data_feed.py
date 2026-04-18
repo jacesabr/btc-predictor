@@ -42,18 +42,20 @@ class Tick:
 
 
 class BinanceCollector:
-    """Fetches BTC/USD from Binance REST API on a polling interval."""
+    """Fetches BTC/USD from Binance REST, falls back to CoinAPI if blocked."""
 
-    BINANCE_URL = "https://api.binance.com/api/v3/ticker/price"
+    BINANCE_URL  = "https://api.binance.com/api/v3/ticker/price"
+    COINAPI_URL  = "https://rest.coinapi.io/v1/exchangerate/BTC/USD"
 
-    def __init__(self, poll_interval: float = 2.0, max_ticks: int = 10000):
+    def __init__(self, poll_interval: float = 2.0, max_ticks: int = 10000, coinapi_key: str = ""):
         self.poll_interval = poll_interval
         self.max_ticks = max_ticks
         self.ticks: List[Tick] = []
         self.callbacks: List[Callable] = []
         self._running = False
         self._last_real_price: Optional[float] = None
-        logger.info("Collector using Binance REST price feed")
+        self._coinapi_key = coinapi_key
+        logger.info("Collector using Binance REST price feed (CoinAPI fallback: %s)", "yes" if coinapi_key else "no")
 
     def on_tick(self, callback: Callable[[Tick], None]):
         self.callbacks.append(callback)
@@ -102,7 +104,32 @@ class BinanceCollector:
                         source="binance_rest",
                     )
         except Exception as exc:
-            logger.warning("Binance price fetch failed: %s", exc)
+            logger.warning("Binance price fetch failed: %s — trying CoinAPI fallback", exc)
+
+        if not self._coinapi_key:
+            return None
+        try:
+            connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+            async with aiohttp.ClientSession(connector=connector) as session:
+                async with session.get(
+                    self.COINAPI_URL,
+                    headers={"X-CoinAPI-Key": self._coinapi_key},
+                    timeout=aiohttp.ClientTimeout(total=8),
+                ) as resp:
+                    data = await resp.json()
+                    price = float(data["rate"])
+                    self._last_real_price = price
+                    spread = price * 0.00005
+                    return Tick(
+                        timestamp=time.time(),
+                        mid_price=price,
+                        bid_price=price - spread / 2,
+                        ask_price=price + spread / 2,
+                        spread=spread,
+                        source="coinapi_rest",
+                    )
+        except Exception as exc:
+            logger.warning("CoinAPI price fetch failed: %s", exc)
             return None
 
     def seed_from_klines(self, klines: list, n: int = 200):

@@ -18,6 +18,7 @@ import json
 import logging
 import pathlib
 import time
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 import aiohttp
@@ -60,7 +61,7 @@ CHARTS_DIR.mkdir(exist_ok=True)
 
 # ── Shared objects ────────────────────────────────────────────
 config          = Config()
-collector       = BinanceCollector(poll_interval=config.poll_interval_seconds)
+collector       = BinanceCollector(poll_interval=config.poll_interval_seconds, coinapi_key=config.coinapi_key)
 storage         = get_storage()
 ensemble        = EnsemblePredictor(config.initial_weights)
 lr_strategy     = LinearRegressionChannel()
@@ -683,15 +684,21 @@ async def _refresh_indicators():
 
 
 async def run_binance_feed():
-    """Fetch Binance 1m OHLCV every 60s."""
+    """Fetch 1m OHLCV every 60s — Binance primary, CoinAPI fallback."""
     global binance_klines
-    url    = "https://api.binance.com/api/v3/klines"
-    params = {"symbol": "BTCUSDT", "interval": "1m", "limit": 500}
+    binance_url = "https://api.binance.com/api/v3/klines"
+    coinapi_url = "https://rest.coinapi.io/v1/ohlcv/BITSTAMP_SPOT_BTC_USD/history"
     while True:
+        fetched = False
+        # Try Binance first
         try:
             connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
             async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                async with session.get(
+                    binance_url,
+                    params={"symbol": "BTCUSDT", "interval": "1m", "limit": 500},
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as resp:
                     if resp.status == 200:
                         data = await resp.json()
                         binance_klines.clear()
@@ -699,8 +706,36 @@ async def run_binance_feed():
                         logger.info("Binance klines updated: %d candles", len(binance_klines))
                         collector.seed_from_klines(binance_klines)
                         await _refresh_indicators()
+                        fetched = True
         except Exception as exc:
-            logger.warning("Binance feed error: %s", exc)
+            logger.warning("Binance klines error: %s — trying CoinAPI", exc)
+
+        # CoinAPI fallback
+        if not fetched and config.coinapi_key:
+            try:
+                connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+                async with aiohttp.ClientSession(connector=connector) as session:
+                    async with session.get(
+                        coinapi_url,
+                        params={"period_id": "1MIN", "limit": 500},
+                        headers={"X-CoinAPI-Key": config.coinapi_key},
+                        timeout=aiohttp.ClientTimeout(total=15),
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            # Convert CoinAPI format → Binance klines format [open_time_ms, o, h, l, close, vol]
+                            klines = []
+                            for bar in data:
+                                ts_ms = int(datetime.fromisoformat(bar["time_period_start"].replace("Z", "+00:00")).timestamp() * 1000)
+                                klines.append([ts_ms, bar["price_open"], bar["price_high"], bar["price_low"], bar["price_close"], bar.get("volume_traded", 0)])
+                            binance_klines.clear()
+                            binance_klines.extend(klines)
+                            logger.info("CoinAPI klines updated: %d candles", len(klines))
+                            collector.seed_from_klines(binance_klines)
+                            await _refresh_indicators()
+            except Exception as exc:
+                logger.warning("CoinAPI klines error: %s", exc)
+
         await asyncio.sleep(60)
 
 
