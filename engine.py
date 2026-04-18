@@ -684,57 +684,78 @@ async def _refresh_indicators():
 
 
 async def run_binance_feed():
-    """Fetch 1m OHLCV every 60s — Binance primary, CoinAPI fallback."""
+    """Fetch 1m OHLCV every 60s — Bybit primary, Kraken fallback, Binance last resort."""
     global binance_klines
-    binance_url = "https://api.binance.com/api/v3/klines"
-    coinapi_url = "https://rest.coinapi.io/v1/ohlcv/BITSTAMP_SPOT_BTC_USD/history"
     while True:
         fetched = False
-        # Try Binance first
+
+        # 1. Bybit klines [ts_ms, open, high, low, close, volume] — same layout as Binance
         try:
             connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
             async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.get(
-                    binance_url,
-                    params={"symbol": "BTCUSDT", "interval": "1m", "limit": 500},
+                    "https://api.bybit.com/v5/market/kline",
+                    params={"category": "spot", "symbol": "BTCUSDT", "interval": "1", "limit": "500"},
                     timeout=aiohttp.ClientTimeout(total=10),
                 ) as resp:
                     if resp.status == 200:
                         data = await resp.json()
+                        # Bybit returns newest-first; reverse so oldest-first like Binance
+                        bars = list(reversed(data["result"]["list"]))
+                        # Convert to Binance kline format: [open_time_ms, o, h, l, close, vol]
+                        klines = [[int(b[0]), b[1], b[2], b[3], b[4], b[5]] for b in bars]
                         binance_klines.clear()
-                        binance_klines.extend(data)
-                        logger.info("Binance klines updated: %d candles", len(binance_klines))
+                        binance_klines.extend(klines)
+                        logger.info("Bybit klines updated: %d candles", len(klines))
                         collector.seed_from_klines(binance_klines)
                         await _refresh_indicators()
                         fetched = True
         except Exception as exc:
-            logger.warning("Binance klines error: %s — trying CoinAPI", exc)
+            logger.warning("Bybit klines error: %s — trying Kraken", exc)
 
-        # CoinAPI fallback
-        if not fetched and config.coinapi_key:
+        # 2. Kraken OHLC fallback [time, open, high, low, close, vwap, volume, count]
+        if not fetched:
             try:
                 connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
                 async with aiohttp.ClientSession(connector=connector) as session:
                     async with session.get(
-                        coinapi_url,
-                        params={"period_id": "1MIN", "limit": 500},
-                        headers={"X-CoinAPI-Key": config.coinapi_key},
-                        timeout=aiohttp.ClientTimeout(total=15),
+                        "https://api.kraken.com/0/public/OHLC",
+                        params={"pair": "XBTUSD", "interval": "1"},
+                        timeout=aiohttp.ClientTimeout(total=10),
                     ) as resp:
                         if resp.status == 200:
                             data = await resp.json()
-                            # Convert CoinAPI format → Binance klines format [open_time_ms, o, h, l, close, vol]
-                            klines = []
-                            for bar in data:
-                                ts_ms = int(datetime.fromisoformat(bar["time_period_start"].replace("Z", "+00:00")).timestamp() * 1000)
-                                klines.append([ts_ms, bar["price_open"], bar["price_high"], bar["price_low"], bar["price_close"], bar.get("volume_traded", 0)])
+                            bars = list(data["result"].values())[0]
+                            # Convert to Binance format: [open_time_ms, o, h, l, close, vol]
+                            klines = [[int(b[0]) * 1000, b[1], b[2], b[3], b[4], b[6]] for b in bars]
                             binance_klines.clear()
                             binance_klines.extend(klines)
-                            logger.info("CoinAPI klines updated: %d candles", len(klines))
+                            logger.info("Kraken klines updated: %d candles", len(klines))
+                            collector.seed_from_klines(binance_klines)
+                            await _refresh_indicators()
+                            fetched = True
+            except Exception as exc:
+                logger.warning("Kraken klines error: %s", exc)
+
+        # 3. Binance last resort
+        if not fetched:
+            try:
+                connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+                async with aiohttp.ClientSession(connector=connector) as session:
+                    async with session.get(
+                        "https://api.binance.com/api/v3/klines",
+                        params={"symbol": "BTCUSDT", "interval": "1m", "limit": "500"},
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            binance_klines.clear()
+                            binance_klines.extend(data)
+                            logger.info("Binance klines updated: %d candles", len(data))
                             collector.seed_from_klines(binance_klines)
                             await _refresh_indicators()
             except Exception as exc:
-                logger.warning("CoinAPI klines error: %s", exc)
+                logger.warning("Binance klines error: %s", exc)
 
         await asyncio.sleep(60)
 

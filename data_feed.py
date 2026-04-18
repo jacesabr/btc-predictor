@@ -42,10 +42,11 @@ class Tick:
 
 
 class BinanceCollector:
-    """Fetches BTC/USD from Binance REST, falls back to CoinAPI if blocked."""
+    """Fetches BTC/USD — Bybit primary, Kraken fallback, Binance last resort."""
 
-    BINANCE_URL  = "https://api.binance.com/api/v3/ticker/price"
-    COINAPI_URL  = "https://rest.coinapi.io/v1/exchangerate/BTC/USD"
+    BYBIT_URL   = "https://api.bybit.com/v5/market/tickers"
+    KRAKEN_URL  = "https://api.kraken.com/0/public/Ticker"
+    BINANCE_URL = "https://api.binance.com/api/v3/ticker/price"
 
     def __init__(self, poll_interval: float = 2.0, max_ticks: int = 10000, coinapi_key: str = ""):
         self.poll_interval = poll_interval
@@ -55,7 +56,7 @@ class BinanceCollector:
         self._running = False
         self._last_real_price: Optional[float] = None
         self._coinapi_key = coinapi_key
-        logger.info("Collector using Binance REST price feed (CoinAPI fallback: %s)", "yes" if coinapi_key else "no")
+        logger.info("Collector using Bybit/Kraken price feed")
 
     def on_tick(self, callback: Callable[[Tick], None]):
         self.callbacks.append(callback)
@@ -83,16 +84,17 @@ class BinanceCollector:
         self._running = False
 
     async def _fetch_binance_price(self) -> Optional[Tick]:
+        # 1. Bybit (primary — no geo-block, no API key)
         try:
             connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
             async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.get(
-                    self.BINANCE_URL,
-                    params={"symbol": "BTCUSDT"},
+                    self.BYBIT_URL,
+                    params={"category": "spot", "symbol": "BTCUSDT"},
                     timeout=aiohttp.ClientTimeout(total=5),
                 ) as resp:
                     data = await resp.json()
-                    price = float(data["price"])
+                    price = float(data["result"]["list"][0]["lastPrice"])
                     self._last_real_price = price
                     spread = price * 0.00005
                     return Tick(
@@ -101,23 +103,22 @@ class BinanceCollector:
                         bid_price=price - spread / 2,
                         ask_price=price + spread / 2,
                         spread=spread,
-                        source="binance_rest",
+                        source="bybit_rest",
                     )
         except Exception as exc:
-            logger.warning("Binance price fetch failed: %s — trying CoinAPI fallback", exc)
+            logger.warning("Bybit price fetch failed: %s — trying Kraken", exc)
 
-        if not self._coinapi_key:
-            return None
+        # 2. Kraken fallback
         try:
             connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
             async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.get(
-                    self.COINAPI_URL,
-                    headers={"X-CoinAPI-Key": self._coinapi_key},
+                    self.KRAKEN_URL,
+                    params={"pair": "XBTUSD"},
                     timeout=aiohttp.ClientTimeout(total=8),
                 ) as resp:
                     data = await resp.json()
-                    price = float(data["rate"])
+                    price = float(list(data["result"].values())[0]["c"][0])
                     self._last_real_price = price
                     spread = price * 0.00005
                     return Tick(
@@ -126,10 +127,10 @@ class BinanceCollector:
                         bid_price=price - spread / 2,
                         ask_price=price + spread / 2,
                         spread=spread,
-                        source="coinapi_rest",
+                        source="kraken_rest",
                     )
         except Exception as exc:
-            logger.warning("CoinAPI price fetch failed: %s", exc)
+            logger.warning("Kraken price fetch failed: %s", exc)
             return None
 
     def seed_from_klines(self, klines: list, n: int = 200):
