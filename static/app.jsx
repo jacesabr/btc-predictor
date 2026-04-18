@@ -735,11 +735,15 @@ function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, ca, cz,
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
             <div style={{ ...label, fontSize:10 }}>Prediction Accuracy — All Sources</div>
             <button
-              onClick={() => fetch("/weights/update",{method:"POST"})
-                .then(()=>Promise.all([
-                  fetch("/weights").then(r=>r.json()).then(setWeights),
-                  fetch("/accuracy/all?n=200").then(r=>r.json()),
-                ]))}
+              onClick={() => {
+                if (!confirm("Reset all win/loss scores? Historical bars are kept but scores restart from now.")) return;
+                fetch("/reset-scores",{method:"POST"})
+                  .then(()=>fetch("/weights/update",{method:"POST"}))
+                  .then(()=>Promise.all([
+                    fetch("/weights").then(r=>r.json()).then(setWeights),
+                    fetch("/accuracy/all?n=200").then(r=>r.json()),
+                  ]));
+              }}
               style={{ fontSize:9, padding:"2px 8px", borderRadius:3,
                 border:`1px solid ${C.border}`, background:C.surface,
                 color:C.textSec, cursor:"pointer", fontFamily:"inherit", letterSpacing:1 }}>

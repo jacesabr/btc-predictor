@@ -475,6 +475,21 @@ async def force_predict():
         return {"status": "error", "detail": str(exc)}
 
 
+@app.post("/reset-scores")
+async def reset_scores():
+    import time as _time
+    now = _time.time()
+    note = f"Score reset {__import__('datetime').datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')} via dashboard"
+    if os.environ.get("DATABASE_URL"):
+        from storage_pg import set_reset_at
+        set_reset_at(now, note)
+    else:
+        import json as _json
+        reset_path = pathlib.Path(__file__).parent / "score_reset.json"
+        reset_path.write_text(_json.dumps({"reset_at": now, "reset_note": note}))
+    return {"status": "ok", "reset_at": now, "note": note}
+
+
 @app.post("/admin/reset")
 async def reset_database():
     from storage import _DATA_DIR, _rewrite_ndjson, _read_ndjson

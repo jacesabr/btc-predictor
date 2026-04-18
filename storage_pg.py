@@ -54,6 +54,13 @@ def _put(conn):
 # ── Schema bootstrap ──────────────────────────────────────────────────────────
 
 _DDL = """
+CREATE TABLE IF NOT EXISTS score_reset (
+    id        INTEGER PRIMARY KEY DEFAULT 1,
+    reset_at  DOUBLE PRECISION NOT NULL DEFAULT 0,
+    reset_note TEXT
+);
+INSERT INTO score_reset (id, reset_at) VALUES (1, 0) ON CONFLICT DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS ticks (
     id          BIGSERIAL PRIMARY KEY,
     timestamp   DOUBLE PRECISION NOT NULL,
@@ -106,6 +113,30 @@ def init_schema():
             cur.execute(_DDL)
         conn.commit()
         logger.info("PostgreSQL schema ready")
+    finally:
+        _put(conn)
+
+
+def get_reset_at() -> float:
+    conn = _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT reset_at FROM score_reset WHERE id=1")
+            row = cur.fetchone()
+            return float(row[0]) if row else 0.0
+    finally:
+        _put(conn)
+
+
+def set_reset_at(ts: float, note: str = "") -> None:
+    conn = _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE score_reset SET reset_at=%s, reset_note=%s WHERE id=1",
+                (ts, note),
+            )
+        conn.commit()
     finally:
         _put(conn)
 
@@ -214,13 +245,14 @@ class StoragePG:
             _put(conn)
 
     def get_rolling_accuracy(self, n: int = 12) -> Tuple[int, int, float]:
+        cutoff = get_reset_at()
         conn = _conn()
         try:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT correct FROM predictions WHERE correct IS NOT NULL "
+                    "SELECT correct FROM predictions WHERE correct IS NOT NULL AND window_start >= %s "
                     "ORDER BY window_start DESC LIMIT %s",
-                    (n,),
+                    (cutoff, n),
                 )
                 rows = cur.fetchall()
             if not rows:
@@ -232,11 +264,14 @@ class StoragePG:
             _put(conn)
 
     def get_total_accuracy(self) -> Tuple[int, int, float]:
+        cutoff = get_reset_at()
         conn = _conn()
         try:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT COUNT(*), SUM(correct) FROM predictions WHERE correct IS NOT NULL"
+                    "SELECT COUNT(*), SUM(correct) FROM predictions "
+                    "WHERE correct IS NOT NULL AND window_start >= %s",
+                    (cutoff,),
                 )
                 row = cur.fetchone()
             total = row[0] or 0
@@ -246,13 +281,15 @@ class StoragePG:
             _put(conn)
 
     def get_strategy_rolling_accuracy(self, n: int = 20) -> Dict[str, float]:
+        cutoff = get_reset_at()
         conn = _conn()
         try:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT strategy_votes, actual_direction FROM predictions "
-                    "WHERE actual_direction IS NOT NULL ORDER BY window_start DESC LIMIT %s",
-                    (n,),
+                    "WHERE actual_direction IS NOT NULL AND window_start >= %s "
+                    "ORDER BY window_start DESC LIMIT %s",
+                    (cutoff, n),
                 )
                 rows = cur.fetchall()
         finally:
@@ -275,13 +312,15 @@ class StoragePG:
         }
 
     def get_strategy_accuracy_full(self, n: int = 100) -> Dict[str, Dict]:
+        cutoff = get_reset_at()
         conn = _conn()
         try:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT strategy_votes, actual_direction FROM predictions "
-                    "WHERE actual_direction IS NOT NULL ORDER BY window_start DESC LIMIT %s",
-                    (n,),
+                    "WHERE actual_direction IS NOT NULL AND window_start >= %s "
+                    "ORDER BY window_start DESC LIMIT %s",
+                    (cutoff, n),
                 )
                 rows = cur.fetchall()
         finally:
@@ -391,12 +430,14 @@ class StoragePG:
             _put(conn)
 
     def get_deepseek_accuracy(self) -> Dict:
+        cutoff = get_reset_at()
         conn = _conn()
         try:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT signal, correct FROM deepseek_predictions "
-                    "WHERE correct IS NOT NULL"
+                    "WHERE correct IS NOT NULL AND window_start >= %s",
+                    (cutoff,),
                 )
                 rows = cur.fetchall()
         finally:
