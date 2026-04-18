@@ -414,39 +414,10 @@ function DeepSeekAuditTab({ deepseekLog, deepseekAcc, deepseekPred, ensembleAccu
   return (
     <div style={{ height:"100%", overflowY:"auto", display:"flex", flexDirection:"column", gap:6 }}>
       <div style={{ display:"flex", gap:6, flexShrink:0 }}>
-        <div style={{ ...card, flex:"0 0 auto", minWidth:160, textAlign:"center" }}>
-          <div style={label}>DeepSeek Accuracy</div>
-          {deepseekAcc?.total > 0 ? (<>
-            <div style={{ fontSize:34, fontWeight:900, color:deepseekAcc.accuracy>=0.5?C.green:C.red, lineHeight:1, marginTop:4 }}>
-              {(deepseekAcc.accuracy*100).toFixed(1)}%
-            </div>
-            <div style={{ fontSize:16, fontWeight:900, color:C.text, marginTop:2 }}>{deepseekAcc.correct}/{deepseekAcc.total}</div>
-          </>) : <div style={{ color:C.muted, fontSize:10, padding:"8px 0" }}>No historical data<br/><span style={{ fontSize:9 }}>recording from next bar</span></div>}
-        </div>
-        <div style={{ ...card, flex:"0 0 auto", minWidth:160, textAlign:"center" }}>
-          <div style={label}>Ensemble Accuracy</div>
-          {totalPreds > 0 ? (<>
-            <div style={{ fontSize:34, fontWeight:900, color:ensembleAccuracy>=50?C.green:C.red, lineHeight:1, marginTop:4 }}>
-              {ensembleAccuracy.toFixed(1)}%
-            </div>
-            <div style={{ fontSize:16, fontWeight:900, color:C.text, marginTop:2 }}>{correctPreds}/{totalPreds}</div>
-          </>) : <div style={{ color:C.muted, fontSize:10, padding:"8px 0" }}>No resolved predictions</div>}
-        </div>
-        <div style={{ ...card, flex:"0 0 auto", minWidth:160, textAlign:"center",
-          borderColor:agreeAcc?.total_agree>0?(agreeAcc.accuracy_agree>=0.5?C.greenBorder:C.redBorder):C.borderSoft }}>
-          <div style={label}>Agree Only</div>
-          <div style={{ fontSize:9, color:C.muted, marginBottom:2 }}>ensemble = DeepSeek</div>
-          {agreeAcc?.total_agree > 0 ? (<>
-            <div style={{ fontSize:34, fontWeight:900, color:agreeAcc.accuracy_agree>=0.5?C.green:C.red, lineHeight:1, marginTop:4 }}>
-              {(agreeAcc.accuracy_agree*100).toFixed(1)}%
-            </div>
-            <div style={{ fontSize:16, fontWeight:900, color:C.text, marginTop:2 }}>{agreeAcc.correct_agree}/{agreeAcc.total_agree}</div>
-          </>) : <div style={{ color:C.muted, fontSize:10, padding:"8px 0" }}>No historical data<br/><span style={{ fontSize:9 }}>needs ensemble + DeepSeek to agree</span></div>}
-        </div>
         {pending && (
           <div style={{ ...card, flex:1, display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ fontSize:22, fontWeight:900, color:deepseekPred.signal==="UP"?C.green:C.red }}>
-              {deepseekPred.signal==="UP"?"▲ UP":"▼ DOWN"}
+            <div style={{ fontSize:22, fontWeight:900, color:deepseekPred.signal==="UP"?C.green:deepseekPred.signal==="NEUTRAL"?C.amber:C.red }}>
+              {deepseekPred.signal==="UP"?"▲ UP":deepseekPred.signal==="NEUTRAL"?"— NEUTRAL":"▼ DOWN"}
             </div>
             <div>
               <div style={{ fontSize:18, fontWeight:800, color:C.text }}>{deepseekPred.confidence}%</div>
@@ -780,12 +751,65 @@ function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, ca, cz,
             <div style={{ color:C.muted, fontSize:10, padding:"12px 0" }}>
               Loading accuracy data — need ≥3 resolved bars per indicator to score.
             </div>
-          ) : (<>
-            <AccuracySection title="AI Predictors" rows={allAccuracy.ai} showWeight={false} />
-            <AccuracySection title="Technical Strategies" rows={allAccuracy.strategies} showWeight={true} />
-            <AccuracySection title="DeepSeek Specialists" rows={allAccuracy.specialists} showWeight={false} />
-            <AccuracySection title="Microstructure Signals" rows={allAccuracy.microstructure} showWeight={false} />
-          </>)}
+          ) : (() => {
+            // Flatten all categories into one list with a Category column, sorted by accuracy desc
+            const CAT_LABEL = { ai:"AI", strategies:"Strategy", specialists:"Specialist", microstructure:"Micro" };
+            const allRows = [];
+            for (const [cat, rows] of Object.entries(allAccuracy)) {
+              if (!Array.isArray(rows)) continue;
+              rows.forEach(r => allRows.push({ ...r, cat: CAT_LABEL[cat] || cat }));
+            }
+            allRows.sort((a, b) => {
+              // Rows with <3 total go to bottom; among the rest sort by accuracy desc, ties by total desc
+              const aQ = a.total >= 3, bQ = b.total >= 3;
+              if (aQ !== bQ) return aQ ? -1 : 1;
+              if (b.accuracy !== a.accuracy) return b.accuracy - a.accuracy;
+              return b.total - a.total;
+            });
+            const bestAcc = allRows.find(r => r.total >= 3)?.accuracy ?? null;
+            return (
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+                <thead>
+                  <tr style={{ borderBottom:`1px solid ${C.border}` }}>
+                    <th style={{ ...td, fontSize:8, color:C.muted, fontWeight:700, letterSpacing:1, textTransform:"uppercase", width:18 }}>#</th>
+                    <th style={{ ...td, fontSize:8, color:C.muted, fontWeight:700, letterSpacing:1, textTransform:"uppercase" }}>Name</th>
+                    <th style={{ ...td, fontSize:8, color:C.muted, fontWeight:700, letterSpacing:1, textTransform:"uppercase" }}>Cat</th>
+                    <th style={{ ...td, fontSize:8, color:C.muted, fontWeight:700, letterSpacing:1, textTransform:"uppercase" }}>Acc%</th>
+                    <th style={{ ...td, fontSize:8, color:C.muted, fontWeight:700, letterSpacing:1, textTransform:"uppercase" }}>W/Total</th>
+                    <th style={{ ...td, fontSize:8, color:C.muted, fontWeight:700, letterSpacing:1, textTransform:"uppercase" }}>Tier</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allRows.map((r, i) => {
+                    const tc = TIER_STYLE[r.label] || TIER_STYLE.LEARNING;
+                    const accColor = r.total < 3 ? C.muted : r.accuracy >= 60 ? C.green : r.accuracy >= 50 ? C.textSec : C.red;
+                    const isBest = bestAcc !== null && r.accuracy === bestAcc && r.total >= 3;
+                    return (
+                      <tr key={r.key} style={{ borderBottom:`1px solid ${C.borderSoft}`, background: isBest ? "#FFFBEB" : "transparent" }}>
+                        <td style={{ ...td, color:C.muted, fontSize:9 }}>
+                          {isBest ? <span style={{ color:C.amber, fontWeight:900 }}>★</span> : i + 1}
+                        </td>
+                        <td style={{ ...td, fontWeight:700, color:C.text, maxWidth:110, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{r.name}</td>
+                        <td style={{ ...td, fontSize:9, color:C.muted }}>{r.cat}</td>
+                        <td style={{ ...td, color:accColor, fontWeight:700, fontSize:12 }}>
+                          {r.total >= 3 ? `${r.accuracy.toFixed(1)}%` : "—"}
+                        </td>
+                        <td style={{ ...td, color:C.textSec, fontSize:10 }}>
+                          {r.total > 0 ? `${r.correct}/${r.total}` : "—"}
+                        </td>
+                        <td style={{ ...td }}>
+                          <span style={{ fontSize:8, fontWeight:700, padding:"1px 5px", borderRadius:3,
+                            background:tc.bg, border:`1px solid ${tc.border}`, color:tc.color }}>
+                            {r.label}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            );
+          })()}
         </div>
       </div>
 
@@ -1113,14 +1137,14 @@ function BackendTab({ backendSnap, deepseekPred }) {
         {/* Ensemble + Polymarket */}
         <div style={{ display:"flex", gap:5, flexShrink:0 }}>
           {ensRes.signal && (
-            <div style={{ ...card, flex:1, borderLeft:`3px solid ${ensRes.signal==="UP"?C.green:C.red}` }}>
+            <div style={{ ...card, flex:1, borderLeft:`3px solid ${ensRes.signal==="UP"?C.green:ensRes.signal==="NEUTRAL"?C.amber:C.red}` }}>
               <div style={{ ...label, marginBottom:4 }}>Ensemble Vote</div>
-              <div style={{ fontSize:20, fontWeight:900, color:ensRes.signal==="UP"?C.green:C.red }}>
-                {ensRes.signal==="UP"?"▲ UP":"▼ DOWN"}
+              <div style={{ fontSize:20, fontWeight:900, color:ensRes.signal==="UP"?C.green:ensRes.signal==="NEUTRAL"?C.amber:C.red }}>
+                {ensRes.signal==="UP"?"▲ UP":ensRes.signal==="NEUTRAL"?"— NEUTRAL":"▼ DOWN"}
               </div>
               <div style={{ fontSize:14, fontWeight:800, color:C.text }}>{((ensRes.confidence||0)*100).toFixed(1)}%</div>
               <div style={{ height:3, background:C.borderSoft, borderRadius:2, margin:"4px 0" }}>
-                <div style={{ width:`${(ensRes.confidence||0)*100}%`, height:"100%", background:ensRes.signal==="UP"?C.green:C.red }} />
+                <div style={{ width:`${(ensRes.confidence||0)*100}%`, height:"100%", background:ensRes.signal==="UP"?C.green:ensRes.signal==="NEUTRAL"?C.amber:C.red }} />
               </div>
               <div style={{ fontSize:9, color:C.muted }}>{ensRes.bullish_count}↑ {ensRes.bearish_count}↓</div>
             </div>
@@ -1161,13 +1185,13 @@ function BackendTab({ backendSnap, deepseekPred }) {
           </div>
           {ds.signal && ds.signal !== "ERROR" ? (
             <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap" }}>
-              <div style={{ fontSize:26, fontWeight:900, color:ds.signal==="UP"?C.green:C.red }}>
-                {ds.signal==="UP"?"▲ UP":"▼ DOWN"}
+              <div style={{ fontSize:26, fontWeight:900, color:ds.signal==="UP"?C.green:ds.signal==="NEUTRAL"?C.amber:C.red }}>
+                {ds.signal==="UP"?"▲ UP":ds.signal==="NEUTRAL"?"— NEUTRAL":"▼ DOWN"}
               </div>
               <div>
                 <div style={{ fontSize:20, fontWeight:900, color:C.text }}>{ds.confidence}%</div>
                 <div style={{ height:4, background:C.borderSoft, borderRadius:2, width:100, marginTop:2 }}>
-                  <div style={{ width:`${ds.confidence}%`, height:"100%", background:ds.signal==="UP"?C.green:C.red, borderRadius:2 }} />
+                  <div style={{ width:`${ds.confidence}%`, height:"100%", background:ds.signal==="UP"?C.green:ds.signal==="NEUTRAL"?C.amber:C.red, borderRadius:2 }} />
                 </div>
               </div>
               {ds.data_received && (
@@ -1203,21 +1227,7 @@ function BackendTab({ backendSnap, deepseekPred }) {
           </div>
         )}
 
-        {/* Narrative */}
-        {ds.narrative && ds.signal !== "ERROR" && (
-          <div style={{ ...card, flexShrink:0, borderLeft:`3px solid ${C.blue}` }}>
-            <div style={{ ...label, marginBottom:5 }}>Price Narrative</div>
-            <div style={{ fontSize:11, color:"#1E40AF", lineHeight:1.8, fontStyle:"italic" }}>{ds.narrative}</div>
-          </div>
-        )}
-
-        {/* Free Observation */}
-        {ds.free_observation && ds.signal !== "ERROR" && (
-          <div style={{ ...card, flexShrink:0, borderLeft:`3px solid ${C.amber}` }}>
-            <div style={{ ...label, marginBottom:5 }}>AI Free Observation</div>
-            <div style={{ fontSize:11, color:C.amber, lineHeight:1.8 }}>{ds.free_observation}</div>
-          </div>
-        )}
+        {/* Narrative and Free Observation removed from live view — both feed into DeepSeek main prompt and are visible in History tab */}
 
         {/* Full Prompt — always shown; error state if missing after a real prediction */}
         {ds.signal && ds.signal !== "ERROR" ? (
@@ -1580,6 +1590,8 @@ function App() {
   const [specialistAt,          setSpecialistAt]          = useState(null);
   const [pendingDeepseekReady,  setPendingDeepseekReady]  = useState(false);
   const [pendingDeepseekPred,   setPendingDeepseekPred]   = useState(null);
+  const [historicalAnalysis,    setHistoricalAnalysis]    = useState("");
+  const [historicalContext,     setHistoricalContext]     = useState("");
   const [tab,                   setTab]                   = useState("live");
   const [backendSnap,    setBackendSnap]    = useState(null);
   const [sourceHistory,  setSourceHistory]  = useState([]);
@@ -1637,6 +1649,8 @@ function App() {
         if (d.polymarket)                             setPolymarket(d.polymarket);
         if (d.specialist_completed_at)                setSpecialistAt(d.specialist_completed_at);
         if (d.pending_deepseek_ready !== undefined)   setPendingDeepseekReady(d.pending_deepseek_ready);
+        if (d.bar_historical_analysis !== undefined)  setHistoricalAnalysis(d.bar_historical_analysis || "");
+        if (d.bar_historical_context !== undefined)   setHistoricalContext(d.bar_historical_context || "");
       };
     }
     connect();
@@ -1646,8 +1660,8 @@ function App() {
 
   useEffect(() => {
     const id = setInterval(() => {
-      if (!winStartTime) return;
-      setTimeLeft(Math.max(0, Math.round(300-(Date.now()/1000-winStartTime))));
+      const ref = winStartTime ?? (Math.floor(Date.now()/1000/300)*300);
+      setTimeLeft(Math.max(0, Math.round(300-(Date.now()/1000-ref))));
     }, 500);
     return () => clearInterval(id);
   }, [winStartTime]);
@@ -1663,6 +1677,8 @@ function App() {
         if (d.pending_deepseek_ready !== undefined) setPendingDeepseekReady(d.pending_deepseek_ready);
         if (d.deepseek_prediction)         setDeepseekPred(d.deepseek_prediction);
         if (d.specialist_completed_at)     setSpecialistAt(d.specialist_completed_at);
+        if (d.bar_historical_analysis !== undefined) setHistoricalAnalysis(d.bar_historical_analysis || "");
+        if (d.bar_historical_context !== undefined)  setHistoricalContext(d.bar_historical_context || "");
       } catch(_) {}
     }
     pollDS();
@@ -1714,11 +1730,11 @@ function App() {
 
   // ── All accuracy — fetch on ensemble tab switch + refresh every 60s ──
   useEffect(() => {
-    if (tab !== "ensemble") return;
+    if (tab !== "ensemble" && tab !== "history") return;
     fetch("/accuracy/all?n=200").then(r=>r.json()).then(setAllAccuracy).catch(()=>{});
   }, [tab]);
   useEffect(() => {
-    if (tab !== "ensemble") return;
+    if (tab !== "ensemble" && tab !== "history") return;
     const id = setInterval(()=>{
       fetch("/accuracy/all?n=200").then(r=>r.json()).then(setAllAccuracy).catch(()=>{});
     }, 60000);
@@ -1917,8 +1933,13 @@ function App() {
       })()
     : "--:-- UTC";
   const activeDeepseekPred = (pendingDeepseekReady && pendingDeepseekPred) ? pendingDeepseekPred : deepseekPred;
-  const aiAgree = activeDeepseekPred&&ensemblePred&&activeDeepseekPred.signal!=="ERROR"
-                    ? activeDeepseekPred.signal===ensemblePred.signal : null;
+  // Apply 70% threshold: Combined Indicators only trades when ≥70% confident; below = NEUTRAL (no trade)
+  const effectiveEnsSig = ensemblePred
+    ? (ensemblePred.signal !== "NEUTRAL" && ensemblePred.confidence * 100 < 70 ? "NEUTRAL" : ensemblePred.signal)
+    : null;
+  // aiAgree only when we have a live (pending) prediction — stale results must not show as current
+  const aiAgree = (pendingDeepseekReady && activeDeepseekPred && ensemblePred && activeDeepseekPred.signal!=="ERROR")
+                    ? activeDeepseekPred.signal===effectiveEnsSig : null;
   const strats = STRATEGY_META.filter(m=>strategies[m.key]).map(m=>({...m,...strategies[m.key]}));
 
   // Cross-exchange divergence (for microstructure display)
@@ -2011,35 +2032,40 @@ function App() {
               {/* ① PREDICTION BAR — 4 columns, uniform layout */}
               {(() => {
                 // Shared accuracy footer — identical across all 4 columns
-                function AccuracyRow({ pct, wins, losses, label: lbl, noData }) {
+                function AccuracyRow({ pct, wins, losses, total, label: lbl, noData }) {
+                  const neutral = (total != null && total > wins + losses) ? total - wins - losses : null;
                   return (<>
                     <div style={{ borderTop:`1px solid ${C.borderSoft}`, margin:"6px 0 4px" }} />
                     <div style={{ ...label, marginBottom:2 }}>{lbl}</div>
                     {noData
                       ? <div style={{ fontSize:10, color:C.muted }}>No historical data</div>
-                      : <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>
+                      : <div style={{ display:"flex", alignItems:"baseline", gap:5, flexWrap:"wrap" }}>
                           <span style={{ fontSize:22, fontWeight:900, color:pct>=50?C.green:C.red }}>{pct.toFixed(1)}%</span>
                           <span style={{ fontSize:10, fontWeight:700, color:C.green }}>{wins}W</span>
                           <span style={{ fontSize:10, color:C.muted }}>/</span>
                           <span style={{ fontSize:10, fontWeight:700, color:C.red }}>{losses}L</span>
+                          {neutral != null && <><span style={{ fontSize:10, color:C.muted }}>/</span><span style={{ fontSize:10, fontWeight:700, color:C.muted }}>{neutral}N</span></>}
                         </div>
                     }
                   </>);
                 }
                 // Shared signal row — identical across all 4 columns
                 function SignalRow({ sig, conf, confStr }) {
-                  const up = sig === "UP";
-                  const clr = up ? C.green : C.red;
-                  const pct = confStr ?? (conf != null ? conf.toFixed(1)+"%" : null);
+                  const up      = sig === "UP";
+                  const neutral = sig === "NEUTRAL";
+                  const clr     = neutral ? C.amber : up ? C.green : C.red;
+                  // Neutral = no trade, 0 position — show 0% as placeholder
+                  const pct     = neutral ? "0%" : (confStr ?? (conf != null ? conf.toFixed(1)+"%" : null));
+                  const barW    = neutral ? 0 : (conf ?? (up ? 65 : 35));
                   return (<>
                     <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
                       <span style={{ fontSize:26, fontWeight:900, color:clr, lineHeight:1 }}>
-                        {up ? "▲ UP" : "▼ DOWN"}
+                        {neutral ? "— NEUTRAL" : up ? "▲ UP" : "▼ DOWN"}
                       </span>
                       {pct && <span style={{ fontSize:20, fontWeight:900, color:C.text }}>{pct}</span>}
                     </div>
                     <div style={{ height:3, background:C.borderSoft, borderRadius:2, margin:"3px 0" }}>
-                      <div style={{ width:`${conf ?? (up?65:35)}%`, height:"100%", borderRadius:2, background:clr }} />
+                      <div style={{ width:`${barW}%`, height:"100%", borderRadius:2, background:clr }} />
                     </div>
                   </>);
                 }
@@ -2069,9 +2095,12 @@ function App() {
                       <div style={{ borderRight:`1px solid ${C.borderSoft}`, paddingRight:12 }}>
                         <div style={colTitle}>Combined Indicators</div>
                         {ensemblePred ? (<>
-                          <SignalRow sig={ensemblePred.signal} conf={ensemblePred.confidence*100} />
+                          <SignalRow sig={effectiveEnsSig} conf={effectiveEnsSig==="NEUTRAL" ? 0 : ensemblePred.confidence*100} />
                           <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                             <span style={{ fontSize:9, color:C.muted }}>{ensemblePred.bullish}↑ {ensemblePred.bearish}↓</span>
+                            {effectiveEnsSig==="NEUTRAL" && ensemblePred.signal!=="NEUTRAL" && (
+                              <span style={{ fontSize:9, fontWeight:700, color:C.amber }}>({(ensemblePred.confidence*100).toFixed(1)}% raw)</span>
+                            )}
                             {aiAgree!==null && (
                               <span style={{ fontSize:9, fontWeight:800, padding:"1px 5px", borderRadius:3,
                                 color:aiAgree?C.green:C.amber, background:aiAgree?C.greenBg:C.amberBg,
@@ -2089,7 +2118,7 @@ function App() {
                       {/* ── Col 2: DeepSeek ── */}
                       <div style={{ borderRight:`1px solid ${C.borderSoft}`, padding:"0 12px" }}>
                         <div style={colTitle}>DeepSeek AI Analysis</div>
-                        {activeDeepseekPred&&activeDeepseekPred.signal!=="ERROR" ? (<>
+                        {pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR" ? (<>
                           <SignalRow sig={activeDeepseekPred.signal} conf={activeDeepseekPred.confidence} />
                           <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                             <span style={{ fontSize:9, color:C.muted }}>#{activeDeepseekPred.window_count} · {activeDeepseekPred.latency_ms}ms</span>
@@ -2101,41 +2130,100 @@ function App() {
                             )}
                           </div>
                           <AccuracyRow lbl="DeepSeek accuracy"
-                            pct={deepseekAcc?.accuracy*100??0} wins={deepseekAcc?.correct??0} losses={(deepseekAcc?.total??0)-(deepseekAcc?.correct??0)}
+                            pct={deepseekAcc?.accuracy*100??0} wins={deepseekAcc?.correct??0}
+                            losses={(deepseekAcc?.directional??deepseekAcc?.total??0)-(deepseekAcc?.correct??0)}
+                            total={(deepseekAcc?.directional??0)+(deepseekAcc?.neutrals??0)}
+                            noData={!deepseekAcc?.total} />
+                        </>) : pendingDeepseekReady && activeDeepseekPred?.signal==="ERROR" ? (
+                          <div style={{ fontSize:11, color:C.red }}>{activeDeepseekPred.reasoning || "API error"}</div>
+                        ) : deepseekPred && deepseekPred.signal!=="ERROR" ? (<>
+                          <SignalRow sig={deepseekPred.signal} conf={deepseekPred.confidence} />
+                          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                            <span style={{ fontSize:9, color:C.muted }}>#{deepseekPred.window_count} · {deepseekPred.latency_ms}ms</span>
+                            <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>prev bar</span>
+                          </div>
+                          <AccuracyRow lbl="DeepSeek accuracy"
+                            pct={deepseekAcc?.accuracy*100??0} wins={deepseekAcc?.correct??0}
+                            losses={(deepseekAcc?.directional??deepseekAcc?.total??0)-(deepseekAcc?.correct??0)}
+                            total={(deepseekAcc?.directional??0)+(deepseekAcc?.neutrals??0)}
                             noData={!deepseekAcc?.total} />
                         </>) : (
-                          <div style={{ fontSize:11, color:activeDeepseekPred?.signal==="ERROR"?C.red:C.muted }}>
-                            {activeDeepseekPred?.signal==="ERROR" ? "API error" : "Analyzing…"}
-                          </div>
+                          <div style={{ fontSize:11, color:C.muted }}>Analyzing…</div>
                         )}
                       </div>
 
-                      {/* ── Col 3: Combined agree ── */}
+                      {/* ── Col 3: Consensus — unique: shows agree/split state, not a repeat of ensemble ── */}
                       <div style={{ borderRight:`1px solid ${C.borderSoft}`, padding:"0 12px" }}>
-                        <div style={colTitle}>Combined Signal</div>
-                        {aiAgree!==null ? (<>
-                          {ensemblePred && <SignalRow sig={ensemblePred.signal} conf={ensemblePred.confidence*100} />}
-                          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                            <span style={{ fontSize:9, fontWeight:800, padding:"1px 5px", borderRadius:3,
-                              color:aiAgree?C.green:C.amber, background:aiAgree?C.greenBg:C.amberBg,
-                              border:`1px solid ${aiAgree?C.greenBorder:C.amberBorder}` }}>
-                              {aiAgree?"✓ agree":"⚠ split"}
-                            </span>
-                          </div>
-                          <AccuracyRow lbl="When both agreed"
-                            pct={agreeAcc?.accuracy_agree*100??0} wins={agreeAcc?.correct_agree??0} losses={(agreeAcc?.total_agree??0)-(agreeAcc?.correct_agree??0)}
-                            noData={!agreeAcc?.total_agree} />
-                        </>) : <div style={{ fontSize:11, color:C.muted }}>Waiting…</div>}
+                        <div style={colTitle}>Consensus</div>
+                        {aiAgree!==null ? (() => {
+                          const dsSig = (pendingDeepseekReady && activeDeepseekPred?.signal!=="ERROR") ? activeDeepseekPred?.signal : deepseekPred?.signal;
+                          const ensSig = effectiveEnsSig;
+                          const agreed = aiAgree && ensSig;
+                          // Consensus is NEUTRAL if either side is neutral
+                          const consensusSig = agreed ? ensSig : "NEUTRAL";
+                          return (<>
+                            {agreed
+                              ? <SignalRow sig={consensusSig} conf={consensusSig==="NEUTRAL" ? 0 : ensemblePred.confidence*100} />
+                              : (<>
+                                  <SignalRow sig="NEUTRAL" conf={0} />
+                                  <div style={{ display:"flex", gap:6, alignItems:"baseline", marginBottom:2 }}>
+                                    {ensSig && <span style={{ fontSize:11, fontWeight:900, color:ensSig==="UP"?C.green:ensSig==="NEUTRAL"?C.amber:C.red }}>{ensSig==="UP"?"▲":ensSig==="NEUTRAL"?"—":"▼"} Ind</span>}
+                                    {dsSig && <span style={{ fontSize:11, fontWeight:900, color:dsSig==="UP"?C.green:dsSig==="NEUTRAL"?C.amber:C.red }}>{dsSig==="UP"?"▲":dsSig==="NEUTRAL"?"—":"▼"} AI</span>}
+                                  </div>
+                                </>)
+                            }
+                            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                              <span style={{ fontSize:9, fontWeight:800, padding:"1px 5px", borderRadius:3,
+                                color:aiAgree?C.green:C.amber, background:aiAgree?C.greenBg:C.amberBg,
+                                border:`1px solid ${aiAgree?C.greenBorder:C.amberBorder}` }}>
+                                {aiAgree?"✓ agree":"⚠ split"}
+                              </span>
+                            </div>
+                            <AccuracyRow lbl="When both agreed"
+                              pct={agreeAcc?.accuracy_agree*100??0} wins={agreeAcc?.correct_agree??0} losses={(agreeAcc?.total_agree??0)-(agreeAcc?.correct_agree??0)}
+                              noData={!agreeAcc?.total_agree} />
+                          </>);
+                        })() : deepseekPred && deepseekPred.signal!=="ERROR" && ensemblePred ? (() => {
+                          const prevEnsSig = effectiveEnsSig;
+                          const prevAgree = deepseekPred.signal===prevEnsSig && prevEnsSig!=="NEUTRAL";
+                          const prevConsensusSig = prevAgree ? prevEnsSig : "NEUTRAL";
+                          return (<>
+                            {prevAgree
+                              ? <SignalRow sig={prevConsensusSig} conf={prevConsensusSig==="NEUTRAL" ? 0 : ensemblePred.confidence*100} />
+                              : (<>
+                                  <SignalRow sig="NEUTRAL" conf={0} />
+                                  <div style={{ display:"flex", gap:6, alignItems:"baseline", marginBottom:2 }}>
+                                    <span style={{ fontSize:11, fontWeight:900, color:prevEnsSig==="UP"?C.green:prevEnsSig==="NEUTRAL"?C.amber:C.red }}>{prevEnsSig==="UP"?"▲":prevEnsSig==="NEUTRAL"?"—":"▼"} Ind</span>
+                                    <span style={{ fontSize:11, fontWeight:900, color:deepseekPred.signal==="UP"?C.green:deepseekPred.signal==="NEUTRAL"?C.amber:C.red }}>{deepseekPred.signal==="UP"?"▲":deepseekPred.signal==="NEUTRAL"?"—":"▼"} AI</span>
+                                  </div>
+                                </>)
+                            }
+                            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                              <span style={{ fontSize:9, fontWeight:800, padding:"1px 5px", borderRadius:3,
+                                color:prevAgree?C.green:C.amber, background:prevAgree?C.greenBg:C.amberBg,
+                                border:`1px solid ${prevAgree?C.greenBorder:C.amberBorder}` }}>
+                                {prevAgree?"✓ agree":"⚠ split"}
+                              </span>
+                              <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>prev bar</span>
+                            </div>
+                            <AccuracyRow lbl="When both agreed"
+                              pct={agreeAcc?.accuracy_agree*100??0} wins={agreeAcc?.correct_agree??0} losses={(agreeAcc?.total_agree??0)-(agreeAcc?.correct_agree??0)}
+                              noData={!agreeAcc?.total_agree} />
+                          </>);
+                        })() : <div style={{ fontSize:11, color:C.muted }}>Waiting…</div>}
                       </div>
 
                       {/* ── Col 4: Best Indicator ── */}
                       <div style={{ paddingLeft:12 }}>
                         <div style={colTitle}>Best Indicator</div>
-                        {bestIndicator?.best_indicator ? (() => {
+                        {bestIndicator ? (() => {
                           const ranked = bestIndicator.ranked || [];
-                          const topAcc = ranked[0]?.accuracy ?? 0;
-                          // all indicators tied at the top accuracy (min 3 calls)
-                          const tied = ranked.filter(r => r.accuracy === topAcc && r.total >= 3);
+                          // Filter to statistically meaningful indicators first (≥20 directional calls)
+                          const qualified = ranked.filter(r => (r.directional ?? r.total) >= 20);
+                          if (!qualified.length) return <div style={{ fontSize:10, color:C.muted }}>Need ≥20 bars</div>;
+                          const topAcc = qualified[0]?.accuracy ?? 0;
+                          // all indicators tied at the top accuracy within the qualified set
+                          const tied = qualified.filter(r => r.accuracy === topAcc);
                           if (!tied.length) return <div style={{ fontSize:10, color:C.muted }}>No historical data</div>;
 
                           // Combine signals: majority vote across all tied indicators
@@ -2143,11 +2231,15 @@ function App() {
                           const upCount = sigs.filter(s => s === "UP").length;
                           const downCount = sigs.filter(s => s === "DOWN").length;
                           const sigTotal = upCount + downCount;
-                          let combinedSig = null, sigConf = 50;
+                          let combinedSig = null, sigConf = 50, isSplit = false;
                           if (sigTotal > 0) {
                             if (upCount > downCount)        { combinedSig = "UP";   sigConf = Math.round(upCount / sigTotal * 100); }
                             else if (downCount > upCount)   { combinedSig = "DOWN"; sigConf = Math.round(downCount / sigTotal * 100); }
-                            else                            { combinedSig = null;   sigConf = 50; } // perfect split
+                            else                            { combinedSig = getBestSig(tied[0].name) || "UP"; sigConf = 50; isSplit = true; } // perfect split — use first indicator's signal at 50%
+                          } else {
+                            // no live signals available — try first tied indicator
+                            combinedSig = getBestSig(tied[0].name) || null;
+                            sigConf = 50;
                           }
 
                           // Display name
@@ -2157,16 +2249,17 @@ function App() {
 
                           // Accuracy — same for all tied
                           const acc = topAcc * 100;
-                          const ref = tied[0]; // wins/losses from first (same % for all)
+                          const ref = tied[0]; // wins/losses/total from first (same % for all)
 
                           return (<>
-                            {combinedSig
-                              ? <SignalRow sig={combinedSig} conf={sigConf} />
-                              : <div style={{ height:3, background:C.borderSoft, borderRadius:2, margin:"3px 0 6px" }} />
-                            }
-                            <div style={{ fontSize:9, color:C.indigo, fontWeight:700 }}>{display}</div>
+                            <SignalRow sig={combinedSig || "NEUTRAL"} conf={combinedSig && !isSplit ? sigConf : 0} confStr={isSplit ? "SPLIT" : undefined} />
+                            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                              <span style={{ fontSize:9, color:C.indigo, fontWeight:700 }}>{display}</span>
+                              {isSplit && <span style={{ fontSize:9, fontWeight:800, padding:"1px 5px", borderRadius:3,
+                                color:C.amber, background:C.amberBg, border:`1px solid ${C.amberBorder}` }}>⚠ split</span>}
+                            </div>
                             <AccuracyRow lbl="Accuracy (all-time)"
-                              pct={acc} wins={ref.wins} losses={ref.losses} noData={false} />
+                              pct={acc} wins={ref.wins} losses={ref.losses} total={ref.total} noData={false} />
                           </>);
                         })() : <div style={{ fontSize:10, color:C.muted }}>No historical data</div>}
                       </div>
@@ -2189,16 +2282,10 @@ function App() {
                         ● LIVE — current bar
                       </span>
                     )}
-                    {activeDeepseekPred&&activeDeepseekPred.signal!=="ERROR" && (<>
+                    {pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR" && (<>
                       {activeDeepseekPred.latency_ms && (
                         <span style={{ fontSize:12, color:C.muted }}>
                           Calculated in <strong style={{ color:C.textSec }}>{(activeDeepseekPred.latency_ms/1000).toFixed(1)}s</strong>
-                        </span>
-                      )}
-                      {!pendingDeepseekReady && activeDeepseekPred.completed_at && (
-                        <span style={{ fontSize:12, color:C.muted }}>
-                          Bar closed: <strong style={{ fontSize:13, color:C.textSec }}>{fmtUtc(activeDeepseekPred.completed_at)}</strong>
-                          {specialistAt && <span style={{ fontSize:11, color:C.muted }}> · Patterns: <strong style={{ color:C.textSec }}>{fmtUtc(specialistAt)}</strong></span>}
                         </span>
                       )}
                     </>)}
@@ -2226,14 +2313,15 @@ function App() {
                 ) : (
                   <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12,
                     padding:"8px 12px", borderRadius:6,
-                    background:C.surface, border:`1px solid ${C.borderSoft}` }}>
-                    <span style={{ fontSize:16, lineHeight:1, flexShrink:0 }}>🕐</span>
-                    <span style={{ fontSize:13, color:C.muted, lineHeight:1.4 }}>
-                      Previous bar result · new analysis fires at bar open
+                    background:C.amberBg, border:`1px solid ${C.amberBorder}` }}>
+                    <span style={{ fontSize:16, lineHeight:1, flexShrink:0 }}>⟳</span>
+                    <span style={{ fontSize:13, fontWeight:700, color:C.amber, lineHeight:1.4 }}>
+                      Analyzing new bar — result appears when DeepSeek completes
                     </span>
                   </div>
                 )}
-                {activeDeepseekPred&&activeDeepseekPred.signal!=="ERROR" ? (<>
+                {/* Analysis content — only shown when a live (pending) result is ready */}
+                {pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR" ? (<>
                   {(activeDeepseekPred.data_received||(activeDeepseekPred.data_requests&&activeDeepseekPred.data_requests.toUpperCase()!=="NONE")) && (
                     <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
                       {activeDeepseekPred.data_received && (
@@ -2286,9 +2374,14 @@ function App() {
                       </div>
                     </div>
                   )}
-                </>) : (
-                  <div style={{ color:activeDeepseekPred?.signal==="ERROR"?C.red:C.muted, fontSize:11, textAlign:"center", padding:"4px 0" }}>
-                    {activeDeepseekPred?.signal==="ERROR"?"API error — see DeepSeek tab":"Analysis fires at bar open…"}
+                </>) : pendingDeepseekReady && activeDeepseekPred?.signal==="ERROR" ? (
+                  <div style={{ color:C.red, fontSize:11, textAlign:"center", padding:"4px 0" }}>
+                    {activeDeepseekPred.reasoning || "API error"}
+                  </div>
+                ) : (
+                  <div style={{ textAlign:"center", padding:"20px 0 12px", color:C.muted }}>
+                    <div style={{ fontSize:11 }}>Previous bar resolved · results in History tab</div>
+                    <div style={{ fontSize:11, marginTop:4, color:C.muted }}>New prediction will appear here once DeepSeek finishes</div>
                   </div>
                 )}
               </div>
@@ -2382,8 +2475,8 @@ function App() {
                         {/* Header: name */}
                         <div style={{ fontSize:13, color:m.color, fontWeight:800, textAlign:"center" }}>{m.name}</div>
                         {/* Big arrow */}
-                        <div style={{ fontSize:30, fontWeight:900, color:s.signal==="UP"?C.green:C.red, lineHeight:1, textAlign:"center", marginTop:2 }}>
-                          {s.signal==="UP"?"▲":"▼"}
+                        <div style={{ fontSize:30, fontWeight:900, color:s.signal==="UP"?C.green:s.signal==="NEUTRAL"?C.amber:C.red, lineHeight:1, textAlign:"center", marginTop:2 }}>
+                          {s.signal==="UP"?"▲":s.signal==="NEUTRAL"?"—":"▼"}
                         </div>
                         {/* Confidence */}
                         <div style={{ fontSize:17, color:C.textSec, textAlign:"center", fontWeight:800 }}>{(s.confidence*100).toFixed(0)}%</div>
@@ -2420,28 +2513,80 @@ function App() {
           <div style={{ height:"100%", overflowY:"auto", display:"flex", flexDirection:"column", gap:8, paddingBottom:8 }}>
 
             {/* Accuracy summary row */}
-            <div style={{ ...card, flexShrink:0, display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:0 }}>
-              {[
-                ["Math Ensemble",
-                  allTimeTotal>0?`${allTimeAccuracy.toFixed(1)}%`:"No data",
-                  allTimeTotal>0?`${allTimeCorrect}/${allTimeTotal} bars`:"recording from next bar",
-                  allTimeTotal>0?(allTimeAccuracy>=50?C.green:C.red):C.muted],
-                ["DeepSeek AI",
-                  deepseekAcc?.total>0?`${(deepseekAcc.accuracy*100).toFixed(1)}%`:"No data",
-                  deepseekAcc?.total>0?`${deepseekAcc.correct}/${deepseekAcc.total} bars`:"recording from next bar",
-                  deepseekAcc?.total>0?(deepseekAcc.accuracy>=0.5?C.green:C.red):C.muted],
-                ["Agree Only",
-                  agreeAcc?.total_agree>0?`${(agreeAcc.accuracy_agree*100).toFixed(1)}%`:"No data",
-                  agreeAcc?.total_agree>0?`${agreeAcc.correct_agree}/${agreeAcc.total_agree} bars`:"needs both to agree",
-                  agreeAcc?.total_agree>0?(agreeAcc.accuracy_agree>=0.5?C.green:C.red):C.muted],
-                ["System", connected?"Live":"Offline", `${strats.length}/${STRATEGY_META.length} strategies`, connected?C.green:C.amber],
-              ].map(([name,big,sub,col],i,arr)=>(
-                <div key={name} style={{ padding:"8px 14px", borderRight:i<arr.length-1?`1px solid ${C.borderSoft}`:"none" }}>
-                  <div style={{ fontSize:9, color:C.muted, letterSpacing:1, textTransform:"uppercase", marginBottom:3 }}>{name}</div>
-                  <div style={{ fontSize:26, fontWeight:900, color:col, lineHeight:1 }}>{big}</div>
-                  <div style={{ fontSize:10, color:C.textSec, marginTop:2 }}>{sub}</div>
-                </div>
-              ))}
+            <div style={{ ...card, flexShrink:0, padding:"6px 0" }}>
+              {/* Top row: 5 core metrics */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:0 }}>
+                {[
+                  ["Math Ensemble",
+                    allTimeTotal>0?`${allTimeAccuracy.toFixed(1)}%`:"—",
+                    allTimeTotal>0?`${allTimeCorrect}W · ${allTimeTotal-allTimeCorrect}L`:"no data",
+                    allTimeTotal>0?(allTimeAccuracy>=50?C.green:C.red):C.muted],
+                  ["DeepSeek AI",
+                    deepseekAcc?.total>0?`${(deepseekAcc.accuracy*100).toFixed(1)}%`:"—",
+                    deepseekAcc?.total>0?`${deepseekAcc.correct}W · ${deepseekAcc.total-deepseekAcc.correct}L · ${deepseekAcc.neutrals??0}N`:"no data",
+                    deepseekAcc?.total>0?(deepseekAcc.accuracy>=0.5?C.green:C.red):C.muted],
+                  ["Agree Only",
+                    agreeAcc?.total_agree>0?`${(agreeAcc.accuracy_agree*100).toFixed(1)}%`:"—",
+                    agreeAcc?.total_agree>0?`${agreeAcc.correct_agree}W · ${agreeAcc.total_agree-agreeAcc.correct_agree}L`:"needs both to agree",
+                    agreeAcc?.total_agree>0?(agreeAcc.accuracy_agree>=0.5?C.green:C.red):C.muted],
+                  ["Agree Rate",
+                    agreeAcc?.total_agree>0 && allTimeTotal>0
+                      ? `${(agreeAcc.total_agree/Math.max(allTimeTotal,deepseekAcc?.total||1)*100).toFixed(0)}%`
+                      : "—",
+                    agreeAcc?.total_agree>0
+                      ? `${agreeAcc.total_agree} bars both agreed`
+                      : "needs both to fire",
+                    C.textSec],
+                  ["System", connected?"Live":"Offline", `${strats.length}/${STRATEGY_META.length} strategies`, connected?C.green:C.amber],
+                ].map(([name,big,sub,col],i,arr)=>(
+                  <div key={name} style={{ padding:"4px 12px", borderRight:i<arr.length-1?`1px solid ${C.borderSoft}`:"none" }}>
+                    <div style={{ fontSize:9, color:C.muted, letterSpacing:1, textTransform:"uppercase", marginBottom:2 }}>{name}</div>
+                    <div style={{ fontSize:18, fontWeight:900, color:col, lineHeight:1 }}>{big}</div>
+                    <div style={{ fontSize:9, color:C.textSec, marginTop:2 }}>{sub}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Strategy accuracy pills — show when allAccuracy is loaded */}
+              {allAccuracy && (() => {
+                const cats = [
+                  { key:"strategies", label:"Strategies" },
+                  { key:"specialists", label:"Specialists" },
+                  { key:"microstructure", label:"Micro" },
+                  { key:"ai", label:"AI" },
+                ];
+                const allRows = [];
+                cats.forEach(({ key, label: catLabel }) => {
+                  (allAccuracy[key] || []).forEach(r => {
+                    if (r.total >= 3) allRows.push({ ...r, cat: catLabel });
+                  });
+                });
+                if (!allRows.length) return null;
+                allRows.sort((a,b) => b.accuracy - a.accuracy);
+                return (
+                  <div style={{ borderTop:`1px solid ${C.borderSoft}`, marginTop:6, paddingTop:5, paddingLeft:12, paddingRight:12 }}>
+                    <div style={{ fontSize:8, color:C.muted, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", marginBottom:4 }}>
+                      Per-signal accuracy ({allRows.length} tracked) — sorted best→worst
+                    </div>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                      {allRows.map(r => {
+                        const col = r.accuracy >= 60 ? C.green : r.accuracy >= 50 ? C.textSec : C.red;
+                        const bg  = r.accuracy >= 60 ? C.greenBg : r.accuracy >= 50 ? C.bg : C.redBg;
+                        const bdr = r.accuracy >= 60 ? C.greenBorder : r.accuracy >= 50 ? C.borderSoft : C.redBorder;
+                        return (
+                          <div key={r.key} style={{ fontSize:9, padding:"2px 7px", borderRadius:4,
+                            color:col, background:bg, border:`1px solid ${bdr}`,
+                            display:"flex", alignItems:"baseline", gap:4 }}>
+                            <span style={{ fontWeight:700 }}>{r.name}</span>
+                            <span style={{ fontWeight:900 }}>{r.accuracy.toFixed(1)}%</span>
+                            <span style={{ opacity:0.6 }}>{r.correct}/{r.total}</span>
+                            <span style={{ fontSize:7, opacity:0.5 }}>{r.cat}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Prediction log + DeepSeek audit side by side */}
@@ -2516,7 +2661,7 @@ function App() {
                 ["Data Source",  dataSource,                         C.textSec],
                 ["Strategies",   `${strats.length}/${STRATEGY_META.length} active`, strats.length===STRATEGY_META.length?C.green:C.amber],
                 ["Ensemble",     allTimeTotal>0?`${allTimeTotal} bars · ${allTimeAccuracy.toFixed(1)}%`:"no data", allTimeTotal>0?(allTimeAccuracy>=50?C.green:C.red):C.muted],
-                ["DeepSeek",     deepseekAcc?.total>0?`${deepseekAcc.total} bars · ${(deepseekAcc.accuracy*100).toFixed(1)}%`:"no data", deepseekAcc?.total>0?(deepseekAcc.accuracy>=0.5?C.green:C.red):C.muted],
+                ["DeepSeek",     deepseekAcc?.total>0?`${deepseekAcc.total} bars · ${(deepseekAcc.accuracy*100).toFixed(1)}% · ${deepseekAcc.neutrals??0}N`:"no data", deepseekAcc?.total>0?(deepseekAcc.accuracy>=0.5?C.green:C.red):C.muted],
                 ["Agree Only",   agreeAcc?.total_agree>0?`${agreeAcc.total_agree} bars · ${(agreeAcc.accuracy_agree*100).toFixed(1)}%`:"no data", agreeAcc?.total_agree>0?(agreeAcc.accuracy_agree>=0.5?C.green:C.red):C.muted],
                 ["Polymarket",   polyLive?`LIVE · UP=${(polymarket.yes_price*100).toFixed(1)}%`:"no market", polyLive?C.green:C.muted],
               ].map(([lbl,val,col],i,arr)=>(
@@ -3010,7 +3155,7 @@ function App() {
                 <Row label="Data source"   val={dataSource} />
                 <Row label="Strategies"    val={`${strats.length}/${STRATEGY_META.length} active`} />
                 <Row label="Ensemble"      val={totalPreds>0?`${totalPreds} resolved · ${accuracy.toFixed(1)}%`:"warming up"} c={accuracy>=50?C.green:C.textSec} />
-                <Row label="DeepSeek"      val={deepseekAcc?.total>0?`${deepseekAcc.total} resolved · ${(deepseekAcc.accuracy*100).toFixed(1)}%`:"warming up"} c={deepseekAcc?.accuracy>=0.5?C.green:C.textSec} />
+                <Row label="DeepSeek"      val={deepseekAcc?.total>0?`${deepseekAcc.total} resolved · ${(deepseekAcc.accuracy*100).toFixed(1)}% · ${deepseekAcc.neutrals??0}N`:"warming up"} c={deepseekAcc?.accuracy>=0.5?C.green:C.textSec} />
                 <Row label="Agree only"    val={agreeAcc?.total_agree>0?`${agreeAcc.total_agree} · ${(agreeAcc.accuracy_agree*100).toFixed(1)}%`:"no windows"} c={agreeAcc?.accuracy_agree>=0.5?C.green:C.textSec} />
                 <Row label="Polymarket"    val={polyLive?`LIVE · UP=${(polymarket.yes_price*100).toFixed(1)}% · 1:${polymarket.market_odds.toFixed(3)}`:"no market"} c={polyLive?C.green:C.muted} />
                 <div style={{ borderTop:`1px solid ${C.borderSoft}`, margin:"6px 0 4px" }} />

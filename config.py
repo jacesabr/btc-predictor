@@ -46,13 +46,6 @@ class Config:
     rolling_window_size: int = 12
     min_predictions_for_weight_update: int = 10
 
-    # Storage — SQLite (legacy fallback)
-    db_path: str = "data/btc_predictor.db"
-
-    # MongoDB
-    mongodb_uri: str = os.environ.get("MONGODB_URI", "")
-    mongodb_db:  str = os.environ.get("MONGODB_DB", "btc_predictor")
-
     # API
     api_host: str = "0.0.0.0"
     api_port: int = int(os.environ.get("PORT", 8000))

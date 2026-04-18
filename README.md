@@ -1,122 +1,254 @@
 # BTC Oracle Predictor
 
-Binary prediction system for "Bitcoin Up or Down in 5 minutes" Polymarket markets.
+Binary prediction system for **"Bitcoin Up or Down in 5 minutes"** Polymarket markets.
 
-## Architecture
+Uses 19 math-based strategies, 5 parallel DeepSeek specialist calls, 20 live microstructure feeds, a historical pattern similarity engine, and a self-optimizing weighted ensemble — all feeding one final DeepSeek reasoning call per 5-minute bar.
+
+---
+
+## Project Structure
 
 ```
 btc-predictor/
 ├── api/
-│   └── server.py              # FastAPI server, WebSocket, prediction loop
+│   └── server.py              # FastAPI app, WebSocket, all background loops, prediction orchestration
 ├── data/
 │   ├── collector.py           # Polls Binance BTCUSDT REST every 12s for live price ticks
-│   ├── dashboard_signals.py   # Fetches 10 live microstructure feeds in parallel at each window open
-│   ├── storage_mongo.py       # MongoDB Atlas storage (ticks, predictions, deepseek_predictions)
-│   ├── storage_file.py        # Local SQLite fallback storage (used when MongoDB is unavailable)
-│   ├── features.py            # Feature engineering from raw ticks + OHLCV
-│   └── local_data/            # Local data cache directory
+│   ├── features.py            # 50+ technical indicators from ticks + OHLCV
+│   ├── dashboard_signals.py   # 20 live microstructure feeds (fetched in parallel at each bar open)
+│   ├── storage_mongo.py       # MongoDB Atlas storage (primary)
+│   ├── storage_file.py        # NDJSON file fallback (used when MongoDB is unavailable)
+│   └── pattern_history.py     # Persistent bar history + per-indicator accuracy tracking
 ├── deepseek/
-│   ├── predictor.py           # Main DeepSeek reasoning call (deepseek-chat)
+│   ├── predictor.py           # Main DeepSeek reasoning call — full context, async, result revealed at bar close
 │   ├── specialists.py         # 5 focused parallel DeepSeek calls (Dow/Fib/Alligator/A-D/Harmonic)
-│   ├── prompt_format.py       # Prompt builder — 100 bars 1m OHLCV + all indicators as text
-│   └── prompts.py             # Specialist prompt templates (DOW_THEORY, FIBONACCI, ALLIGATOR, ACC_DIST, HARMONIC)
+│   ├── prompt_format.py       # Prompt builder + structured response parser
+│   └── historical_analyst.py  # Finds 3–5 historically similar bars; injects context into main prompt
 ├── strategies/
-│   ├── base.py                # All 19 math-based strategies + get_all_predictions()
-│   ├── ensemble.py            # Weighted ensemble combiner with dynamic weight updates
-│   └── ml_models.py           # Linear regression channel strategy
+│   ├── base.py                # 19 math-based strategies + math fallbacks for all 5 specialist types
+│   ├── ensemble.py            # Weighted voting combiner with dynamic accuracy-based weight updates
+│   └── ml_models.py           # Linear regression channel strategy (scikit-learn)
 ├── utils/
-│   ├── ev_calculator.py       # Expected value + Kelly criterion
-│   └── polymarket.py          # Polymarket market odds feed
-├── static/                    # React dashboard (Babel standalone, no build step)
-│   ├── index.html
-│   └── app.jsx
-├── config.py                  # All configuration (API keys, MongoDB URI, weights)
+│   ├── polymarket.py          # Polymarket Gamma API — live odds, market slug, implied probability
+│   └── ev_calculator.py       # Expected value + Kelly criterion sizing
+├── static/
+│   ├── index.html             # Dashboard entry point
+│   └── app.jsx                # React app (Babel standalone, no build step)
+├── specialists/               # Runtime I/O artifacts (last_prompt.txt, last_response.txt per specialist)
+├── charts/                    # Candlestick PNGs regenerated each bar
+├── results/                   # Production NDJSON data (ticks, predictions, deepseek_predictions, pattern_history)
+├── config.py                  # All configuration: API keys, weights, timing, MongoDB URI
+├── Procfile                   # Heroku: uvicorn api.server:app
 └── requirements.txt
 ```
 
-## Data Sources
-
-- **Live price ticks**: Binance BTCUSDT REST API — polled every 12s
-- **1m OHLCV**: Binance `/api/v3/klines` — 500 bars fetched every 60s, used by all volume/OHLCV strategies
-- **Market odds**: Polymarket API — implied probability and market odds for active 5m BTC market
-- **Market microstructure**: 10 live feeds fetched in parallel at each 5-minute window open (see below)
+---
 
 ## How It Works
 
-At each 5-minute candle open:
+At each **5-minute candle open** (UTC-aligned):
 
-1. **Math strategies** (19 total) compute signals from live ticks + 1m OHLCV
-2. **DeepSeek specialists** (5 parallel calls) analyse Dow Theory, Fibonacci, Alligator, Acc/Dist, Harmonics using raw OHLCV text — results replace the math versions in the ensemble
-3. **Ensemble vote** weighs all signals (dynamically adjusted by rolling accuracy)
-4. **Main DeepSeek** receives ensemble snapshot + all indicators + all 10 microstructure feeds as text, returns UP/DOWN + reasoning — tracked separately, NOT in ensemble
-5. At candle close, both ensemble and DeepSeek predictions are resolved against actual price
+1. **Math strategies** — 19 technical strategies compute signals from live ticks + 1m OHLCV
+2. **Dashboard signals** — 20 microstructure feeds fetched in parallel (order book, funding, liquidations, etc.)
+3. **DeepSeek specialists** — 5 focused parallel calls (Dow Theory, Fibonacci, Alligator, Acc/Dist, Harmonics) analyse 60-bar OHLCV; results override math fallbacks in the ensemble
+4. **Historical analyst** — scans `pattern_history.ndjson` for the 3–5 most similar past bars and their outcomes
+5. **Ensemble vote** — weighted combination of all strategies + specialists + dashboard votes; weights auto-adjust by rolling accuracy
+6. **Main DeepSeek call** — receives full context (ensemble, all indicators, all 20 feeds, pattern history); fires async, result held until bar close
+7. **Bar close resolution** — both ensemble and DeepSeek predictions resolved against actual price; weights updated; pattern history appended
 
-## Market Microstructure Feeds (`data/dashboard_signals.py`)
+---
 
-All 10 feeds are fetched in parallel at each 5-minute window open and injected into the main DeepSeek prompt:
+## Prediction Strategies
 
-| # | Feed | Source | What it provides |
-|---|------|--------|-----------------|
-| 1 | Order book imbalance | Binance spot depth-20 | Bid/ask volume balance, passive buy/sell wall strength |
-| 2 | Long / short ratio | Binance Futures (retail + top-20%) | Retail crowding (contrarian) + smart money positioning |
-| 3 | Taker buy/sell flow | Binance Futures 5m aggressor | BSR, 3-bar trend — who is paying urgently to buy/sell |
-| 4 | Open interest + funding | Binance Futures perpetual | OI in BTC, 8h funding rate, mark vs index premium |
-| 5 | Liquidations | Binance Futures last-5min | Long/short liquidation counts, USD value, cascade velocity |
-| 6 | Fear & Greed index | alternative.me (daily) | Market sentiment extremes (contrarian at <25 / >75) |
-| 7 | Mempool fee pressure | mempool.space | On-chain urgency — high fees may signal exchange deposits/selling |
-| 8 | CoinAPI aggregated rate | 350+ exchange weighted avg | Cross-exchange price divergence — arbitrage pressure direction |
-| 9 | Coinalyze funding | Cross-exchange aggregate | Validates Binance funding; divergence = Binance-specific overleveraging |
-| 10 | CoinGecko market overview | CoinGecko | BTC market cap, 24h volume, 24h change — macro backdrop |
+### Math Strategies (`strategies/base.py`)
 
-> **Note on feed availability**: In early windows after startup, some feeds may not yet have data
-> and appear as "unavailable" in the prompt. This is the root cause of the 3 observed DeepSeek
-> `DATA_REQUESTS` in the log (windows #2, #17, #26 all asked for taker flow BSR, liquidation data,
-> funding rate, L/S ratio, and/or CoinAPI — all of which ARE collected once the feeds warm up).
-> No new data sources are needed; the requests disappear once the system is running.
+| Group | Strategies |
+|-------|-----------|
+| Oscillators | RSI(4), MACD (3/10/16 Raschke), Stochastic |
+| Trend & Structure | EMA Cross (8/21 + 4/9 multi-TF), Supertrend (ATR), ADX |
+| Specialist Fallbacks | Dow Theory, Fibonacci Pullback, Williams Alligator, Acc/Dist, Harmonic |
+| Volume / Price | VWAP, Volume Flow (OBV slope + surge) |
+| Market / Crowd | Polymarket odds (1.3× initial weight) |
+| ML | Linear Regression Channel |
 
-## Storage (MongoDB Atlas)
+### DeepSeek Specialists (`deepseek/specialists.py`)
 
-| Collection | Contents |
-|---|---|
-| `ticks` | Every price tick (timestamp, mid, bid, ask, spread) |
-| `predictions` | Ensemble predictions + resolution (correct/incorrect) |
-| `deepseek_predictions` | Full DeepSeek audit log: prompt, reasoning, indicators snapshot, strategy snapshot, resolution |
+Five calls fired **in parallel** at bar open (30s timeout), replacing math fallbacks in the ensemble:
 
-A local SQLite fallback (`data/storage_file.py`) is used automatically when MongoDB Atlas is unreachable.
+- **Dow Theory** — market structure, trend direction, volume confirmation
+- **Fibonacci Retracement** — key levels and current price position
+- **Williams Alligator** — jaw/teeth/lips trending or tangled
+- **Accumulation/Distribution** — volume-weighted flow direction
+- **Harmonic Patterns** — Bat, Gartley, Crab, Butterfly, Shark, ABCD PRZ detection
 
-## DeepSeek Response Fields
+Each returns `{signal, confidence, reasoning}`. If a specialist call fails or times out, the math fallback is used.
 
-The main DeepSeek call returns a structured response with the following parsed fields:
+### Ensemble (`strategies/ensemble.py`)
+
+Weighted sum of all signals. Weights auto-update each bar:
+
+| Rolling Accuracy | Weight Tier |
+|-----------------|------------|
+| < 40% | 0.05 — effectively disabled |
+| 40–50% | 0.10–0.50 — weak |
+| 50–60% | 0.50–1.20 — average to good |
+| 60–65% | 1.20–2.00 — boosted |
+| > 65% | 2.00–3.00 — excellent |
+
+Learning rate: 0.15 (exponential smoothing — weights move gradually, not instantly).
+
+---
+
+## Data Sources
+
+### Live Price
+- **Ticks**: Binance BTCUSDT REST — polled every 12s, last 5,000 kept in memory
+- **1m OHLCV**: Binance `/api/v3/klines` — 500 bars, refreshed every 60s
+
+### 20 Market Microstructure Feeds (`data/dashboard_signals.py`)
+
+All fetched **in parallel** at each bar open and injected into the main DeepSeek prompt:
+
+| # | Feed | Source | Signal |
+|---|------|--------|--------|
+| 1 | Order book imbalance | Binance spot depth-20 | Bid/ask volume balance |
+| 2 | Long/short ratio | Binance Futures | Retail crowding + smart money |
+| 3 | Taker buy/sell flow | Binance Futures 5m | Aggressor BSR, 3-bar trend |
+| 4 | OI + funding | Binance Futures perp | Open interest, 8h funding, mark premium |
+| 5 | Liquidations | Binance Futures last-5m | Long/short cascade velocity |
+| 6 | Fear & Greed | alternative.me (daily) | Sentiment extremes (contrarian) |
+| 7 | Mempool fee pressure | mempool.space | On-chain urgency |
+| 8 | Coinalyze funding | Cross-exchange aggregate | Validates Binance funding |
+| 9 | CoinAPI aggregated rate | 350+ exchange weighted avg | Cross-exchange arbitrage pressure |
+| 10 | CoinGecko market overview | CoinGecko | BTC 24h change, volume, market cap |
+| 11 | CoinAPI momentum | Multi-exchange 5m acceleration | Rate-of-change direction |
+| 12 | CoinAPI large trades | Whale order flow | > 2 BTC block direction |
+| 13 | Kraken premium | Kraken vs Binance spread | Institutional signal |
+| 14 | OI velocity | Binance OI change 30m | Open interest rate of change |
+| 15 | Spot whale flow | Binance spot aggTrades | > 5 BTC direction |
+| 16 | Bybit liquidations | Bybit | Cross-exchange cascade validation |
+| 17 | OKX funding rate | OKX | Independent exchange confirmation |
+| 18 | BTC dominance | CoinGecko global | Market cap % |
+| 19 | Top trader position ratio | Binance top accounts | Notional position direction |
+| 20 | Funding trend | Binance historical | Funding rate slope |
+
+Each feed maps to UP/DOWN/NEUTRAL and enters the ensemble as an additional vote (weight 0.65 confidence).
+
+### Polymarket Odds
+- Slug: `btc-updown-5m-{unix_timestamp}` (5-min aligned)
+- Implied probability + market odds from Gamma API
+- Used for EV/Kelly calculation and as a strategy signal (1.3× initial weight)
+
+---
+
+## Main DeepSeek Call (`deepseek/predictor.py`)
+
+Fires **asynchronously** at bar open. Result is held until bar close (stale-window guard discards it if the bar rolls over before completion).
+
+**Inputs:**
+- Last 20 price ticks + 100 × 1m OHLCV bars
+- All 50+ technical indicators
+- All 19 strategy predictions + 5 specialist results
+- All 20 dashboard microstructure signals + ensemble vote
+- 3–5 historically similar bars + their outcomes (from historical analyst)
+- Rolling accuracy metrics per indicator
+
+**Parsed response fields:**
 
 | Field | Description |
-|---|---|
+|-------|-------------|
 | `signal` | `UP` / `DOWN` / `UNKNOWN` / `ERROR` |
 | `confidence` | Integer 0–100 |
-| `reasoning` | 4 numbered reasons (microstructure / funding+positioning / technical / synthesis) |
-| `narrative` | 2–4 sentence price-action story — names specific bars, prices, and volume conviction |
-| `free_observation` | 1–2 sentences on any anomalous or high-conviction pattern noticed |
-| `data_received` | DeepSeek's confirmation of what data it analysed this window |
-| `data_requests` | Additional data DeepSeek asked for, or `NONE` — logged to server log and stored |
-| `polymarket_url` | Direct link to the active Polymarket market |
-| `window_start` / `window_end` | Human-readable window timestamps |
-| `latency_ms` | DeepSeek API round-trip time |
+| `reasoning` | 4 numbered reasons (microstructure / funding / technical / synthesis) |
+| `narrative` | 2–4 sentence price-action story |
+| `free_observation` | Anomalous or high-conviction pattern |
+| `data_received` | DeepSeek's confirmation of what it analysed |
+| `data_requests` | Additional data requested, or `NONE` |
+| `latency_ms` | API round-trip time |
 
-All `data_requests` that are not `NONE` are logged at `INFO` level in `server_new.log` as:
-```
-INFO:api.server:DeepSeek requested additional data: <request text>
-```
+DeepSeek prediction is tracked **separately** from the ensemble — it is NOT part of the ensemble vote.
+
+---
+
+## Historical Pattern Analyst (`deepseek/historical_analyst.py`)
+
+Scans `results/pattern_history.ndjson` (every prior bar) for the 3–5 most similar past bars by feature similarity (technical indicators, volume profile, microstructure alignment). Each match includes its resolved outcome (UP/DOWN + accuracy). This context is injected into the main DeepSeek prompt to ground predictions in observed history.
+
+Pattern history grows indefinitely and is never trimmed.
+
+---
+
+## Storage
+
+### Primary: MongoDB Atlas (`data/storage_mongo.py`)
+
+| Collection | Contents |
+|------------|----------|
+| `ticks` | Every price tick (timestamp, mid, bid, ask, spread) |
+| `predictions` | Ensemble predictions + resolution |
+| `deepseek_predictions` | Full audit log: prompt, response, reasoning, indicators, resolution, latency |
+
+### Fallback: NDJSON Files (`data/storage_file.py`)
+
+Identical interface to MongoDB. Used automatically when Atlas is unreachable. Files in `results/`:
+- `ticks.ndjson`
+- `predictions.ndjson`
+- `deepseek_predictions.ndjson`
+- `pattern_history.ndjson`
+
+### Pattern History (`data/pattern_history.py`)
+
+Separate from predictions — stores the full bar record including all specialists, all indicators, all dashboard signals, ensemble prediction, DeepSeek prediction, and resolution. Used for historical similarity matching and per-indicator accuracy leaderboards.
+
+---
 
 ## Accuracy Tracking
 
-Three accuracy metrics are tracked:
-- **Ensemble**: all windows
-- **DeepSeek**: all windows where DeepSeek fired
-- **Agree Only**: windows where ensemble signal == DeepSeek signal (highest quality filter)
+Three accuracy metrics tracked per window:
 
-Each indicator's rolling accuracy is tracked individually. The ensemble auto-adjusts weights:
-- `DISABLED` (<40% accuracy) — near-zero weight, flagged in DeepSeek prompt as "IGNORE"
-- `WEAK` (<50%) — low trust
-- `MARGINAL` / `LEARNING` / `RELIABLE` / `EXCELLENT` — graded trust levels
+- **Ensemble** — all windows
+- **DeepSeek** — all windows where DeepSeek fired
+- **Agree Only** — windows where ensemble signal == DeepSeek signal (highest quality filter)
+
+Per-indicator rolling accuracy drives ensemble weight updates. Accuracy tiers shown in the dashboard `/accuracy/all` leaderboard, labelled `DISABLED` / `WEAK` / `MARGINAL` / `LEARNING` / `RELIABLE` / `EXCELLENT`.
+
+---
+
+## Dashboard (`static/`)
+
+React app (Babel standalone, no build step) served at `http://localhost:8000`.
+
+Key endpoints:
+- **WebSocket `/ws`** — live price, prediction state, strategies, specialists (1 Hz)
+- `GET /weights` — strategy weights + accuracy labels
+- `GET /accuracy/all` — full leaderboard (AI, strategies, specialists, microstructure)
+- `GET /audit` — every prediction with all evidence (CSV-exportable)
+- `GET /deepseek/source-history` — recent DeepSeek calls + full data snapshots
+
+---
+
+## Configuration (`config.py`)
+
+All tunable parameters and API keys:
+
+```python
+poll_interval_seconds: 12.0          # Binance tick poll rate
+window_duration_seconds: 300         # 5-minute bar
+rolling_window_size: 12              # bars for rolling accuracy
+min_predictions_for_weight_update: 10
+
+# EV / Kelly
+min_ev_to_enter: 0.05
+strong_ev_threshold: 0.15
+max_kelly_fraction: 0.25
+
+# API keys (loaded from environment)
+MONGODB_URI, DEEPSEEK_API_KEY, COINAPI_KEY, COINALYZE_KEY
+```
+
+Initial strategy weights set in `config.py` under `initial_weights`.
+
+---
 
 ## Running
 
@@ -128,5 +260,96 @@ uvicorn api.server:app --host 0.0.0.0 --port 8000
 
 Dashboard at `http://localhost:8000`
 
-> **VPN note**: Binance and Chainlink APIs are geo-blocked in India. A VPN is required when running locally.
-> A permanent server-side VPN solution is the preferred long-term fix.
+Required environment variables:
+```
+MONGODB_URI=<Atlas connection string>
+DEEPSEEK_API_KEY=<DeepSeek API key>
+COINAPI_KEY=<CoinAPI key>         # optional — feeds 9, 11, 12 degrade gracefully
+COINALYZE_KEY=<Coinalyze key>     # optional — feed 8 degrades gracefully
+```
+
+**VPN note:** Binance and Chainlink APIs are geo-blocked in India. A VPN is required when running locally. A permanent server-side VPN is the preferred long-term fix.
+
+### Heroku / Cloud Deployment
+
+```
+Procfile: web: python -m uvicorn api.server:app --host 0.0.0.0 --port $PORT
+```
+
+---
+
+## Monetization Concept: Copy-Trade Platform
+
+The predictor can serve as the signal source for a SaaS copy-trading platform on top of Polymarket.
+
+### Overview
+
+Users connect their Polymarket credentials, choose Paper Trade (virtual) or Real Trade (live USDC), set position sizing, and follow the bot. The platform executes Polymarket orders on their behalf via `py-clob-client`.
+
+### Polymarket Trading API
+
+```python
+from py_clob_client.client import ClobClient
+from py_clob_client.clob_types import MarketOrderArgs, OrderType
+from py_clob_client.order_builder.constants import BUY
+
+client = ClobClient("https://clob.polymarket.com", key=PRIVATE_KEY, chain_id=137)
+client.set_api_creds(client.create_or_derive_api_creds())
+
+order = client.create_market_order(MarketOrderArgs(
+    token_id=TOKEN_ID,   # YES token for UP, NO token for DOWN
+    amount=25.0,         # USDC
+    side=BUY,
+    order_type=OrderType.FOK
+))
+resp = client.post_order(order, OrderType.FOK)
+```
+
+Token IDs are resolved from the market slug via the Gamma API + CLOB API. The `utils/polymarket.py` module already fetches the slug — extend it to resolve token IDs.
+
+**One-time user requirement:** Each user must approve the CTF Exchange + NegRisk Adapter contracts on Polygon before orders will execute.
+
+### Wallet / Custody Options
+
+| Option | Best For | Notes |
+|--------|----------|-------|
+| **Circle Programmable Wallets** (recommended) | Safety + compliance | Circle handles key security; USDC native; per-user deposit addresses |
+| **Privy** | Email-login UX | Official Polymarket example repo exists; user-owned wallets with server-side signing |
+| **Turnkey** | Pure backend programmatic | Official Polymarket example; fully API-driven signing |
+| **DIY platform wallet** | MVP prototype only | Single private key in env var; all funds at risk if key leaks |
+
+### MVP API Surface
+
+```
+POST /api/auth/register|login       JWT auth
+GET  /api/bots                      Available bots + live stats
+POST /api/follow                    Follow a bot (paper or real, set sizing)
+GET  /api/trades                    User trade history
+GET  /api/portfolio                 Aggregated P&L
+```
+
+**Trade execution:** `TradeExecutor` service subscribes to the predictor signal. On each UP/DOWN, it loops through active followers, aggregates real-trade positions into one platform order, then distributes P&L proportionally.
+
+### Monetization Models
+
+1. **Subscription** — monthly fee for real-trade copy mode; paper trading free
+2. **Performance fee** — % of profits from real trades
+3. **Freemium** — 1 bot free, premium bots behind paywall
+4. **Signal marketplace** — other developers list bots; platform takes a cut
+
+### Key Risks
+
+- Platform private key must NEVER be in code — use env var or secrets manager; consider multi-sig (Gnosis Safe) for production
+- FOK orders fail on thin liquidity — add fallback retry as GTC limit order slightly off mid-price
+- BTC 5m windows are short — execution must complete within seconds of signal
+- Check Polymarket ToS for automated bots acting on behalf of other users
+- Holding client USDC may require a Money Transmitter License depending on jurisdiction — get legal advice before public launch
+
+### Useful References
+
+- [py-clob-client](https://github.com/Polymarket/py-clob-client) — official Python client (MIT)
+- [Polymarket Agents](https://github.com/Polymarket/agents) — official AI agent framework
+- [Polymarket + Privy example](https://github.com/Polymarket/privy-safe-builder-example) — server-side signing
+- [polymarket-apis PyPI](https://pypi.org/project/polymarket-apis/) — unified API wrapper
+- [PolySimulator](https://polysimulator.com/) — paper trading UX reference
+- [CTF Exchange allowance setup](https://gist.github.com/poly-rodr/44313920481de58d5a3f6d1f8226bd5e)

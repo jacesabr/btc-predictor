@@ -1,13 +1,10 @@
 """
-File-based Storage — drop-in replacement for storage_mongo.Storage.
+File-based Storage — NDJSON persistence for ticks, predictions, and DeepSeek predictions.
 
-Data is persisted as newline-delimited JSON (NDJSON) in the results/ directory
-at the project root (btc-predictor/results/):
+Data is stored in results/ at the project root:
   - ticks.ndjson
   - predictions.ndjson
   - deepseek_predictions.ndjson
-
-All public methods have identical signatures to the MongoDB Storage class.
 """
 
 import json
@@ -20,9 +17,18 @@ from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# All result files live in btc-predictor/results/ (project root / results)
-_DATA_DIR = Path(__file__).parent.parent / "results"
-_MAX_TICKS = 5000  # keep rolling window to avoid unbounded growth
+_DATA_DIR        = Path(__file__).parent / "results"
+_RESET_FILE      = Path(__file__).parent / "score_reset.json"
+_MAX_TICKS       = 5000
+
+
+def _score_reset_at() -> float:
+    """Return the Unix timestamp after which bars count toward scores. 0 = count all."""
+    try:
+        data = json.loads(_RESET_FILE.read_text(encoding="utf-8"))
+        return float(data.get("reset_at", 0))
+    except Exception:
+        return 0.0
 
 
 def _read_ndjson(path: Path) -> List[Dict]:
@@ -62,9 +68,7 @@ class Storage:
         _DATA_DIR.mkdir(parents=True, exist_ok=True)
         logger.info("File storage initialised at %s", _DATA_DIR)
 
-    # -------------------------------------------------------------------------
-    # Ticks
-    # -------------------------------------------------------------------------
+    # ── Ticks ─────────────────────────────────────────────────────────────────
 
     def store_tick(self, timestamp: float, mid: float, bid: float, ask: float, spread: float):
         with self._lock:
@@ -75,7 +79,6 @@ class Storage:
                 "ask_price": ask,
                 "spread": spread,
             })
-            # Trim to last _MAX_TICKS to keep file small
             records = _read_ndjson(self._ticks_path)
             if len(records) > _MAX_TICKS:
                 _rewrite_ndjson(self._ticks_path, records[-_MAX_TICKS:])
@@ -90,9 +93,7 @@ class Storage:
             records = records[-n:]
         return [r["mid_price"] for r in records]
 
-    # -------------------------------------------------------------------------
-    # Ensemble predictions
-    # -------------------------------------------------------------------------
+    # ── Ensemble predictions ──────────────────────────────────────────────────
 
     def store_prediction(
         self,
@@ -107,7 +108,6 @@ class Storage:
     ):
         with self._lock:
             records = _read_ndjson(self._preds_path)
-            # upsert by window_start
             if any(r["window_start"] == window_start for r in records):
                 return
             _append_ndjson(self._preds_path, {
@@ -138,9 +138,10 @@ class Storage:
                 _rewrite_ndjson(self._preds_path, records)
 
     def get_rolling_accuracy(self, n: int = 12) -> Tuple[int, int, float]:
+        cutoff = _score_reset_at()
         with self._lock:
             records = _read_ndjson(self._preds_path)
-        resolved = [r for r in records if r.get("correct") is not None]
+        resolved = [r for r in records if r.get("correct") is not None and r["window_start"] >= cutoff]
         resolved.sort(key=lambda r: r["window_start"], reverse=True)
         resolved = resolved[:n]
         if not resolved:
@@ -150,9 +151,10 @@ class Storage:
         return total, correct, correct / total
 
     def get_total_accuracy(self) -> Tuple[int, int, float]:
+        cutoff = _score_reset_at()
         with self._lock:
             records = _read_ndjson(self._preds_path)
-        resolved = [r for r in records if r.get("correct") is not None]
+        resolved = [r for r in records if r.get("correct") is not None and r["window_start"] >= cutoff]
         if not resolved:
             return 0, 0, 0.0
         total = len(resolved)
@@ -160,9 +162,10 @@ class Storage:
         return total, correct, correct / total
 
     def get_strategy_rolling_accuracy(self, n: int = 20) -> Dict[str, float]:
+        cutoff = _score_reset_at()
         with self._lock:
             records = _read_ndjson(self._preds_path)
-        resolved = [r for r in records if r.get("actual_direction")]
+        resolved = [r for r in records if r.get("actual_direction") and r["window_start"] >= cutoff]
         resolved.sort(key=lambda r: r["window_start"], reverse=True)
         resolved = resolved[:n]
         if not resolved:
@@ -187,10 +190,10 @@ class Storage:
         }
 
     def get_strategy_accuracy_full(self, n: int = 100) -> Dict[str, Dict]:
-        """Return {name: {correct, total, accuracy}} for the last N resolved predictions."""
+        cutoff = _score_reset_at()
         with self._lock:
             records = _read_ndjson(self._preds_path)
-        resolved = [r for r in records if r.get("actual_direction")]
+        resolved = [r for r in records if r.get("actual_direction") and r["window_start"] >= cutoff]
         resolved.sort(key=lambda r: r["window_start"], reverse=True)
         resolved = resolved[:n]
         if not resolved:
@@ -227,9 +230,7 @@ class Storage:
                   "signal", "confidence", "actual_direction", "correct", "market_odds", "ev"}
         return [{k: v for k, v in r.items() if k in fields} for r in resolved[:n]]
 
-    # -------------------------------------------------------------------------
-    # DeepSeek predictions
-    # -------------------------------------------------------------------------
+    # ── DeepSeek predictions ──────────────────────────────────────────────────
 
     def store_deepseek_prediction(
         self,
@@ -272,11 +273,11 @@ class Storage:
                 "data_received":       data_received,
                 "data_requests":       data_requests,
                 "indicators_snapshot": indicators_snapshot,
-                "narrative":                narrative,
-                "free_observation":         free_observation,
-                "chart_path":               chart_path,
+                "narrative":           narrative,
+                "free_observation":    free_observation,
+                "chart_path":          chart_path,
                 "dashboard_signals_snapshot": dashboard_signals_snapshot,
-                "created_at":               time.time(),
+                "created_at":          time.time(),
             })
             _rewrite_ndjson(self._ds_path, records)
 
@@ -296,16 +297,18 @@ class Storage:
                 _rewrite_ndjson(self._ds_path, records)
 
     def get_agree_accuracy(self) -> Dict:
+        cutoff = _score_reset_at()
         with self._lock:
             ds_records  = _read_ndjson(self._ds_path)
             ens_records = _read_ndjson(self._preds_path)
-        ds_map = {r["window_start"]: r for r in ds_records if r.get("actual_direction")}
+        ds_map = {r["window_start"]: r for r in ds_records
+                  if r.get("actual_direction") and r["window_start"] >= cutoff}
         if not ds_map:
             return {"total_agree": 0, "correct_agree": 0, "accuracy_agree": 0.0}
         total = correct = 0
         for r in ens_records:
             ws = r["window_start"]
-            if ws in ds_map and r.get("actual_direction"):
+            if ws in ds_map and r.get("actual_direction") and ws >= cutoff:
                 if ds_map[ws]["signal"] == r["signal"]:
                     total += 1
                     if r["actual_direction"] == r["signal"]:
@@ -317,14 +320,19 @@ class Storage:
         }
 
     def get_deepseek_accuracy(self) -> Dict:
+        cutoff = _score_reset_at()
         with self._lock:
             records = _read_ndjson(self._ds_path)
-        resolved = [r for r in records if r.get("correct") is not None]
+        scoped   = [r for r in records if r["window_start"] >= cutoff]
+        resolved = [r for r in scoped if r.get("correct") is not None]
         if not resolved:
             return {"total": 0, "correct": 0, "accuracy": 0.0}
         total = len(resolved)
         correct = sum(1 for r in resolved if r["correct"])
-        return {"total": total, "correct": correct, "accuracy": correct / total}
+        neutrals = sum(1 for r in scoped if r.get("signal") == "NEUTRAL")
+        directional = total - sum(1 for r in resolved if r.get("signal") == "NEUTRAL")
+        return {"total": total, "correct": correct, "accuracy": correct / total if total > 0 else 0.0,
+                "neutrals": neutrals, "directional": directional}
 
     def get_recent_deepseek_predictions(self, n: int = 50) -> List[Dict]:
         with self._lock:
@@ -347,5 +355,66 @@ class Storage:
                         pass
         return records
 
+    def store_accuracy_snapshot(self, window_start: float, snapshot: Dict):
+        with self._lock:
+            records = _read_ndjson(self._ds_path)
+            updated = False
+            for r in records:
+                if r["window_start"] == window_start:
+                    r["accuracy_snapshot"] = snapshot
+                    updated = True
+                    break
+            if updated:
+                _rewrite_ndjson(self._ds_path, records)
+
+    def get_prediction_history_with_indicators(self, n: int = 25) -> List[Dict]:
+        with self._lock:
+            pred_records = _read_ndjson(self._preds_path)
+            ds_records   = _read_ndjson(self._ds_path)
+
+        resolved = [r for r in pred_records if r.get("actual_direction")]
+        resolved.sort(key=lambda r: r["window_start"], reverse=True)
+        resolved = resolved[:n]
+        if not resolved:
+            return []
+
+        ds_map = {r["window_start"]: r for r in ds_records}
+
+        result = []
+        for doc in reversed(resolved):
+            ws = doc["window_start"]
+            votes_raw = doc.get("strategy_votes", "{}")
+            try:
+                votes = json.loads(votes_raw) if isinstance(votes_raw, str) else (votes_raw or {})
+            except Exception:
+                votes = {}
+            ind_raw = ds_map.get(ws, {}).get("indicators_snapshot", "{}")
+            try:
+                indicators = json.loads(ind_raw) if isinstance(ind_raw, str) else (ind_raw or {})
+            except Exception:
+                indicators = {}
+            result.append({
+                "window_start":     ws,
+                "actual_direction": doc["actual_direction"],
+                "start_price":      doc.get("start_price"),
+                "strategy_votes":   votes,
+                "indicators":       indicators,
+            })
+        return result
+
     def close(self):
-        pass  # nothing to close
+        pass
+
+
+# ── Backend factory ───────────────────────────────────────────────────────────
+# Import this instead of Storage() directly:
+#   from storage import get_storage
+#   storage = get_storage()
+# Local (no DATABASE_URL) → file-based Storage above.
+# Railway (DATABASE_URL set) → PostgreSQL StoragePG.
+
+def get_storage(**kwargs):
+    if os.environ.get("DATABASE_URL"):
+        from storage_pg import StoragePG
+        return StoragePG(**kwargs)
+    return Storage(**kwargs)
