@@ -417,7 +417,7 @@ class StoragePG:
         finally:
             _put(conn)
 
-    def resolve_deepseek_prediction(self, window_start: float, end_price: float, actual: str):
+    def resolve_deepseek_prediction(self, window_start: float, end_price: float, actual: str = None):
         conn = _conn()
         try:
             with conn.cursor() as cur:
@@ -429,6 +429,8 @@ class StoragePG:
                 if not row:
                     return
                 signal, start_price = row
+                if actual is None:
+                    actual = "UP" if end_price >= start_price else "DOWN"
                 correct = actual == signal
                 cur.execute(
                     "UPDATE deepseek_predictions "
