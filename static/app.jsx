@@ -2148,182 +2148,145 @@ function App() {
                   return null;
                 };
 
+                // ── Pre-compute all 4 column values before rendering ──────────────
+                // Col 1 — Ensemble
+                const c1sig  = effectiveEnsSig;
+                const c1conf = c1sig==="NEUTRAL" ? 0 : ensemblePred?.confidence*100;
+                const c1meta = ensemblePred ? { votes:`${ensemblePred.bullish}↑ ${ensemblePred.bearish}↓`, rawConf: effectiveEnsSig==="NEUTRAL"&&ensemblePred.signal!=="NEUTRAL" ? (ensemblePred.confidence*100).toFixed(1) : null } : null;
+
+                // Col 2 — DeepSeek
+                const dsLive = pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR";
+                const dsErr  = pendingDeepseekReady && activeDeepseekPred?.signal==="ERROR";
+                const dsPrev = !dsLive && !dsErr && deepseekPred && deepseekPred.signal!=="ERROR";
+                const c2src  = dsLive ? activeDeepseekPred : dsPrev ? deepseekPred : null;
+                const c2sig  = c2src?.signal || null;
+                const c2conf = c2src?.confidence ?? 0;
+                const c2meta = c2src ? { label:`#${c2src.window_count} · ${c2src.latency_ms}ms`, prev:dsPrev, aiReq: c2src.data_requests&&c2src.data_requests.toUpperCase()!=="NONE"&&c2src.data_requests.trim()!=="" } : null;
+
+                // Col 3 — Consensus
+                const c3dsSig   = c2sig;
+                const c3ensSig  = effectiveEnsSig;
+                const c3agreed  = aiAgree!==null ? (aiAgree && c3ensSig!=="NEUTRAL") : (dsPrev && deepseekPred?.signal===c3ensSig && c3ensSig!=="NEUTRAL");
+                const c3sig     = c3agreed ? c3ensSig : "NEUTRAL";
+                const c3conf    = c3agreed ? c1conf : 0;
+                const c3hasData = aiAgree!==null || (dsPrev && ensemblePred);
+                const c3isPrev  = aiAgree===null && dsPrev;
+
+                // Col 4 — Best Indicator
+                let c4sig = null, c4conf = 50, c4display = "", c4split = false, c4acc = 0, c4ref = null, c4ready = false;
+                if (bestIndicator) {
+                  const ranked    = bestIndicator.ranked || [];
+                  const qualified = ranked.filter(r => (r.directional ?? r.total) >= 20);
+                  if (qualified.length) {
+                    const topAcc = qualified[0]?.accuracy ?? 0;
+                    const tied   = qualified.filter(r => r.accuracy === topAcc);
+                    if (tied.length) {
+                      const sigs      = tied.map(r => getBestSig(r.name)).filter(s => s==="UP"||s==="DOWN");
+                      const upC       = sigs.filter(s=>s==="UP").length;
+                      const dnC       = sigs.filter(s=>s==="DOWN").length;
+                      const sigTotal  = upC + dnC;
+                      if (sigTotal > 0) {
+                        if (upC > dnC)      { c4sig = "UP";   c4conf = Math.round(upC/sigTotal*100); }
+                        else if (dnC > upC) { c4sig = "DOWN"; c4conf = Math.round(dnC/sigTotal*100); }
+                        else                { c4sig = getBestSig(tied[0].name)||"UP"; c4conf = 50; c4split = true; }
+                      } else {
+                        c4sig = getBestSig(tied[0].name) || null; c4conf = 50;
+                      }
+                      c4display = tied.length===1 ? tied[0].name.replace(/^strat:|^spec:|^dash:/,"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()) : `Top ${tied.length} Indicators`;
+                      c4acc = topAcc * 100; c4ref = tied[0]; c4ready = true;
+                    }
+                  }
+                }
+
+                // ── Shared cell style helpers ─────────────────────────────────────
+                const cR  = { borderRight:`1px solid ${C.borderSoft}`, paddingRight:12 };
+                const cM  = { borderRight:`1px solid ${C.borderSoft}`, padding:"0 12px" };
+                const cL  = { paddingLeft:12 };
+                // Each "row" in the flat grid: title / signal / meta / accuracy
+                // meta row has a fixed minHeight so all columns stay level
+                const metaRow = { minHeight:26, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" };
+                const badge = (ok) => ({ fontSize:9, fontWeight:800, padding:"1px 5px", borderRadius:3,
+                  color:ok?C.green:C.amber, background:ok?C.greenBg:C.amberBg,
+                  border:`1px solid ${ok?C.greenBorder:C.amberBorder}` });
+
                 return (
                   <div style={{ ...card, flexShrink:0, padding:"8px 12px" }}>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:0 }}>
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gridTemplateRows:"auto auto auto auto", gap:0 }}>
 
-                      {/* ── Col 1: Math Ensemble ── */}
-                      <div style={{ borderRight:`1px solid ${C.borderSoft}`, paddingRight:12 }}>
-                        <div style={colTitle}>Combined Indicators</div>
-                        {ensemblePred ? (<>
-                          <SignalRow sig={effectiveEnsSig} conf={effectiveEnsSig==="NEUTRAL" ? 0 : ensemblePred.confidence*100} />
-                          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                            <span style={{ fontSize:9, color:C.muted }}>{ensemblePred.bullish}↑ {ensemblePred.bearish}↓</span>
-                            {effectiveEnsSig==="NEUTRAL" && ensemblePred.signal!=="NEUTRAL" && (
-                              <span style={{ fontSize:9, fontWeight:700, color:C.amber }}>({(ensemblePred.confidence*100).toFixed(1)}% raw)</span>
-                            )}
-                            {aiAgree!==null && (
-                              <span style={{ fontSize:9, fontWeight:800, padding:"1px 5px", borderRadius:3,
-                                color:aiAgree?C.green:C.amber, background:aiAgree?C.greenBg:C.amberBg,
-                                border:`1px solid ${aiAgree?C.greenBorder:C.amberBorder}` }}>
-                                {aiAgree?"✓ agree":"⚠ split"}
-                              </span>
-                            )}
-                          </div>
-                          <AccuracyRow lbl="All-time accuracy"
-                            pct={allTimeAccuracy} wins={allTimeCorrect} losses={allTimeTotal-allTimeCorrect}
-                            total={allTimeTotal+allTimeNeutral}
-                            noData={allTimeTotal===0} />
-                        </>) : <div style={{ fontSize:11, color:C.muted }}>Warming up…</div>}
+                      {/* ══ ROW 1 — Titles ══ */}
+                      <div style={{ ...cR, paddingBottom:4 }}><div style={colTitle}>Combined Indicators</div></div>
+                      <div style={{ ...cM, paddingBottom:4 }}><div style={colTitle}>DeepSeek AI Analysis</div></div>
+                      <div style={{ ...cM, paddingBottom:4 }}><div style={colTitle}>Consensus</div></div>
+                      <div style={{ ...cL, paddingBottom:4 }}><div style={colTitle}>Best Indicator</div></div>
+
+                      {/* ══ ROW 2 — Signals ══ */}
+                      <div style={cR}>
+                        {ensemblePred ? <SignalRow sig={c1sig} conf={c1conf} /> : <div style={{ fontSize:11, color:C.muted }}>Warming up…</div>}
+                      </div>
+                      <div style={cM}>
+                        {dsErr ? <div style={{ fontSize:11, color:C.red }}>{activeDeepseekPred.reasoning||"API error"}</div>
+                          : c2sig ? <SignalRow sig={c2sig} conf={c2conf} />
+                          : <div style={{ fontSize:11, color:C.muted }}>Analyzing…</div>}
+                      </div>
+                      <div style={cM}>
+                        {c3hasData ? <SignalRow sig={c3sig} conf={c3conf} /> : <div style={{ fontSize:11, color:C.muted }}>Waiting…</div>}
+                      </div>
+                      <div style={cL}>
+                        {c4ready ? <SignalRow sig={c4sig||"NEUTRAL"} conf={c4sig&&!c4split?c4conf:0} confStr={c4split?"SPLIT":undefined} />
+                          : <div style={{ fontSize:10, color:C.muted }}>{bestIndicator ? "Need ≥20 bars" : "No historical data"}</div>}
                       </div>
 
-                      {/* ── Col 2: DeepSeek ── */}
-                      <div style={{ borderRight:`1px solid ${C.borderSoft}`, padding:"0 12px" }}>
-                        <div style={colTitle}>DeepSeek AI Analysis</div>
-                        {pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR" ? (<>
-                          <SignalRow sig={activeDeepseekPred.signal} conf={activeDeepseekPred.confidence} />
-                          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                            <span style={{ fontSize:9, color:C.muted }}>#{activeDeepseekPred.window_count} · {activeDeepseekPred.latency_ms}ms</span>
-                            {activeDeepseekPred.data_requests&&activeDeepseekPred.data_requests.toUpperCase()!=="NONE"&&activeDeepseekPred.data_requests.trim()!=="" && (
-                              <span style={{ fontSize:9, fontWeight:700, padding:"1px 5px", borderRadius:3,
-                                color:C.amber, background:C.amberBg, border:`1px solid ${C.amberBorder}` }}>
-                                ⚡ AI req
-                              </span>
-                            )}
-                          </div>
-                          <AccuracyRow lbl="DeepSeek accuracy"
-                            pct={deepseekAcc?.accuracy*100??0} wins={deepseekAcc?.correct??0}
-                            losses={(deepseekAcc?.directional??deepseekAcc?.total??0)-(deepseekAcc?.correct??0)}
-                            total={(deepseekAcc?.directional??0)+(deepseekAcc?.neutrals??0)}
-                            noData={!deepseekAcc?.total} />
-                        </>) : pendingDeepseekReady && activeDeepseekPred?.signal==="ERROR" ? (
-                          <div style={{ fontSize:11, color:C.red }}>{activeDeepseekPred.reasoning || "API error"}</div>
-                        ) : deepseekPred && deepseekPred.signal!=="ERROR" ? (<>
-                          <SignalRow sig={deepseekPred.signal} conf={deepseekPred.confidence} />
-                          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                            <span style={{ fontSize:9, color:C.muted }}>#{deepseekPred.window_count} · {deepseekPred.latency_ms}ms</span>
-                            <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>prev bar</span>
-                          </div>
-                          <AccuracyRow lbl="DeepSeek accuracy"
-                            pct={deepseekAcc?.accuracy*100??0} wins={deepseekAcc?.correct??0}
-                            losses={(deepseekAcc?.directional??deepseekAcc?.total??0)-(deepseekAcc?.correct??0)}
-                            total={(deepseekAcc?.directional??0)+(deepseekAcc?.neutrals??0)}
-                            noData={!deepseekAcc?.total} />
-                        </>) : (
-                          <div style={{ fontSize:11, color:C.muted }}>Analyzing…</div>
-                        )}
+                      {/* ══ ROW 3 — Metadata (fixed minHeight keeps all cols level) ══ */}
+                      <div style={{ ...cR, ...metaRow }}>
+                        {c1meta && (<>
+                          <span style={{ fontSize:9, color:C.muted }}>{c1meta.votes}</span>
+                          {c1meta.rawConf && <span style={{ fontSize:9, fontWeight:700, color:C.amber }}>({c1meta.rawConf}% raw)</span>}
+                          {aiAgree!==null && <span style={badge(aiAgree)}>{aiAgree?"✓ agree":"⚠ split"}</span>}
+                        </>)}
+                      </div>
+                      <div style={{ ...cM, ...metaRow }}>
+                        {c2meta && (<>
+                          <span style={{ fontSize:9, color:C.muted }}>{c2meta.label}</span>
+                          {c2meta.prev && <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>prev bar</span>}
+                          {c2meta.aiReq && <span style={{ fontSize:9, fontWeight:700, padding:"1px 5px", borderRadius:3, color:C.amber, background:C.amberBg, border:`1px solid ${C.amberBorder}` }}>⚡ AI req</span>}
+                        </>)}
+                      </div>
+                      <div style={{ ...cM, ...metaRow }}>
+                        {c3hasData && (<>
+                          {!c3agreed && c3dsSig && (<>
+                            <span style={{ fontSize:10, fontWeight:900, color:c3ensSig==="UP"?C.green:c3ensSig==="NEUTRAL"?C.amber:C.red }}>{c3ensSig==="UP"?"▲":c3ensSig==="NEUTRAL"?"—":"▼"} Ind</span>
+                            <span style={{ fontSize:10, fontWeight:900, color:c3dsSig==="UP"?C.green:c3dsSig==="NEUTRAL"?C.amber:C.red }}>{c3dsSig==="UP"?"▲":c3dsSig==="NEUTRAL"?"—":"▼"} AI</span>
+                          </>)}
+                          <span style={badge(c3agreed)}>{c3agreed?"✓ agree":"⚠ split"}</span>
+                          {c3isPrev && <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>prev bar</span>}
+                        </>)}
+                      </div>
+                      <div style={{ ...cL, ...metaRow }}>
+                        {c4ready && (<>
+                          <span style={{ fontSize:9, color:C.indigo, fontWeight:700 }}>{c4display}</span>
+                          {c4split && <span style={badge(false)}>⚠ split</span>}
+                        </>)}
                       </div>
 
-                      {/* ── Col 3: Consensus — unique: shows agree/split state, not a repeat of ensemble ── */}
-                      <div style={{ borderRight:`1px solid ${C.borderSoft}`, padding:"0 12px" }}>
-                        <div style={colTitle}>Consensus</div>
-                        {aiAgree!==null ? (() => {
-                          const dsSig = (pendingDeepseekReady && activeDeepseekPred?.signal!=="ERROR") ? activeDeepseekPred?.signal : deepseekPred?.signal;
-                          const ensSig = effectiveEnsSig;
-                          const agreed = aiAgree && ensSig;
-                          // Consensus is NEUTRAL if either side is neutral
-                          const consensusSig = agreed ? ensSig : "NEUTRAL";
-                          return (<>
-                            {agreed
-                              ? <SignalRow sig={consensusSig} conf={consensusSig==="NEUTRAL" ? 0 : ensemblePred.confidence*100} />
-                              : (<>
-                                  <SignalRow sig="NEUTRAL" conf={0} />
-                                  <div style={{ display:"flex", gap:6, alignItems:"baseline", marginBottom:2 }}>
-                                    {ensSig && <span style={{ fontSize:11, fontWeight:900, color:ensSig==="UP"?C.green:ensSig==="NEUTRAL"?C.amber:C.red }}>{ensSig==="UP"?"▲":ensSig==="NEUTRAL"?"—":"▼"} Ind</span>}
-                                    {dsSig && <span style={{ fontSize:11, fontWeight:900, color:dsSig==="UP"?C.green:dsSig==="NEUTRAL"?C.amber:C.red }}>{dsSig==="UP"?"▲":dsSig==="NEUTRAL"?"—":"▼"} AI</span>}
-                                  </div>
-                                </>)
-                            }
-                            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                              <span style={{ fontSize:9, fontWeight:800, padding:"1px 5px", borderRadius:3,
-                                color:aiAgree?C.green:C.amber, background:aiAgree?C.greenBg:C.amberBg,
-                                border:`1px solid ${aiAgree?C.greenBorder:C.amberBorder}` }}>
-                                {aiAgree?"✓ agree":"⚠ split"}
-                              </span>
-                            </div>
-                            <AccuracyRow lbl="When both agreed"
-                              pct={agreeAcc?.accuracy_agree*100??0} wins={agreeAcc?.correct_agree??0} losses={(agreeAcc?.total_agree??0)-(agreeAcc?.correct_agree??0)}
-                              noData={!agreeAcc?.total_agree} />
-                          </>);
-                        })() : deepseekPred && deepseekPred.signal!=="ERROR" && ensemblePred ? (() => {
-                          const prevEnsSig = effectiveEnsSig;
-                          const prevAgree = deepseekPred.signal===prevEnsSig && prevEnsSig!=="NEUTRAL";
-                          const prevConsensusSig = prevAgree ? prevEnsSig : "NEUTRAL";
-                          return (<>
-                            {prevAgree
-                              ? <SignalRow sig={prevConsensusSig} conf={prevConsensusSig==="NEUTRAL" ? 0 : ensemblePred.confidence*100} />
-                              : (<>
-                                  <SignalRow sig="NEUTRAL" conf={0} />
-                                  <div style={{ display:"flex", gap:6, alignItems:"baseline", marginBottom:2 }}>
-                                    <span style={{ fontSize:11, fontWeight:900, color:prevEnsSig==="UP"?C.green:prevEnsSig==="NEUTRAL"?C.amber:C.red }}>{prevEnsSig==="UP"?"▲":prevEnsSig==="NEUTRAL"?"—":"▼"} Ind</span>
-                                    <span style={{ fontSize:11, fontWeight:900, color:deepseekPred.signal==="UP"?C.green:deepseekPred.signal==="NEUTRAL"?C.amber:C.red }}>{deepseekPred.signal==="UP"?"▲":deepseekPred.signal==="NEUTRAL"?"—":"▼"} AI</span>
-                                  </div>
-                                </>)
-                            }
-                            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                              <span style={{ fontSize:9, fontWeight:800, padding:"1px 5px", borderRadius:3,
-                                color:prevAgree?C.green:C.amber, background:prevAgree?C.greenBg:C.amberBg,
-                                border:`1px solid ${prevAgree?C.greenBorder:C.amberBorder}` }}>
-                                {prevAgree?"✓ agree":"⚠ split"}
-                              </span>
-                              <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>prev bar</span>
-                            </div>
-                            <AccuracyRow lbl="When both agreed"
-                              pct={agreeAcc?.accuracy_agree*100??0} wins={agreeAcc?.correct_agree??0} losses={(agreeAcc?.total_agree??0)-(agreeAcc?.correct_agree??0)}
-                              noData={!agreeAcc?.total_agree} />
-                          </>);
-                        })() : <div style={{ fontSize:11, color:C.muted }}>Waiting…</div>}
+                      {/* ══ ROW 4 — Accuracy ══ */}
+                      <div style={cR}>
+                        <AccuracyRow lbl="All-time accuracy" pct={allTimeAccuracy} wins={allTimeCorrect}
+                          losses={allTimeTotal-allTimeCorrect} total={allTimeTotal+allTimeNeutral} noData={allTimeTotal===0} />
                       </div>
-
-                      {/* ── Col 4: Best Indicator ── */}
-                      <div style={{ paddingLeft:12 }}>
-                        <div style={colTitle}>Best Indicator</div>
-                        {bestIndicator ? (() => {
-                          const ranked = bestIndicator.ranked || [];
-                          // Filter to statistically meaningful indicators first (≥20 directional calls)
-                          const qualified = ranked.filter(r => (r.directional ?? r.total) >= 20);
-                          if (!qualified.length) return <div style={{ fontSize:10, color:C.muted }}>Need ≥20 bars</div>;
-                          const topAcc = qualified[0]?.accuracy ?? 0;
-                          // all indicators tied at the top accuracy within the qualified set
-                          const tied = qualified.filter(r => r.accuracy === topAcc);
-                          if (!tied.length) return <div style={{ fontSize:10, color:C.muted }}>No historical data</div>;
-
-                          // Combine signals: majority vote across all tied indicators
-                          const sigs = tied.map(r => getBestSig(r.name)).filter(s => s === "UP" || s === "DOWN");
-                          const upCount = sigs.filter(s => s === "UP").length;
-                          const downCount = sigs.filter(s => s === "DOWN").length;
-                          const sigTotal = upCount + downCount;
-                          let combinedSig = null, sigConf = 50, isSplit = false;
-                          if (sigTotal > 0) {
-                            if (upCount > downCount)        { combinedSig = "UP";   sigConf = Math.round(upCount / sigTotal * 100); }
-                            else if (downCount > upCount)   { combinedSig = "DOWN"; sigConf = Math.round(downCount / sigTotal * 100); }
-                            else                            { combinedSig = getBestSig(tied[0].name) || "UP"; sigConf = 50; isSplit = true; } // perfect split — use first indicator's signal at 50%
-                          } else {
-                            // no live signals available — try first tied indicator
-                            combinedSig = getBestSig(tied[0].name) || null;
-                            sigConf = 50;
-                          }
-
-                          // Display name
-                          const display = tied.length === 1
-                            ? tied[0].name.replace(/^strat:|^spec:|^dash:/,"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase())
-                            : `Top ${tied.length} Indicators`;
-
-                          // Accuracy — same for all tied
-                          const acc = topAcc * 100;
-                          const ref = tied[0]; // wins/losses/total from first (same % for all)
-
-                          return (<>
-                            <SignalRow sig={combinedSig || "NEUTRAL"} conf={combinedSig && !isSplit ? sigConf : 0} confStr={isSplit ? "SPLIT" : undefined} />
-                            <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                              <span style={{ fontSize:9, color:C.indigo, fontWeight:700 }}>{display}</span>
-                              {isSplit && <span style={{ fontSize:9, fontWeight:800, padding:"1px 5px", borderRadius:3,
-                                color:C.amber, background:C.amberBg, border:`1px solid ${C.amberBorder}` }}>⚠ split</span>}
-                            </div>
-                            <AccuracyRow lbl="Accuracy (all-time)"
-                              pct={acc} wins={ref.wins??ref.correct??0} losses={(ref.total??0)-(ref.wins??ref.correct??0)} total={ref.total} noData={false} />
-                          </>);
-                        })() : <div style={{ fontSize:10, color:C.muted }}>No historical data</div>}
+                      <div style={cM}>
+                        <AccuracyRow lbl="DeepSeek accuracy" pct={deepseekAcc?.accuracy*100??0} wins={deepseekAcc?.correct??0}
+                          losses={(deepseekAcc?.directional??deepseekAcc?.total??0)-(deepseekAcc?.correct??0)}
+                          total={(deepseekAcc?.directional??0)+(deepseekAcc?.neutrals??0)} noData={!deepseekAcc?.total} />
+                      </div>
+                      <div style={cM}>
+                        <AccuracyRow lbl="When both agreed" pct={agreeAcc?.accuracy_agree*100??0} wins={agreeAcc?.correct_agree??0}
+                          losses={(agreeAcc?.total_agree??0)-(agreeAcc?.correct_agree??0)} noData={!agreeAcc?.total_agree} />
+                      </div>
+                      <div style={cL}>
+                        {c4ready && c4ref
+                          ? <AccuracyRow lbl="Accuracy (all-time)" pct={c4acc} wins={c4ref.wins??c4ref.correct??0}
+                              losses={(c4ref.total??0)-(c4ref.wins??c4ref.correct??0)} total={c4ref.total} noData={false} />
+                          : <div />}
                       </div>
 
                     </div>
