@@ -406,9 +406,24 @@ function MicroSummary({ ob, tk, ls, lq, oif, cz, ca, fg, mp, cg, dots, caDivPct,
 // ── DeepSeek Audit Tab ────────────────────────────────────────
 function DeepSeekAuditTab({ deepseekLog, deepseekAcc, deepseekPred, ensembleAccuracy, totalPreds, correctPreds, agreeAcc }) {
   const [expanded, setExpanded] = useState({});
+  const [detailCache, setDetailCache] = useState({});
   function chartOpen(ws) { return expanded[`${ws}_chart`] !== false; }
   function toggle(key) { setExpanded(e => ({ ...e, [key]: !e[key] })); }
   function toggleChart(ws) { setExpanded(e => ({ ...e, [`${ws}_chart`]: e[`${ws}_chart`]===false })); }
+
+  async function toggleDetail(ws, field) {
+    const key = `${ws}_${field}`;
+    if (expanded[key]) { toggle(key); return; }
+    // Fetch full record if not cached
+    if (!detailCache[ws]) {
+      try {
+        const r = await fetch(`/deepseek/predictions/${ws}`);
+        if (r.ok) setDetailCache(c => ({ ...c, [ws]: await r.json() }));
+      } catch(_) {}
+    }
+    toggle(key);
+  }
+
   const pending = deepseekPred && deepseekPred.signal !== "ERROR";
 
   return (
@@ -444,6 +459,9 @@ function DeepSeekAuditTab({ deepseekLog, deepseekAcc, deepseekPred, ensembleAccu
         const imgUrl = row.chart_path ? ("/charts/" + String(row.chart_path).replace(/\\/g,"/").split("/").pop()) : null;
         const dataReq = row.data_requests && String(row.data_requests).toUpperCase()!=="NONE" ? row.data_requests : "";
         const showPrompt=!!expanded[`${ws}_prompt`], showRaw=!!expanded[`${ws}_raw`];
+        const detail = detailCache[ws] || {};
+        const fullPrompt = detail.full_prompt || row.full_prompt || "";
+        const rawResponse = detail.raw_response || row.raw_response || "";
         const wTime=new Date(ws*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
         const wDate=new Date(ws*1000).toLocaleDateString([],{month:"short",day:"numeric"});
         return (
@@ -592,51 +610,41 @@ function DeepSeekAuditTab({ deepseekLog, deepseekAcc, deepseekPred, ensembleAccu
               </div>
             )}
             <div style={{ display:"flex", gap:5, borderTop:`1px solid ${C.borderSoft}`, paddingTop:6, flexWrap:"wrap", alignItems:"center" }}>
-              {row.full_prompt ? (
-                <button onClick={()=>toggle(`${ws}_prompt`)} style={{
-                  fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:4, cursor:"pointer",
-                  background:showPrompt?C.indigo:C.bg, color:showPrompt?"#fff":C.textSec,
-                  border:`1px solid ${showPrompt?C.indigo:C.border}`, fontFamily:"inherit" }}>
-                  {showPrompt?"▲ Full Prompt":"▼ Full Prompt"}
-                </button>
-              ) : (
-                <span style={{ fontSize:9, fontWeight:700, color:C.red, padding:"2px 8px",
-                  border:`1px solid ${C.redBorder}`, borderRadius:4, background:C.redBg }}>
-                  ⚠ Prompt not stored
-                </span>
-              )}
-              {row.raw_response ? (
-                <button onClick={()=>toggle(`${ws}_raw`)} style={{
-                  fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:4, cursor:"pointer",
-                  background:showRaw?C.indigo:C.bg, color:showRaw?"#fff":C.textSec,
-                  border:`1px solid ${showRaw?C.indigo:C.border}`, fontFamily:"inherit" }}>
-                  {showRaw?"▲ Raw Response":"▼ Raw Response"}
-                </button>
-              ) : (
-                <span style={{ fontSize:9, fontWeight:700, color:C.red, padding:"2px 8px",
-                  border:`1px solid ${C.redBorder}`, borderRadius:4, background:C.redBg }}>
-                  ⚠ Response not stored
-                </span>
-              )}
+              <button onClick={()=>toggleDetail(ws,"prompt")} style={{
+                fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:4, cursor:"pointer",
+                background:showPrompt?C.indigo:C.bg, color:showPrompt?"#fff":C.textSec,
+                border:`1px solid ${showPrompt?C.indigo:C.border}`, fontFamily:"inherit" }}>
+                {showPrompt?"▲ Full Prompt":"▼ Full Prompt"}
+              </button>
+              <button onClick={()=>toggleDetail(ws,"raw")} style={{
+                fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:4, cursor:"pointer",
+                background:showRaw?C.indigo:C.bg, color:showRaw?"#fff":C.textSec,
+                border:`1px solid ${showRaw?C.indigo:C.border}`, fontFamily:"inherit" }}>
+                {showRaw?"▲ Raw Response":"▼ Raw Response"}
+              </button>
             </div>
-            {showPrompt && row.full_prompt && (
+            {showPrompt && (
               <div style={{ marginTop:8 }}>
                 <div style={{ fontSize:8, color:C.muted, marginBottom:3, fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>
-                  Exact prompt sent to DeepSeek · {row.full_prompt.length.toLocaleString()} chars
+                  Exact prompt sent to DeepSeek{fullPrompt ? ` · ${fullPrompt.length.toLocaleString()} chars` : ""}
                 </div>
-                <pre style={{ fontSize:9, color:C.textSec, background:C.bg, border:`1px solid ${C.borderSoft}`,
-                  borderRadius:5, padding:8, overflowX:"auto", whiteSpace:"pre-wrap", wordBreak:"break-word",
-                  maxHeight:400, overflowY:"auto", lineHeight:1.55 }}>{row.full_prompt}</pre>
+                {fullPrompt
+                  ? <pre style={{ fontSize:9, color:C.textSec, background:C.bg, border:`1px solid ${C.borderSoft}`,
+                      borderRadius:5, padding:8, overflowX:"auto", whiteSpace:"pre-wrap", wordBreak:"break-word",
+                      maxHeight:400, overflowY:"auto", lineHeight:1.55 }}>{fullPrompt}</pre>
+                  : <div style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>Loading…</div>}
               </div>
             )}
-            {showRaw && row.raw_response && (
+            {showRaw && (
               <div style={{ marginTop:8 }}>
                 <div style={{ fontSize:8, color:C.muted, marginBottom:3, fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>
-                  Exact response from DeepSeek · {row.raw_response.length.toLocaleString()} chars
+                  Exact response from DeepSeek{rawResponse ? ` · ${rawResponse.length.toLocaleString()} chars` : ""}
                 </div>
-                <pre style={{ fontSize:9, color:C.textSec, background:C.bg, border:`1px solid ${C.borderSoft}`,
-                  borderRadius:5, padding:8, overflowX:"auto", whiteSpace:"pre-wrap", wordBreak:"break-word",
-                  maxHeight:300, overflowY:"auto", lineHeight:1.55 }}>{row.raw_response}</pre>
+                {rawResponse
+                  ? <pre style={{ fontSize:9, color:C.textSec, background:C.bg, border:`1px solid ${C.borderSoft}`,
+                      borderRadius:5, padding:8, overflowX:"auto", whiteSpace:"pre-wrap", wordBreak:"break-word",
+                      maxHeight:300, overflowY:"auto", lineHeight:1.55 }}>{rawResponse}</pre>
+                  : <div style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>Loading…</div>}
               </div>
             )}
           </div>
@@ -1733,7 +1741,7 @@ function App() {
       try {
         const [a,b,c,d,e,f,g] = await Promise.all([
           fetch("/backtest"), fetch("/predictions/recent"), fetch("/weights"),
-          fetch("/deepseek/accuracy"), fetch("/deepseek/predictions?n=20"),
+          fetch("/deepseek/accuracy"), fetch("/deepseek/predictions/list?n=300"),
           fetch("/accuracy/agree"), fetch("/best-indicator"),
         ]);
         if (a.ok) setBacktest(await a.json());

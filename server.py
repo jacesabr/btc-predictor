@@ -307,6 +307,26 @@ async def get_deepseek_predictions(n: int = 50):
     return _safe_storage(storage.get_recent_deepseek_predictions, n, default=[])
 
 
+_HEAVY_FIELDS = {"full_prompt", "raw_response"}
+
+@app.get("/deepseek/predictions/list")
+async def get_deepseek_predictions_list(n: int = 300):
+    """Lean list for history UI — strips full_prompt and raw_response to keep payload small.
+    Those fields are fetched on demand via /deepseek/predictions/{window_start}."""
+    docs = _safe_storage(storage.get_recent_deepseek_predictions, n, default=[])
+    return [{k: v for k, v in doc.items() if k not in _HEAVY_FIELDS} for doc in docs]
+
+
+@app.get("/deepseek/predictions/{window_start}")
+async def get_deepseek_prediction_detail(window_start: float):
+    """Single record with all fields including full_prompt and raw_response."""
+    docs = _safe_storage(storage.get_recent_deepseek_predictions, 500, default=[])
+    for doc in docs:
+        if doc.get("window_start") == window_start:
+            return doc
+    return {}
+
+
 @app.get("/deepseek/source-history")
 async def get_deepseek_source_history(n: int = 20):
     docs    = _safe_storage(storage.get_recent_deepseek_predictions, n, default=[])
