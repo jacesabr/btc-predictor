@@ -2094,7 +2094,7 @@ function App() {
                     {noData
                       ? <div style={{ fontSize:10, color:C.muted }}>No historical data</div>
                       : <>
-                          <div style={{ display:"flex", alignItems:"baseline", gap:5, flexWrap:"wrap" }}>
+                          <div style={{ display:"flex", alignItems:"baseline", gap:5, flexWrap:"nowrap", overflow:"hidden" }}>
                             <span style={{ fontSize:22, fontWeight:900, color:pct>=50?C.green:C.red }}>{pct.toFixed(1)}%</span>
                             <span style={{ fontSize:10, fontWeight:700, color:C.green }}>{wins||0}W</span>
                             <span style={{ fontSize:10, color:C.muted }}>/</span>
@@ -2204,7 +2204,7 @@ function App() {
                 const cL  = { paddingLeft:12 };
                 // Each "row" in the flat grid: title / signal / meta / accuracy
                 // meta row has a fixed minHeight so all columns stay level
-                const metaRow = { minHeight:26, display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" };
+                const metaRow = { height:26, display:"flex", alignItems:"center", gap:6, flexWrap:"nowrap", overflow:"hidden" };
                 const badge = (ok) => ({ fontSize:9, fontWeight:800, padding:"1px 5px", borderRadius:3,
                   color:ok?C.green:C.amber, background:ok?C.greenBg:C.amberBg,
                   border:`1px solid ${ok?C.greenBorder:C.amberBorder}` });
