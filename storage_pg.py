@@ -117,6 +117,26 @@ def init_schema():
         _put(conn)
 
 
+def migrate_neutral_correct():
+    """One-time fix: NEUTRAL predictions were wrongly scored correct=0 (loss). Set to NULL."""
+    conn = _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE predictions SET correct = NULL WHERE signal = 'NEUTRAL' AND correct IS NOT NULL"
+            )
+            p_count = cur.rowcount
+            cur.execute(
+                "UPDATE deepseek_predictions SET correct = NULL WHERE signal = 'NEUTRAL' AND correct IS NOT NULL"
+            )
+            ds_count = cur.rowcount
+        conn.commit()
+        if p_count or ds_count:
+            logger.info("Neutral migration: patched %d predictions, %d deepseek_predictions", p_count, ds_count)
+    finally:
+        _put(conn)
+
+
 def get_reset_at() -> float:
     conn = _conn()
     try:
@@ -147,6 +167,7 @@ class StoragePG:
     def __init__(self, uri: str = "", db_name: str = "btc_predictor"):
         self._lock = threading.Lock()
         init_schema()
+        migrate_neutral_correct()
         logger.info("PostgreSQL storage initialised")
 
     # ── Ticks ─────────────────────────────────────────────────────────────────
@@ -237,7 +258,8 @@ class StoragePG:
                     return
                 signal, start_price = row
                 actual = "UP" if end_price >= start_price else "DOWN"
-                correct = 1 if actual == signal else 0
+                # NEUTRAL is an abstention — not scored as correct or wrong
+                correct = None if signal == "NEUTRAL" else (1 if actual == signal else 0)
                 cur.execute(
                     "UPDATE predictions SET end_price=%s, actual_direction=%s, correct=%s "
                     "WHERE window_start=%s",
@@ -253,7 +275,8 @@ class StoragePG:
         try:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT correct FROM predictions WHERE correct IS NOT NULL AND window_start >= %s "
+                    "SELECT correct FROM predictions "
+                    "WHERE correct IS NOT NULL AND signal != 'NEUTRAL' AND window_start >= %s "
                     "ORDER BY window_start DESC LIMIT %s",
                     (cutoff, n),
                 )
@@ -266,20 +289,27 @@ class StoragePG:
         finally:
             _put(conn)
 
-    def get_total_accuracy(self) -> Tuple[int, int, float]:
+    def get_total_accuracy(self) -> Tuple[int, int, float, int]:
         cutoff = get_reset_at()
         conn = _conn()
         try:
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT COUNT(*), SUM(correct) FROM predictions "
-                    "WHERE correct IS NOT NULL AND window_start >= %s",
+                    "WHERE correct IS NOT NULL AND signal != 'NEUTRAL' AND window_start >= %s",
                     (cutoff,),
                 )
                 row = cur.fetchone()
-            total = row[0] or 0
+                cur.execute(
+                    "SELECT COUNT(*) FROM predictions "
+                    "WHERE signal = 'NEUTRAL' AND window_start >= %s",
+                    (cutoff,),
+                )
+                neutral_row = cur.fetchone()
+            total   = row[0] or 0
             correct = int(row[1] or 0)
-            return total, correct, correct / total if total > 0 else 0.0
+            neutral = neutral_row[0] or 0
+            return total, correct, correct / total if total > 0 else 0.0, neutral
         finally:
             _put(conn)
 
@@ -365,7 +395,9 @@ class StoragePG:
                 cur.execute(
                     "SELECT p.actual_direction, p.signal, d.signal "
                     "FROM predictions p JOIN deepseek_predictions d USING (window_start) "
-                    "WHERE p.actual_direction IS NOT NULL AND d.signal NOT IN ('ERROR','NEUTRAL')"
+                    "WHERE p.actual_direction IS NOT NULL "
+                    "AND p.signal NOT IN ('ERROR','NEUTRAL') "
+                    "AND d.signal NOT IN ('ERROR','NEUTRAL')"
                 )
                 rows = cur.fetchall()
         finally:
