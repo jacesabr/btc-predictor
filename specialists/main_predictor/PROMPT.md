@@ -36,9 +36,9 @@ CRITICAL RULES:
     disagreement between indicators paralyse you. Your job is to weigh the evidence and identify
     the dominant side, even when the picture is imperfect.
 
-  - Most directional calls will land in the 60–75% confidence range — that is healthy and normal.
-    A 55% confidence on a UP or DOWN call still places a full trade. Ask yourself: "Am I
-    genuinely more right than wrong here?" If yes, pick the side. If no, go NEUTRAL.
+  - MINIMUM CONFIDENCE RULE: Any UP or DOWN call below 65% confidence will be automatically
+    overridden to NEUTRAL by the system. Do not output a directional call below 65% — output
+    NEUTRAL directly instead. The valid directional confidence range is 65%–95%.
 
   - NEUTRAL means "I have no reliable edge this bar — staying out is the better trade."
     Use it when conditions genuinely do not support a call:

@@ -809,6 +809,11 @@ def parse_response(text: str) -> Tuple[str, int, str, str, str, str, str]:
         elif "POSITION: BELOW" in tu:   signal = "DOWN"
         elif "POSITION: NEUTRAL" in tu: signal = "NEUTRAL"
 
+    # Hard filter: sub-65% confidence calls have no reliable edge — treat as abstention
+    if signal in ("UP", "DOWN") and confidence < 65:
+        logger.info("parse_response: overriding %s@%d%% → NEUTRAL (below 65%% threshold)", signal, confidence)
+        signal = "NEUTRAL"
+
     reasoning = "\n".join(numbered).strip()[:1400]
     if not reasoning:
         m = re.search(r"REASONS?:\s*(.*)", text, re.IGNORECASE | re.DOTALL)
