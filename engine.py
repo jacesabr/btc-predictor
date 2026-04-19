@@ -220,8 +220,9 @@ async def _run_postmortem_background(
             updated_dashboard=dashboard_signals or {},
         )
         if text:
-            _safe_storage(storage.store_postmortem, ds_record["window_start"], text)
-            logger.info("Postmortem stored for bar %.0f", ds_record["window_start"])
+            ws = ds_record.get("window_start", 0)
+            _safe_storage(storage.store_postmortem, ws, text)
+            logger.info("Postmortem stored for bar %.0f", ws)
     except Exception as exc:
         logger.warning("Postmortem background task failed: %s", exc)
 
