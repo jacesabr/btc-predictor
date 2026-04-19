@@ -182,10 +182,13 @@ class Storage:
                 votes = {}
             actual = doc["actual_direction"]
             for name, vote in votes.items():
+                sig = vote.get("signal") if isinstance(vote, dict) else str(vote)
+                if sig not in ("UP", "DOWN"):
+                    continue
                 if name not in accuracy:
                     accuracy[name] = {"correct": 0, "total": 0}
                 accuracy[name]["total"] += 1
-                if vote.get("signal") == actual:
+                if sig == actual:
                     accuracy[name]["correct"] += 1
         return {
             name: s["correct"] / s["total"] if s["total"] > 0 else 0.5
@@ -210,10 +213,13 @@ class Storage:
                 votes = {}
             actual = doc["actual_direction"]
             for name, vote in votes.items():
+                sig = vote.get("signal") if isinstance(vote, dict) else str(vote)
+                if sig not in ("UP", "DOWN"):
+                    continue
                 if name not in stats:
                     stats[name] = {"correct": 0, "total": 0}
                 stats[name]["total"] += 1
-                if vote.get("signal") == actual:
+                if sig == actual:
                     stats[name]["correct"] += 1
         return {
             name: {
