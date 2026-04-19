@@ -227,11 +227,48 @@ class Storage:
     def get_recent_predictions(self, n: int = 50) -> List[Dict]:
         with self._lock:
             records = _read_ndjson(self._preds_path)
-        resolved = [r for r in records if r.get("correct") is not None]
+        # Include neutrals and losses — filter only on actual_direction being resolved
+        resolved = [r for r in records if r.get("actual_direction")]
         resolved.sort(key=lambda r: r["window_start"], reverse=True)
         fields = {"window_start", "window_end", "start_price", "end_price",
                   "signal", "confidence", "actual_direction", "correct", "market_odds", "ev"}
         return [{k: v for k, v in r.items() if k in fields} for r in resolved[:n]]
+
+    def get_neutral_analysis(self) -> Dict:
+        """Return stats on NEUTRAL DeepSeek predictions to help tune the neutral threshold."""
+        cutoff = _score_reset_at()
+        with self._lock:
+            ds_records = _read_ndjson(self._ds_path)
+        neutrals = [
+            r for r in ds_records
+            if r.get("signal") == "NEUTRAL" and r.get("actual_direction") and r["window_start"] >= cutoff
+        ]
+        total = len(neutrals)
+        if not total:
+            return {
+                "total": 0, "market_went_up": 0, "market_went_down": 0,
+                "pct_up": 0.0, "pct_down": 0.0,
+                "would_have_won_if_traded_up": 0, "would_have_won_if_traded_down": 0,
+                "records": [],
+            }
+        up   = sum(1 for r in neutrals if r["actual_direction"] == "UP")
+        down = total - up
+        records_out = sorted(
+            [{"window_start": r["window_start"], "actual_direction": r["actual_direction"],
+              "confidence": r.get("confidence", 0), "reasoning": r.get("reasoning", "")[:200]}
+             for r in neutrals],
+            key=lambda x: x["window_start"], reverse=True,
+        )
+        return {
+            "total":              total,
+            "market_went_up":     up,
+            "market_went_down":   down,
+            "pct_up":             round(up / total * 100, 1),
+            "pct_down":           round(down / total * 100, 1),
+            "would_have_won_if_traded_up":   up,
+            "would_have_won_if_traded_down": down,
+            "records": records_out,
+        }
 
     # ── DeepSeek predictions ──────────────────────────────────────────────────
 
@@ -299,6 +336,15 @@ class Storage:
                     break
             if updated:
                 _rewrite_ndjson(self._ds_path, records)
+
+    def store_postmortem(self, window_start: float, postmortem: str):
+        with self._lock:
+            records = _read_ndjson(self._ds_path)
+            for r in records:
+                if r["window_start"] == window_start:
+                    r["postmortem"] = postmortem
+                    break
+            _rewrite_ndjson(self._ds_path, records)
 
     def get_agree_accuracy(self) -> Dict:
         cutoff = _score_reset_at()

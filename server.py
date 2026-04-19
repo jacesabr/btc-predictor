@@ -326,6 +326,7 @@ async def get_deepseek_source_history(n: int = 20):
             "data_received":              doc.get("data_received", ""),
             "data_requests":              doc.get("data_requests", ""),
             "free_observation":           doc.get("free_observation", ""),
+            "full_prompt":                doc.get("full_prompt", ""),
             "latency_ms":                 doc.get("latency_ms", 0),
             "window_count":               doc.get("window_count", 0),
             "actual_direction":           doc.get("actual_direction"),
@@ -337,17 +338,30 @@ async def get_deepseek_source_history(n: int = 20):
     return results
 
 
+@app.get("/neutral-analysis")
+async def get_neutral_analysis():
+    """Stats on NEUTRAL predictions — use to tune the neutral confidence threshold."""
+    return _safe_storage(storage.get_neutral_analysis, default={
+        "total": 0, "market_went_up": 0, "market_went_down": 0,
+        "pct_up": 0.0, "pct_down": 0.0,
+        "would_have_won_if_traded_up": 0, "would_have_won_if_traded_down": 0,
+        "records": [],
+    })
+
+
 @app.get("/audit")
 async def get_audit(n: int = 500):
     records  = _safe_storage(storage.get_audit_records, n, default=[])
+    neutrals = [r for r in records if r.get("signal") == "NEUTRAL"]
     resolved = [r for r in records if r.get("correct") is not None]
     wins     = sum(1 for r in resolved if r["correct"])
     return {
         "summary": {
             "total_predictions":    len(records),
             "resolved_predictions": len(resolved),
-            "wins":   wins,
-            "losses": len(resolved) - wins,
+            "neutrals":             len(neutrals),
+            "wins":                 wins,
+            "losses":               len(resolved) - wins,
             "win_rate": round(wins / len(resolved), 4) if resolved else None,
         },
         "records": records,
@@ -357,12 +371,14 @@ async def get_audit(n: int = 500):
 @app.get("/audit/export")
 async def export_audit(n: int = 500):
     records  = _safe_storage(storage.get_audit_records, n, default=[])
+    neutrals = [r for r in records if r.get("signal") == "NEUTRAL"]
     resolved = [r for r in records if r.get("correct") is not None]
     wins     = sum(1 for r in resolved if r["correct"])
     payload  = {
         "exported_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
         "summary": {
             "total_predictions": len(records), "resolved_predictions": len(resolved),
+            "neutrals": len(neutrals),
             "wins": wins, "losses": len(resolved) - wins,
             "win_rate": round(wins / len(resolved), 4) if resolved else None,
         },

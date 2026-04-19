@@ -88,6 +88,8 @@ def append_resolved_window(
     historical_analysis:    str                  = "",
     dashboard_signals_raw:  Optional[Dict]       = None,
     accuracy_snapshot:      Optional[Dict]       = None,
+    full_prompt:            str                  = "",
+    trade_action:           str                  = "",
 ):
     """Append one fully resolved bar to the history file. Thread-safe."""
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -117,6 +119,8 @@ def append_resolved_window(
         "indicators":         indicators,
         "dashboard_signals_raw": dashboard_signals_raw or {},
         "accuracy_snapshot": accuracy_snapshot or {},
+        "full_prompt":        full_prompt,
+        "trade_action":       trade_action,
     }
     try:
         with _lock:

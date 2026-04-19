@@ -872,7 +872,7 @@ class EnsemblePredictor:
         total      = up_score + down_score
         up_prob    = up_score / total if total > 0 else 0.5
         confidence = max(up_prob, 1 - up_prob)
-        signal     = "NEUTRAL" if confidence < 0.70 else ("UP" if up_prob > 0.5 else "DOWN")
+        signal     = "NEUTRAL" if confidence < 0.65 else ("UP" if up_prob > 0.5 else "DOWN")
         return {
             "signal":             signal,
             "confidence":         confidence,

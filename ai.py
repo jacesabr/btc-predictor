@@ -823,6 +823,127 @@ def parse_response(text: str) -> Tuple[str, int, str, str, str, str, str]:
 
 
 # ═══════════════════════════════════════════════════════════════
+# SECTION 1b — Post-mortem analyst
+# Fires after bar resolves. Sends full prediction record + actual
+# outcome + fresh market data so DeepSeek can explain itself.
+# ═══════════════════════════════════════════════════════════════
+
+_PM_DIR = _ROOT / "specialists" / "postmortem"
+
+
+async def run_postmortem(
+    api_key: str,
+    ds_record: Dict,
+    actual_direction: str,
+    end_price: float,
+    updated_klines: List,
+    updated_features: Dict,
+    updated_dashboard: Dict,
+) -> str:
+    """Send the resolved prediction back to DeepSeek for self-analysis.
+    Returns the raw postmortem text, or "" on failure."""
+    if not api_key:
+        return ""
+
+    signal     = ds_record.get("signal", "UNKNOWN")
+    confidence = ds_record.get("confidence", 0)
+    start_price = ds_record.get("start_price", 0)
+    window_start = ds_record.get("window_start", 0)
+    reasoning  = ds_record.get("reasoning", "")
+    narrative  = ds_record.get("narrative", "")
+    free_obs   = ds_record.get("free_observation", "")
+    data_recv  = ds_record.get("data_received", "")
+    data_req   = ds_record.get("data_requests", "")
+
+    correct = (signal == actual_direction) if signal in ("UP", "DOWN") else None
+    verdict = "CORRECT" if correct is True else ("WRONG" if correct is False else "ABSTENTION (NEUTRAL)")
+    price_delta = end_price - start_price if end_price and start_price else 0
+    pct_move    = price_delta / start_price * 100 if start_price else 0
+
+    bar_ts = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(window_start))
+
+    # Fresh kline CSV (last 30 bars after resolution)
+    ohlcv_lines = ["Time(UTC),Open,High,Low,Close,Volume"]
+    for k in (updated_klines or [])[-30:]:
+        try:
+            t = time.strftime("%H:%M", time.gmtime(float(k[0]) / 1000))
+            ohlcv_lines.append(f"{t},{float(k[1]):.2f},{float(k[2]):.2f},{float(k[3]):.2f},{float(k[4]):.2f},{float(k[5]):.4f}")
+        except Exception:
+            pass
+    ohlcv_block = "\n".join(ohlcv_lines)
+
+    # Compact features block
+    feat_lines = []
+    fv = lambda k, d=0: updated_features.get(k, d)
+    for key in ("rsi_7", "macd_hist", "stoch_k_14", "ema_diff_5_13", "atr_14", "volume_ratio", "trend_slope", "trend_r2"):
+        v = updated_features.get(key)
+        if v is not None:
+            feat_lines.append(f"  {key}: {v:.4f}")
+    features_block = "\n".join(feat_lines) or "  (not available)"
+
+    # Dashboard signals summary
+    dash_lines = []
+    if updated_dashboard and isinstance(updated_dashboard, dict):
+        for k, v in updated_dashboard.items():
+            if k == "fetched_at" or not isinstance(v, dict):
+                continue
+            sig = v.get("signal", "")
+            interp = v.get("interpretation", "")[:80]
+            if sig:
+                dash_lines.append(f"  {k}: {sig}  — {interp}")
+    dash_block = "\n".join(dash_lines) or "  (not available)"
+
+    prompt = f"""You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar {bar_ts}) ══════════════════════════════
+Signal     : {signal}  ({confidence}%)
+Start price: ${start_price:,.2f}
+Reasoning  : {reasoning[:800]}
+Narrative  : {narrative[:400]}
+Free obs   : {free_obs[:300]}
+Data recv  : {data_recv}
+Data req   : {data_req}
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : {actual_direction}
+End price        : ${end_price:,.2f}
+Move             : {price_delta:+.2f} ({pct_move:+.4f}%)
+VERDICT          : {verdict}
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+{ohlcv_block}
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+{features_block}
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+{dash_block}
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: {verdict}
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was {verdict.split()[0].lower()}]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]"""
+
+    try:
+        t0 = time.time()
+        raw = await _api_call(api_key, prompt, max_tokens=600, timeout_s=40.0)
+        elapsed = int((time.time() - t0) * 1000)
+        logger.info("Postmortem completed for bar %s (%s) in %dms", bar_ts, verdict, elapsed)
+        _save(_PM_DIR / f"last_{int(window_start)}.txt", f"=== PROMPT ===\n{prompt}\n\n=== RESPONSE ===\n{raw}")
+        return raw.strip()
+    except Exception as exc:
+        logger.warning("Postmortem failed for bar %s: %s", bar_ts, exc)
+        return ""
+
+
+# ═══════════════════════════════════════════════════════════════
 # SECTION 2 — Unified specialist (OHLCV → 5 specialist signals)
 # ═══════════════════════════════════════════════════════════════
 

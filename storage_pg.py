@@ -86,22 +86,29 @@ CREATE TABLE IF NOT EXISTS predictions (
 );
 
 CREATE TABLE IF NOT EXISTS deepseek_predictions (
-    window_start      DOUBLE PRECISION PRIMARY KEY,
-    window_end        DOUBLE PRECISION,
-    start_price       DOUBLE PRECISION,
-    end_price         DOUBLE PRECISION,
-    signal            TEXT,
-    confidence        DOUBLE PRECISION,
-    reasoning         TEXT,
-    narrative         TEXT,
-    free_observation  TEXT,
-    data_received     TEXT,
-    data_requests     TEXT,
-    latency_ms        INTEGER,
-    window_count      INTEGER,
-    actual_direction  TEXT,
-    correct           BOOLEAN,
-    created_at        DOUBLE PRECISION
+    window_start              DOUBLE PRECISION PRIMARY KEY,
+    window_end                DOUBLE PRECISION,
+    start_price               DOUBLE PRECISION,
+    end_price                 DOUBLE PRECISION,
+    signal                    TEXT,
+    confidence                DOUBLE PRECISION,
+    reasoning                 TEXT,
+    narrative                 TEXT,
+    free_observation          TEXT,
+    data_received             TEXT,
+    data_requests             TEXT,
+    latency_ms                INTEGER,
+    window_count              INTEGER,
+    actual_direction          TEXT,
+    correct                   BOOLEAN,
+    created_at                DOUBLE PRECISION,
+    chart_path                TEXT,
+    raw_response              TEXT,
+    full_prompt               TEXT,
+    strategy_snapshot         TEXT,
+    indicators_snapshot       TEXT,
+    dashboard_signals_snapshot TEXT,
+    postmortem                TEXT
 );
 """
 
@@ -513,6 +520,49 @@ class StoragePG:
 
     def get_audit_records(self, n: int = 500) -> List[Dict]:
         return self.get_recent_deepseek_predictions(n)
+
+    def get_neutral_analysis(self) -> Dict:
+        """Return stats on NEUTRAL DeepSeek predictions to help tune the neutral threshold."""
+        cutoff = get_reset_at()
+        conn = _conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT window_start, actual_direction, confidence, reasoning "
+                    "FROM deepseek_predictions "
+                    "WHERE signal = 'NEUTRAL' AND actual_direction IS NOT NULL AND window_start >= %s "
+                    "ORDER BY window_start DESC",
+                    (cutoff,),
+                )
+                rows = [dict(r) for r in cur.fetchall()]
+        finally:
+            _put(conn)
+        total = len(rows)
+        if not total:
+            return {
+                "total": 0, "market_went_up": 0, "market_went_down": 0,
+                "pct_up": 0.0, "pct_down": 0.0,
+                "would_have_won_if_traded_up": 0, "would_have_won_if_traded_down": 0,
+                "records": [],
+            }
+        up   = sum(1 for r in rows if r["actual_direction"] == "UP")
+        down = total - up
+        records_out = [
+            {"window_start": r["window_start"], "actual_direction": r["actual_direction"],
+             "confidence": r.get("confidence", 0),
+             "reasoning": (r.get("reasoning") or "")[:200]}
+            for r in rows
+        ]
+        return {
+            "total":              total,
+            "market_went_up":     up,
+            "market_went_down":   down,
+            "pct_up":             round(up / total * 100, 1),
+            "pct_down":           round(down / total * 100, 1),
+            "would_have_won_if_traded_up":   up,
+            "would_have_won_if_traded_down": down,
+            "records": records_out,
+        }
 
     def get_recent_predictions(self, n: int = 50) -> List[Dict]:
         cutoff = get_reset_at()

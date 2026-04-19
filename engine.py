@@ -400,19 +400,25 @@ async def _run_full_prediction(prices, is_force=False):
     current_state["strategies"]       = strategy_preds
     current_state["agree_accuracy"]   = _safe_storage(storage.get_agree_accuracy, default={})
 
-    # Step 5 — Await historical analyst (already running since bar open)
+    # Step 5 — Check if historical analyst already finished (it ran concurrently).
+    # DeepSeek fires NOW regardless — historical analysis is an enrichment, not a prerequisite.
+    # If the historical task is still running when DeepSeek fires, it gets None (prompt shows
+    # the "did not fire" placeholder). The task is then cancelled to avoid wasting API quota.
     historical_analysis = None
-    historical_fail_msg = None
+    hist_signal         = None
+    dash_directions: Dict = {}
+    if dashboard_signals:
+        try: dash_directions = extract_signal_directions(dashboard_signals)
+        except: pass
 
-    if deepseek and _features_ok:
-        try:
-            dash_directions = {}
-            if dashboard_signals:
-                try: dash_directions = extract_signal_directions(dashboard_signals)
-                except: pass
-            hist_signal, historical_analysis = await asyncio.wait_for(
-                historical_task, timeout=200.0,
-            ) if historical_task else (None, None)
+    if deepseek and _features_ok and historical_task:
+        if historical_task.done():
+            try:
+                hist_result = historical_task.result()
+                if isinstance(hist_result, tuple) and len(hist_result) == 2:
+                    hist_signal, historical_analysis = hist_result
+            except Exception as exc:
+                logger.warning("Historical analyst task error (ignored): %s", exc)
             if historical_analysis and hist_signal:
                 current_state["bar_historical_analysis"] = historical_analysis
                 current_state["bar_historical_context"] = _build_current_bar(
@@ -421,30 +427,12 @@ async def _run_full_prediction(prices, is_force=False):
                     pred["signal"], pred["confidence"], dash_directions,
                 )
                 strategy_preds["historical_analyst"] = hist_signal
+                logger.info("Historical analyst finished before DeepSeek — injected into prompt")
             else:
-                historical_fail_msg = "Historical Analyst returned no output — main DeepSeek call skipped"
-        except asyncio.TimeoutError:
-            historical_fail_msg = "Historical Analyst timed out (>200s) — main DeepSeek skipped"
-            logger.warning(historical_fail_msg)
-            hist_signal = historical_analysis = None
-        except Exception as exc:
-            historical_fail_msg = f"Historical Analyst failed ({exc}) — main DeepSeek skipped"
-            logger.warning(historical_fail_msg)
-            hist_signal = historical_analysis = None
-
-    if historical_fail_msg and deepseek and _features_ok:
-        bar_ts = time.strftime("%H:%M:%S UTC", time.gmtime(window_start_time))
-        current_state["pending_deepseek_prediction"] = {
-            "signal": "ERROR", "confidence": 0, "reasoning": historical_fail_msg,
-            "data_received": "", "data_requests": "", "narrative": "", "free_observation": "",
-            "raw_response": "", "full_prompt": "", "polymarket_url": "",
-            "window_start": bar_ts,
-            "window_end": time.strftime("%H:%M:%S UTC", time.gmtime(window_start_time + 300)),
-            "latency_ms": 0, "completed_at": time.time(),
-            "window_count": deepseek.window_count + 1 if deepseek else 0,
-        }
-        current_state["pending_deepseek_ready"] = True
-        logger.warning("Main DeepSeek SKIPPED — %s", historical_fail_msg)
+                logger.info("Historical analyst done but returned no output — DeepSeek fires without it")
+        else:
+            logger.info("Historical analyst still running — DeepSeek fires without waiting (task cancelled)")
+            historical_task.cancel()
 
     pm_odds_open = polymarket_feed.market_odds if polymarket_feed.is_live else None
     pm_ev_open   = (calculate_ev(pred["confidence"], pm_odds_open).expected_value
@@ -489,8 +477,8 @@ async def _run_full_prediction(prices, is_force=False):
         "captured_at": time.time(),
     })
 
-    # Fire DeepSeek (non-blocking)
-    if deepseek and _features_ok and not historical_fail_msg:
+    # Fire DeepSeek (non-blocking) — always fires if data is available
+    if deepseek and _features_ok:
         ds_strategy_preds = {
             k: v for k, v in strategy_preds.items()
             if k not in SPECIALIST_KEYS and not k.startswith("dash:")
@@ -596,6 +584,8 @@ async def _resolve_window(
         }
 
         try:
+            _ds_signal   = ds_pred_snap.get("signal", "")
+            _trade_action = _ds_signal if _ds_signal in ("UP", "DOWN", "NEUTRAL") else "NEUTRAL"
             append_resolved_window(
                 window_start       = window_start_time,
                 window_end         = window_start_time + config.window_duration_seconds,
@@ -605,7 +595,7 @@ async def _resolve_window(
                 ensemble_signal    = pred["signal"],
                 ensemble_conf      = pred["confidence"],
                 ensemble_correct   = (actual == pred["signal"]),
-                deepseek_signal    = ds_pred_snap.get("signal", ""),
+                deepseek_signal    = _ds_signal,
                 deepseek_conf      = ds_pred_snap.get("confidence", 0),
                 deepseek_correct   = ds_correct,
                 deepseek_reasoning = ds_pred_snap.get("reasoning", ""),
@@ -618,6 +608,8 @@ async def _resolve_window(
                 indicators         = snap_indicators,
                 dashboard_signals_raw = snap_dash_raw,
                 accuracy_snapshot  = accuracy_snapshot,
+                full_prompt        = ds_pred_snap.get("full_prompt", ""),
+                trade_action       = _trade_action,
             )
         except Exception as ph_exc:
             logger.warning("Pattern history append failed: %s", ph_exc)
