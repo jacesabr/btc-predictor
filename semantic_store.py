@@ -238,7 +238,7 @@ def compute_all_indicator_accuracy(n: Optional[int] = None) -> Dict[str, Dict]:
             "accuracy":    round(wins / directional, 4) if directional > 0 else 0.5,
         }
 
-    qualified = {k: v for k, v in result.items() if v["directional"] >= 20}
+    qualified = {k: v for k, v in result.items() if v["directional"] > 0}
     best = max(qualified, key=lambda k: qualified[k]["accuracy"]) if qualified else None
     result["best_indicator"] = best  # type: ignore[assignment]
 
@@ -314,6 +314,18 @@ def clean_incomplete_windows(window_starts) -> int:
     return removed
 
 
+# ── File-based vector stubs (no pgvector locally) ────────────────────────────
+
+def store_embedding(window_start: float, vector) -> None:
+    """No-op for file-based backend — pgvector only available on Railway."""
+    pass
+
+
+def search_similar(query_vec, k: int = 50) -> list:
+    """Fallback: return most recent k bars by timestamp (no vector search locally)."""
+    return load_all()[-k:]
+
+
 # ── Backend routing ───────────────────────────────────────────────────────────
 # When DATABASE_URL is present (Railway), transparently swap every public
 # function to its PostgreSQL equivalent. Local dev is completely unaffected.
@@ -325,6 +337,8 @@ if os.environ.get("DATABASE_URL"):
             load_all,
             compute_dashboard_accuracy,
             compute_all_indicator_accuracy,
+            store_embedding,
+            search_similar,
         )
         logger.info("semantic_store: using PostgreSQL backend")
     except ImportError as _e:

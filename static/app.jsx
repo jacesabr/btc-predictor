@@ -830,7 +830,7 @@ function AccuracySection({ title, rows, showWeight, emptyMsg }) {
   );
 }
 
-function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, ca, cz, cg, dots, price, allAccuracy }) {
+function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, ca, cz, cg, dots, price, allAccuracy, allAccuracyErr, onRefreshAccuracy }) {
   const caDivPct = (ca?.rate && price) ? ((price - ca.rate) / ca.rate * 100) : null;
   const caSig = caDivPct != null
     ? (Math.abs(caDivPct) > 0.05 ? (caDivPct > 0 ? "BEARISH_ARBI" : "BULLISH_ARBI") : "NEUTRAL")
@@ -898,8 +898,10 @@ function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, ca, cz,
           </div>
 
           {!hasAccuracy ? (
-            <div style={{ color:C.muted, fontSize:10, padding:"12px 0" }}>
-              Loading accuracy data — need ≥3 resolved bars per indicator to score.
+            <div style={{ color: allAccuracyErr ? C.red : C.muted, fontSize:10, padding:"12px 0", display:"flex", alignItems:"center", gap:8 }}>
+              {allAccuracyErr
+                ? <>Failed to load accuracy data — <span style={{cursor:"pointer",textDecoration:"underline"}} onClick={onRefreshAccuracy}>retry</span></>
+                : "Loading accuracy data…"}
             </div>
           ) : (() => {
             // Flatten all categories into one list with a Category column, sorted by accuracy desc
@@ -1723,6 +1725,58 @@ function SourceHistoryTab({ sourceHistory, selectedSource, setSelectedSource }) 
   );
 }
 
+// ── Errors Tab ────────────────────────────────────────────────
+function ErrorsTab({ errors }) {
+  const [expanded, setExpanded] = React.useState(null);
+  if (!errors || errors.length === 0) return (
+    <div style={{ padding:24, color:C.muted, fontSize:12, textAlign:"center" }}>
+      No errors recorded this session. ERROR/UNAVAILABLE bars will appear here.
+    </div>
+  );
+  return (
+    <div style={{ overflow:"auto", height:"100%", padding:"6px 0" }}>
+      <div style={{ fontSize:10, color:C.muted, letterSpacing:1, marginBottom:8, paddingLeft:4 }}>
+        {errors.length} ERROR/UNAVAILABLE BAR{errors.length!==1?"S":""} — not embedded, excluded from history
+      </div>
+      {errors.map((e, i) => {
+        const isOpen = expanded === i;
+        const isErr  = e.signal === "ERROR";
+        return (
+          <div key={i} style={{ ...card, marginBottom:6, borderLeft:`3px solid ${isErr?C.red:C.amber}` }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}
+                 onClick={() => setExpanded(isOpen ? null : i)}>
+              <span style={{ fontSize:9, fontWeight:700, color:isErr?C.red:C.amber, letterSpacing:1 }}>
+                {e.signal}
+              </span>
+              <span style={{ fontSize:10, color:C.muted }}>{e.bar_time}</span>
+              <span style={{ fontSize:10, color:C.muted }}>Bar #{e.bar_num}</span>
+              <span style={{ marginLeft:"auto", fontSize:9, color:C.muted }}>{isOpen?"▲":"▼"}</span>
+            </div>
+            {isOpen && (
+              <div style={{ marginTop:8, borderTop:`1px solid ${C.border}`, paddingTop:8 }}>
+                {e.reasoning && (
+                  <div style={{ marginBottom:6 }}>
+                    <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:3 }}>REASONING</div>
+                    <pre style={{ fontSize:10, color:C.text, whiteSpace:"pre-wrap", margin:0 }}>{e.reasoning}</pre>
+                  </div>
+                )}
+                {e.raw_response && (
+                  <div>
+                    <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:3 }}>RAW RESPONSE</div>
+                    <pre style={{ fontSize:10, color:C.red, whiteSpace:"pre-wrap", margin:0, maxHeight:300, overflow:"auto",
+                      background:"#1a0a0a", padding:8, borderRadius:4 }}>{e.raw_response}</pre>
+                  </div>
+                )}
+                <div style={{ marginTop:6, fontSize:9, color:C.muted }}>Logged {e.logged_at_str}</div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════
 //  Main App
 // ══════════════════════════════════════════════════════════════
@@ -1757,10 +1811,12 @@ function App() {
   const [serviceUnavailable,    setServiceUnavailable]    = useState(false);
   const [serviceUnavailReason,  setServiceUnavailReason]  = useState("");
   const [tab,                   setTab]                   = useState("live");
+  const [errorLog,              setErrorLog]              = useState([]);
   const [backendSnap,    setBackendSnap]    = useState(null);
   const [sourceHistory,  setSourceHistory]  = useState([]);
   const [selectedSource, setSelectedSource] = useState(0);
   const [allAccuracy,    setAllAccuracy]    = useState(null);
+  const [allAccuracyErr, setAllAccuracyErr] = useState(false);
   const wsRef           = useRef(null);
   const reconnectRef    = useRef(null);
   const prevDsWindowRef = useRef(null);
@@ -1883,6 +1939,12 @@ function App() {
     fetch("/backend").then(r=>r.json()).then(setBackendSnap).catch(()=>{});
   }, [tab]);
 
+  // ── Error log — fetch on tab switch ──────────────────────────
+  useEffect(() => {
+    if (tab !== "errors") return;
+    fetch("/errors").then(r=>r.json()).then(d=>setErrorLog(d.errors||[])).catch(()=>{});
+  }, [tab]);
+
   // ── Source history — fetch on tab switch + refresh every 60s ──
   useEffect(() => {
     if (tab !== "sources") return;
@@ -1896,18 +1958,22 @@ function App() {
     return () => clearInterval(id);
   }, [tab]);
 
-  // ── All accuracy — fetch on ensemble tab switch + refresh every 60s ──
+  // ── All accuracy — fetch on ensemble tab switch + refresh every 20s ──
+  const fetchAllAccuracy = React.useCallback(() => {
+    fetch("/accuracy/all?n=200")
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then(d => { if (d && (d.ai?.length || d.strategies?.length || d.specialists?.length || d.microstructure?.length)) { setAllAccuracy(d); setAllAccuracyErr(false); } else { setAllAccuracyErr(true); if (d?.error) console.error("[accuracy/all server error]", d.error); } })
+      .catch(e => { console.error("[accuracy/all]", e); setAllAccuracyErr(true); });
+  }, []);
   useEffect(() => {
     if (tab !== "ensemble" && tab !== "history") return;
-    fetch("/accuracy/all?n=200").then(r=>r.json()).then(setAllAccuracy).catch(()=>{});
-  }, [tab]);
+    fetchAllAccuracy();
+  }, [tab, fetchAllAccuracy]);
   useEffect(() => {
     if (tab !== "ensemble" && tab !== "history") return;
-    const id = setInterval(()=>{
-      fetch("/accuracy/all?n=200").then(r=>r.json()).then(setAllAccuracy).catch(()=>{});
-    }, 60000);
+    const id = setInterval(fetchAllAccuracy, 20000);
     return () => clearInterval(id);
-  }, [tab]);
+  }, [tab, fetchAllAccuracy]);
 
   useEffect(() => {
     const wc = deepseekPred?.window_count;
@@ -1997,13 +2063,18 @@ function App() {
 
   const fetchLQ = useCallback(async () => {
     try {
-      const d = await fetch("https://fapi.binance.com/fapi/v1/allForceOrders?symbol=BTCUSDT&limit=10").then(r=>r.json());
-      const longs  = d.filter(x=>x.side==="SELL");
-      const shorts = d.filter(x=>x.side==="BUY");
-      const lvol   = longs.reduce((s,x)=>s+parseFloat(x.origQty||0)*parseFloat(x.averagePrice||0),0);
-      const svol   = shorts.reduce((s,x)=>s+parseFloat(x.origQty||0)*parseFloat(x.averagePrice||0),0);
+      const d = await fetch(
+        "https://www.okx.com/api/v5/public/liquidation-orders?instType=SWAP&mgnMode=cross&instId=BTC-USDT-SWAP&state=filled&limit=100"
+      ).then(r=>r.json());
+      const rows = (d.data||[]).flatMap(e=>e.details||[]);
+      const cutoff = Date.now() - 300_000;
+      const window = rows.filter(r=>+r.ts>=cutoff).length ? rows.filter(r=>+r.ts>=cutoff) : rows;
+      const longs  = window.filter(r=>(r.posSide||"").toLowerCase()==="long");
+      const shorts = window.filter(r=>(r.posSide||"").toLowerCase()==="short");
+      const lvol   = longs.reduce((s,r)=>s+parseFloat(r.sz||0)*parseFloat(r.bkPx||0),0);
+      const svol   = shorts.reduce((s,r)=>s+parseFloat(r.sz||0)*parseFloat(r.bkPx||0),0);
       const sig    = lvol>svol*1.5?"BEARISH":svol>lvol*1.5?"BULLISH":"NEUTRAL";
-      setLq({ total:d.length, longCount:longs.length, shortCount:shorts.length, lvol, svol, sig });
+      setLq({ total:window.length, longCount:longs.length, shortCount:shorts.length, lvol, svol, sig });
       dot("lq","live");
     } catch { dot("lq","err"); }
   }, []);
@@ -2167,7 +2238,7 @@ function App() {
             </div>
           )}
         </div>
-        {[["live","LIVE"],["history","HISTORY"],["ensemble","ENSEMBLE"],["sources","SOURCES"]].map(([t,label])=>(
+        {[["live","LIVE"],["history","HISTORY"],["ensemble","ENSEMBLE"],["sources","SOURCES"],["binance_test","BINANCE TEST"],["errors","ERRORS"]].map(([t,label])=>(
           <button key={t} onClick={()=>setTab(t)} style={{
             background:"none", border:"none",
             borderBottom:tab===t?`2px solid ${C.amber}`:"2px solid transparent",
@@ -2320,25 +2391,15 @@ function App() {
                 let c4sig = null, c4conf = 50, c4display = "", c4split = false, c4acc = 0, c4ref = null, c4ready = false;
                 if (bestIndicator) {
                   const ranked    = bestIndicator.ranked || [];
-                  const qualified = ranked.filter(r => (r.directional ?? r.total) >= 20);
+                  const qualified = ranked.filter(r => (r.directional ?? r.total) > 0);
                   if (qualified.length) {
-                    const topAcc = qualified[0]?.accuracy ?? 0;
-                    const tied   = qualified.filter(r => r.accuracy === topAcc);
-                    if (tied.length) {
-                      const sigs      = tied.map(r => getBestSig(r.name)).filter(s => s==="UP"||s==="DOWN");
-                      const upC       = sigs.filter(s=>s==="UP").length;
-                      const dnC       = sigs.filter(s=>s==="DOWN").length;
-                      const sigTotal  = upC + dnC;
-                      if (sigTotal > 0) {
-                        if (upC > dnC)      { c4sig = "UP";   c4conf = Math.round(upC/sigTotal*100); }
-                        else if (dnC > upC) { c4sig = "DOWN"; c4conf = Math.round(dnC/sigTotal*100); }
-                        else                { c4sig = getBestSig(tied[0].name)||"UP"; c4conf = 50; c4split = true; }
-                      } else {
-                        c4sig = getBestSig(tied[0].name) || null; c4conf = 50;
-                      }
-                      c4display = tied.length===1 ? tied[0].name.replace(/^strat:|^spec:|^dash:/,"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase()) : `Top ${tied.length} Indicators`;
-                      c4acc = topAcc * 100; c4ref = tied[0]; c4ready = true;
-                    }
+                    const top = qualified[0];
+                    c4sig     = getBestSig(top.name) || null;
+                    c4conf    = 50;
+                    c4display = top.name.replace(/^strat:|^spec:|^dash:/,"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+                    c4acc     = (top.accuracy ?? 0) * 100;
+                    c4ref     = top;
+                    c4ready   = true;
                   }
                 }
 
@@ -2377,7 +2438,7 @@ function App() {
                       </div>
                       <div style={cL}>
                         {c4ready ? <SignalRow sig={c4sig||"NEUTRAL"} conf={c4sig&&!c4split?c4conf:0} confStr={c4split?"SPLIT":undefined} />
-                          : <div style={{ fontSize:10, color:C.muted }}>{bestIndicator ? "Need ≥20 bars" : "No historical data"}</div>}
+                          : <div style={{ fontSize:10, color:C.muted }}>No historical data{bestIndicator && bestIndicator.pattern_record_count >= 0 ? <span style={{marginLeft:4,opacity:0.6}}>[{bestIndicator.pattern_record_count} rec]</span> : null}</div>}
                       </div>
 
                       {/* ══ ROW 3 — Metadata (fixed minHeight keeps all cols level) ══ */}
@@ -3099,6 +3160,8 @@ function App() {
             fg={fg} mp={mp} ca={ca} cz={cz} cg={cg}
             dots={dots} price={price}
             allAccuracy={allAccuracy}
+            allAccuracyErr={allAccuracyErr}
+            onRefreshAccuracy={fetchAllAccuracy}
           />
         )}
 
@@ -3183,6 +3246,20 @@ function App() {
           </div>
         )}
 
+        {/* ══ BINANCE TEST TAB ══ */}
+        {tab==="binance_test" && (
+          <ErrorBoundary key="binance-test-tab">
+            <BinanceTestTab />
+          </ErrorBoundary>
+        )}
+
+        {/* ══ ERRORS TAB ══ */}
+        {tab==="errors" && (
+          <ErrorBoundary key="errors-tab">
+            <ErrorsTab errors={errorLog} />
+          </ErrorBoundary>
+        )}
+
         {/* ══ SETTINGS TAB ══ */}
         {tab==="settings" && (
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, height:"100%", overflow:"auto" }}>
@@ -3250,6 +3327,166 @@ function App() {
         *{scrollbar-width:auto;scrollbar-color:#A09D99 #E6E4DF}
         input[type=range]{height:3px}
       `}</style>
+    </div>
+  );
+}
+
+// ── Binance Test Tab ──────────────────────────────────────────
+const BINANCE_ENDPOINTS = [
+  { id:"spot_price",       label:"Spot Price",            url:"https://api.binance.com/api/v3/ticker/price",                                        params:{symbol:"BTCUSDT"},                          desc:"Current BTCUSDT spot price" },
+  { id:"ticker_24hr",      label:"24hr Ticker",           url:"https://api.binance.com/api/v3/ticker/24hr",                                         params:{symbol:"BTCUSDT"},                          desc:"24h volume, price change, statistics" },
+  { id:"order_book",       label:"Order Book Depth",      url:"https://api.binance.com/api/v3/depth",                                               params:{symbol:"BTCUSDT",limit:20},                 desc:"Top 20 bids & asks" },
+  { id:"klines_1m",        label:"1m Klines (OHLCV)",     url:"https://api.binance.com/api/v3/klines",                                              params:{symbol:"BTCUSDT",interval:"1m",limit:10},   desc:"Last 10 × 1-min candles" },
+  { id:"ls_global",        label:"Global L/S Ratio",      url:"https://fapi.binance.com/futures/data/globalLongShortAccountRatio",                  params:{symbol:"BTCUSDT",period:"5m",limit:1},      desc:"Retail long/short account ratio" },
+  { id:"ls_top_acct",      label:"Top Trader L/S Acct",   url:"https://fapi.binance.com/futures/data/topLongShortAccountRatio",                     params:{symbol:"BTCUSDT",period:"5m",limit:1},      desc:"Smart money account positioning" },
+  { id:"ls_top_pos",       label:"Top Trader L/S Pos",    url:"https://fapi.binance.com/futures/data/topLongShortPositionRatio",                    params:{symbol:"BTCUSDT",period:"5m",limit:1},      desc:"Top traders notional long/short" },
+  { id:"taker_flow",       label:"Taker Buy/Sell Ratio",  url:"https://fapi.binance.com/futures/data/takerlongshortRatio",                          params:{symbol:"BTCUSDT",period:"5m",limit:3},      desc:"Aggressive buyer vs seller flow" },
+  { id:"open_interest",    label:"Open Interest",         url:"https://fapi.binance.com/fapi/v1/openInterest",                                      params:{symbol:"BTCUSDT"},                          desc:"Total BTC futures open interest" },
+  { id:"premium_index",    label:"Premium Index",         url:"https://fapi.binance.com/fapi/v1/premiumIndex",                                      params:{symbol:"BTCUSDT"},                          desc:"Mark price, index price, funding rate" },
+  { id:"oi_history",       label:"OI History",            url:"https://fapi.binance.com/futures/data/openInterestHist",                             params:{symbol:"BTCUSDT",period:"5m",limit:6},      desc:"OI change over last 30 min" },
+  { id:"funding_history",  label:"Funding Rate History",  url:"https://fapi.binance.com/fapi/v1/fundingRate",                                       params:{symbol:"BTCUSDT",limit:6},                  desc:"Last 6 funding rates" },
+];
+
+function BinanceTestTab() {
+  const [results, setResults] = React.useState({});
+  const [loading, setLoading] = React.useState(false);
+  const [lastRun, setLastRun] = React.useState(null);
+
+  const buildUrl = (url, params) => {
+    const qs = Object.entries(params).map(([k,v])=>`${k}=${encodeURIComponent(v)}`).join("&");
+    return `${url}?${qs}`;
+  };
+
+  const summarise = (data) => {
+    if (Array.isArray(data)) {
+      const first = data[0];
+      return { _type:`array[${data.length}]`, ...(typeof first==="object"&&first?first:{}) };
+    }
+    return data;
+  };
+
+  const runAll = React.useCallback(async () => {
+    setLoading(true);
+    setResults({});
+    const fresh = {};
+    await Promise.all(BINANCE_ENDPOINTS.map(async (ep) => {
+      const t0 = Date.now();
+      try {
+        const r = await fetch(buildUrl(ep.url, ep.params));
+        const ms = Date.now() - t0;
+        const data = await r.json();
+        fresh[ep.id] = { ok: r.ok, status: r.status, ms, data: summarise(data) };
+      } catch(e) {
+        fresh[ep.id] = { ok: false, status: "ERR", ms: Date.now()-t0, error: String(e) };
+      }
+    }));
+    setResults(fresh);
+    setLastRun(new Date().toLocaleTimeString());
+    setLoading(false);
+  }, []);
+
+  React.useEffect(() => { runAll(); }, []);
+
+  const passed = Object.values(results).filter(r=>r.ok).length;
+  const total  = Object.keys(results).length;
+
+  return (
+    <div style={{ height:"100%", overflowY:"auto", display:"flex", flexDirection:"column", gap:6, paddingBottom:8 }}>
+      {/* Header */}
+      <div style={{ ...card, flexShrink:0, display:"flex", alignItems:"center", gap:12 }}>
+        <div>
+          <div style={{ fontSize:13, fontWeight:800, color:C.text }}>Binance API Connectivity Test</div>
+          <div style={{ fontSize:9, color:C.muted, marginTop:2 }}>
+            {total>0 ? `${passed}/${total} endpoints reachable` : "Press Run to test"}{lastRun?` · last run ${lastRun}`:""}
+          </div>
+        </div>
+        <button onClick={runAll} disabled={loading} style={{
+          marginLeft:"auto", background:C.amberBg, color:C.amber, border:`1px solid ${C.amberBorder}`,
+          padding:"5px 16px", borderRadius:5, cursor:loading?"default":"pointer",
+          fontSize:10, fontFamily:"inherit", fontWeight:700, letterSpacing:0.5, opacity:loading?0.6:1 }}>
+          {loading ? "Testing…" : "Run All"}
+        </button>
+        {total>0 && (
+          <div style={{ fontSize:11, fontWeight:700,
+            color: passed===total ? C.green : passed===0 ? C.red : C.amber }}>
+            {passed===total ? "✓ All OK" : passed===0 ? "✗ All Failed" : `${passed}/${total} OK`}
+          </div>
+        )}
+      </div>
+
+      {/* Grid of endpoint cards */}
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6 }}>
+        {BINANCE_ENDPOINTS.map(ep => {
+          const r = results[ep.id];
+          const statusColor = !r ? C.muted : r.ok ? C.green : C.red;
+          const bgColor     = !r ? C.surface : r.ok ? C.greenBg : C.redBg;
+          const borderColor = !r ? C.border  : r.ok ? C.greenBorder : C.redBorder;
+
+          // pick a few key fields to show prominently
+          const highlights = [];
+          if (r?.ok && r.data) {
+            const d = r.data;
+            if (d.price)                highlights.push(["Price",  `$${parseFloat(d.price).toLocaleString()}`]);
+            if (d.markPrice)            highlights.push(["Mark",   `$${parseFloat(d.markPrice).toLocaleString()}`]);
+            if (d.openInterest)         highlights.push(["OI",     parseFloat(d.openInterest).toLocaleString()+" BTC"]);
+            if (d.longShortRatio)       highlights.push(["L/S",    parseFloat(d.longShortRatio).toFixed(4)]);
+            if (d.longAccount)          highlights.push(["Long",   `${(parseFloat(d.longAccount)*100).toFixed(1)}%`]);
+            if (d.buySellRatio)         highlights.push(["BSR",    parseFloat(d.buySellRatio).toFixed(4)]);
+            if (d.lastFundingRate!==undefined) highlights.push(["Fund%", (parseFloat(d.lastFundingRate||d.fundingRate||0)*100).toFixed(4)+"%"]);
+            if (d.fundingRate!==undefined && !d.lastFundingRate) highlights.push(["Fund%", (parseFloat(d.fundingRate)*100).toFixed(4)+"%"]);
+            if (d.priceChangePercent)   highlights.push(["24hΔ",   `${parseFloat(d.priceChangePercent).toFixed(2)}%`]);
+            if (d.weightedAvgPrice)     highlights.push(["VWAP",   `$${parseFloat(d.weightedAvgPrice).toLocaleString()}`]);
+            if (d.sumOpenInterest)      highlights.push(["OI",     parseFloat(d.sumOpenInterest).toLocaleString()+" BTC"]);
+            if (d._type)                highlights.push(["Items",  d._type]);
+          }
+
+          return (
+            <div key={ep.id} style={{ background:bgColor, border:`1px solid ${borderColor}`, borderRadius:8, padding:"10px 12px" }}>
+              {/* Title row */}
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:4 }}>
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.text }}>{ep.label}</div>
+                  <div style={{ fontSize:8, color:C.muted, marginTop:1 }}>{ep.desc}</div>
+                </div>
+                <div style={{ textAlign:"right", flexShrink:0, marginLeft:6 }}>
+                  <div style={{ fontSize:11, fontWeight:800, color:statusColor }}>
+                    {!r ? "—" : r.ok ? `✓ ${r.status}` : `✗ ${r.status}`}
+                  </div>
+                  {r?.ms!=null && <div style={{ fontSize:8, color:C.muted }}>{r.ms}ms</div>}
+                </div>
+              </div>
+
+              {/* Highlights */}
+              {highlights.length>0 && (
+                <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:4 }}>
+                  {highlights.slice(0,4).map(([k,v])=>(
+                    <div key={k} style={{ background:C.surface, borderRadius:4, padding:"2px 6px", fontSize:9 }}>
+                      <span style={{ color:C.muted }}>{k} </span>
+                      <span style={{ fontWeight:700, color:C.text }}>{v}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Raw JSON preview */}
+              {r && (
+                <details style={{ marginTop:2 }}>
+                  <summary style={{ fontSize:8, color:C.muted, cursor:"pointer", userSelect:"none" }}>raw response</summary>
+                  <pre style={{ fontSize:8, color:C.textSec, marginTop:4, whiteSpace:"pre-wrap", wordBreak:"break-all",
+                    background:C.bg, padding:4, borderRadius:4, maxHeight:120, overflow:"auto" }}>
+                    {r.error || JSON.stringify(r.data, null, 2)}
+                  </pre>
+                </details>
+              )}
+
+              {/* Loading shimmer */}
+              {loading && !r && (
+                <div style={{ fontSize:9, color:C.muted }}>Testing…</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

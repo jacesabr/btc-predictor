@@ -53,10 +53,11 @@ from engine import (
     _pred_for_ws, _run_full_prediction, _run_deepseek,
     generate_bar_chart, run_collector, run_binance_feed,
     run_indicator_refresh, run_prediction_loop, SPECIALIST_KEYS,
+    _error_log,
 )
 from signals import fetch_dashboard_signals, extract_signal_directions
 from strategies import get_all_predictions, calculate_ev, required_accuracy_for_odds
-from semantic_store import compute_all_indicator_accuracy, compute_dashboard_accuracy
+from semantic_store import compute_all_indicator_accuracy, compute_dashboard_accuracy, load_all as load_pattern_history
 from ai import SPECIALIST_KEYS as _SPEC_KEYS
 
 logger = logging.getLogger(__name__)
@@ -438,10 +439,14 @@ async def export_audit(n: int = 500):
 
 @app.get("/accuracy/all")
 async def get_all_accuracy(n: int = 100):
-    from strategies import accuracy_to_label
-    limit     = n if n > 0 else None
-    all_stats = compute_all_indicator_accuracy(limit)
-    wts       = ensemble.get_weights()
+    try:
+      from strategies import accuracy_to_label
+      limit     = n if n > 0 else None
+      all_stats = compute_all_indicator_accuracy(limit)
+      wts       = ensemble.get_weights()
+    except Exception as exc:
+      import logging; logging.getLogger("server").error("/accuracy/all failed: %s", exc, exc_info=True)
+      return {"ai": [], "strategies": [], "specialists": [], "microstructure": [], "error": str(exc)}
     all_stats.pop("best_indicator", None)
 
     def _row(key, name, stats, weight=None):
@@ -495,7 +500,21 @@ async def get_best_indicator(n: int = 0):
         [{"name": k, **v} for k, v in data.items()],
         key=lambda x: (x["accuracy"], x["total"]), reverse=True,
     )
-    return {"best_indicator": best, "ranked": ranked, "total_indicators": len(ranked)}
+    try:
+        pattern_record_count = len(load_pattern_history())
+    except Exception:
+        pattern_record_count = -1
+    return {"best_indicator": best, "ranked": ranked, "total_indicators": len(ranked), "pattern_record_count": pattern_record_count}
+
+
+@app.get("/errors")
+async def get_errors():
+    from datetime import datetime, timezone
+    errors = []
+    for e in reversed(_error_log):
+        dt = datetime.fromtimestamp(e["logged_at"], tz=timezone.utc)
+        errors.append({**e, "logged_at_str": dt.strftime("%Y-%m-%d %H:%M:%S UTC")})
+    return {"errors": errors, "count": len(errors)}
 
 
 @app.post("/force-predict")

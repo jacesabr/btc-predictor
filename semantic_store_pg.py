@@ -13,8 +13,10 @@ import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
+import numpy as np
 import psycopg2
 import psycopg2.extras
+from pgvector.psycopg2 import register_vector
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +36,9 @@ def _session_label(ts: float) -> str:
 
 def _conn():
     from storage_pg import _get_pool
-    return _get_pool().getconn()
+    conn = _get_pool().getconn()
+    register_vector(conn)
+    return conn
 
 
 def _put(conn):
@@ -45,12 +49,16 @@ def _put(conn):
 # ── Schema ────────────────────────────────────────────────────────────────────
 
 _DDL = """
+CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE IF NOT EXISTS pattern_history (
     window_start DOUBLE PRECISION PRIMARY KEY,
     data         TEXT NOT NULL,
-    created_at   DOUBLE PRECISION NOT NULL
+    created_at   DOUBLE PRECISION NOT NULL,
+    embedding    vector(1024)
 );
 CREATE INDEX IF NOT EXISTS idx_pattern_history_ws ON pattern_history (window_start);
+CREATE INDEX IF NOT EXISTS idx_pattern_history_emb ON pattern_history
+    USING hnsw (embedding vector_cosine_ops);
 """
 
 
@@ -98,6 +106,8 @@ def append_resolved_window(
     historical_analysis:    str                  = "",
     dashboard_signals_raw:  Optional[Dict]       = None,
     accuracy_snapshot:      Optional[Dict]       = None,
+    full_prompt:            str                  = "",
+    trade_action:           str                  = "",
 ):
     _init()
     dt = datetime.fromtimestamp(window_start, tz=timezone.utc)
@@ -126,6 +136,8 @@ def append_resolved_window(
         "indicators":         indicators,
         "dashboard_signals_raw": dashboard_signals_raw or {},
         "accuracy_snapshot":  accuracy_snapshot or {},
+        "full_prompt":         full_prompt,
+        "trade_action":        trade_action,
     }
     conn = _conn()
     try:
@@ -165,6 +177,59 @@ def load_all(limit: int = 10000) -> List[Dict]:
         _put(conn)
 
 
+# ── Vector search ─────────────────────────────────────────────────────────────
+
+def store_embedding(window_start: float, vector: np.ndarray):
+    """Store a Cohere 1024-dim embedding for a resolved bar in pattern_history."""
+    _init()
+    conn = _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE pattern_history SET embedding = %s WHERE window_start = %s",
+                (vector.astype(np.float32), float(window_start)),
+            )
+        conn.commit()
+    finally:
+        _put(conn)
+
+
+def search_similar(query_vec: np.ndarray, k: int = 50) -> List[Dict]:
+    """
+    Return up to k most similar bars using pgvector cosine distance.
+    Bars without embeddings are excluded automatically.
+    Returns list of bar dicts ordered by similarity (most similar first).
+    """
+    _init()
+    conn = _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT data, embedding <=> %s AS distance
+                FROM pattern_history
+                WHERE embedding IS NOT NULL
+                ORDER BY embedding <=> %s
+                LIMIT %s
+                """,
+                (query_vec.astype(np.float32), query_vec.astype(np.float32), k),
+            )
+            rows = cur.fetchall()
+        results = []
+        for data_str, distance in rows:
+            try:
+                bar = json.loads(data_str)
+                bar["_similarity"] = round(1.0 - float(distance), 4)
+                results.append(bar)
+            except Exception:
+                pass
+        logger.info("pgvector search: %d similar bars found (top sim=%.3f)",
+                    len(results), results[0]["_similarity"] if results else 0)
+        return results
+    finally:
+        _put(conn)
+
+
 # ── Accuracy helpers (same interface as semantic_store.py) ────────────────────
 
 def compute_dashboard_accuracy(n: int = 200) -> Dict:
@@ -190,26 +255,67 @@ def compute_dashboard_accuracy(n: int = 200) -> Dict:
     }
 
 
-def compute_all_indicator_accuracy(n: int = 100) -> Dict:
-    records = load_all(n)
-    resolved = [r for r in records if r.get("actual_direction")]
+def compute_all_indicator_accuracy(n: Optional[int] = None) -> Dict:
+    limit = n if n is not None and n > 0 else 10000
+    records = load_all(limit)
+    resolved = [r for r in records if r.get("actual_direction") in ("UP", "DOWN")]
     if not resolved:
-        return {}
-    sums: Dict[str, Dict] = {}
-    for r in resolved:
-        actual = r["actual_direction"]
-        ind = r.get("indicators") or {}
-        votes = r.get("strategy_votes") or {}
-        for name, vote in votes.items():
-            sig = vote.get("signal") if isinstance(vote, dict) else None
-            if sig not in ("UP", "DOWN"):
+        result: Dict = {}
+        result["best_indicator"] = None
+        return result
+
+    counts: Dict[str, Dict] = {}
+
+    def _tally(name: str, predicted: str, actual: str):
+        if name not in counts:
+            counts[name] = {"wins": 0, "losses": 0, "total": 0}
+        counts[name]["total"] += 1
+        if predicted not in ("UP", "DOWN"):
+            return
+        if predicted == actual:
+            counts[name]["wins"] += 1
+        else:
+            counts[name]["losses"] += 1
+
+    for rec in resolved:
+        actual = rec["actual_direction"]
+
+        for strat_name, vote in (rec.get("strategy_votes") or {}).items():
+            if strat_name.startswith("dash:") or strat_name.startswith("spec:"):
                 continue
-            if name not in sums:
-                sums[name] = {"correct": 0, "total": 0}
-            sums[name]["total"] += 1
-            if sig == actual:
-                sums[name]["correct"] += 1
-    return {
-        k: {"accuracy": v["correct"] / v["total"], "correct": v["correct"], "total": v["total"]}
-        for k, v in sums.items() if v["total"] > 0
-    }
+            sig = ""
+            if isinstance(vote, dict):
+                sig = (vote.get("signal") or "").upper()
+            elif isinstance(vote, str):
+                sig = vote.upper()
+            _tally(f"strat:{strat_name}", sig, actual)
+
+        for spec_name, spec in (rec.get("specialist_signals") or {}).items():
+            sig = ""
+            if isinstance(spec, dict):
+                sig = (spec.get("signal") or "").upper()
+            _tally(f"spec:{spec_name}", sig, actual)
+
+        for ind_name, ind_sig in (rec.get("dashboard_signals_raw") or {}).items():
+            _tally(f"dash:{ind_name}", (ind_sig or "").upper(), actual)
+
+        _tally("deepseek", (rec.get("deepseek_signal") or "").upper(), actual)
+        _tally("ensemble", (rec.get("ensemble_signal") or "").upper(), actual)
+
+    result = {}
+    for name, c in counts.items():
+        total       = c["total"]
+        wins        = c["wins"]
+        losses      = c["losses"]
+        directional = wins + losses
+        result[name] = {
+            "wins":        wins,
+            "losses":      losses,
+            "total":       total,
+            "directional": directional,
+            "accuracy":    round(wins / directional, 4) if directional > 0 else 0.5,
+        }
+
+    qualified = {k: v for k, v in result.items() if v["directional"] > 0}
+    result["best_indicator"] = max(qualified, key=lambda k: qualified[k]["accuracy"]) if qualified else None
+    return result
