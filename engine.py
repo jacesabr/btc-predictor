@@ -48,7 +48,7 @@ from strategies import (
     get_all_predictions, EnsemblePredictor, LinearRegressionChannel,
     calculate_ev,
 )
-from ai import DeepSeekPredictor, run_specialists, run_historical_analyst, SPECIALIST_KEYS, _build_current_bar
+from ai import DeepSeekPredictor, run_specialists, run_historical_analyst, SPECIALIST_KEYS, _build_current_bar, run_postmortem
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -194,6 +194,36 @@ def generate_bar_chart(klines: List, window_start: float, signal: str, confidenc
     except Exception as exc:
         logger.warning("Chart generation failed: %s", exc)
         return None
+
+
+# ── Post-mortem background task ───────────────────────────────
+
+async def _run_postmortem_background(
+    ds_record: dict,
+    actual_direction: str,
+    end_price: float,
+    klines: list,
+    features: dict,
+    dashboard_signals,
+):
+    """Fire after bar resolves: ask DeepSeek to explain itself, store result."""
+    if not config.deepseek_api_key:
+        return
+    try:
+        text = await run_postmortem(
+            api_key=config.deepseek_api_key,
+            ds_record=ds_record,
+            actual_direction=actual_direction,
+            end_price=end_price,
+            updated_klines=klines,
+            updated_features=features or {},
+            updated_dashboard=dashboard_signals or {},
+        )
+        if text:
+            _safe_storage(storage.store_postmortem, ds_record["window_start"], text)
+            logger.info("Postmortem stored for bar %.0f", ds_record["window_start"])
+    except Exception as exc:
+        logger.warning("Postmortem background task failed: %s", exc)
 
 
 # ── DeepSeek task ─────────────────────────────────────────────
@@ -556,6 +586,24 @@ async def _resolve_window(
                         else None)
 
         await _safe_storage_async(storage.resolve_deepseek_prediction, window_start_time, end_price)
+
+        # Fire postmortem in background — non-blocking, best effort
+        if ds_pred_snap.get("signal") not in (None, "ERROR", "UNAVAILABLE"):
+            _pm_record = {**ds_pred_snap, "window_start": window_start_time}
+            _pm_klines = list(binance_klines) if binance_klines else []
+            _pm_features = dict(current_state.get("backend_snapshot", {}).get("features", {}))
+            _pm_dash = current_state.get("backend_snapshot", {}).get("dashboard_signals")
+            if isinstance(_pm_dash, str):
+                try: _pm_dash = json.loads(_pm_dash)
+                except: _pm_dash = {}
+            asyncio.create_task(_run_postmortem_background(
+                ds_record=_pm_record,
+                actual_direction=actual,
+                end_price=end_price,
+                klines=_pm_klines,
+                features=_pm_features,
+                dashboard_signals=_pm_dash,
+            ))
 
         ens_at_total, ens_at_correct, ens_at_acc = (
             await _safe_storage_async(storage.get_total_accuracy, default=(0, 0, 0.0))

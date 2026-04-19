@@ -547,6 +547,34 @@ function DeepSeekAuditTab({ deepseekLog, deepseekAcc, deepseekPred, ensembleAccu
                 <div style={{ fontSize:11, color:C.amber, lineHeight:1.75 }}>{row.free_observation}</div>
               </div>
             )}
+            {row.postmortem ? (
+              <div style={{ background:"#F5F3FF", border:"1px solid #C4B5FD",
+                borderLeft:"3px solid #7C3AED", borderRadius:5, padding:"6px 10px", marginBottom:8 }}>
+                <div style={{ fontSize:8, fontWeight:700, color:"#7C3AED", textTransform:"uppercase", letterSpacing:1, marginBottom:5 }}>
+                  Post-Mortem · DeepSeek Self-Analysis
+                </div>
+                {row.postmortem.split("\n").filter(Boolean).map((line, i) => {
+                  const colonIdx = line.indexOf(":");
+                  if (colonIdx > 0 && colonIdx < 25) {
+                    const label = line.slice(0, colonIdx);
+                    const body  = line.slice(colonIdx + 1).trim();
+                    return (
+                      <div key={i} style={{ marginBottom:4, lineHeight:1.6 }}>
+                        <span style={{ fontSize:9, fontWeight:900, color:"#7C3AED", textTransform:"uppercase", letterSpacing:0.5 }}>{label}: </span>
+                        <span style={{ fontSize:11, color:"#4C1D95" }}>{body}</span>
+                      </div>
+                    );
+                  }
+                  return <div key={i} style={{ fontSize:11, color:"#4C1D95", lineHeight:1.6, marginBottom:2 }}>{line}</div>;
+                })}
+              </div>
+            ) : row.actual_direction && row.signal && row.signal !== "NEUTRAL" && (
+              <div style={{ background:"#F5F3FF", border:"1px dashed #C4B5FD", borderRadius:5,
+                padding:"5px 10px", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
+                <span style={{ fontSize:9, color:"#A78BFA" }}>⏳</span>
+                <span style={{ fontSize:9, color:"#7C3AED", fontWeight:700 }}>Post-mortem pending — DeepSeek is analyzing this result in background</span>
+              </div>
+            )}
             {(row.data_received || dataReq) && (
               <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
                 {row.data_received && (

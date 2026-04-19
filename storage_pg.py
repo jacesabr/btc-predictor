@@ -122,6 +122,31 @@ def init_schema():
         logger.info("PostgreSQL schema ready")
     finally:
         _put(conn)
+    migrate_deepseek_columns()
+
+
+def migrate_deepseek_columns():
+    """Add columns introduced after initial deploy — safe to run repeatedly (IF NOT EXISTS)."""
+    new_cols = [
+        ("chart_path",                 "TEXT"),
+        ("raw_response",               "TEXT"),
+        ("full_prompt",                "TEXT"),
+        ("strategy_snapshot",          "TEXT"),
+        ("indicators_snapshot",        "TEXT"),
+        ("dashboard_signals_snapshot", "TEXT"),
+        ("postmortem",                 "TEXT"),
+    ]
+    conn = _conn()
+    try:
+        with conn.cursor() as cur:
+            for col, typ in new_cols:
+                cur.execute(
+                    f"ALTER TABLE deepseek_predictions ADD COLUMN IF NOT EXISTS {col} {typ}"
+                )
+        conn.commit()
+        logger.info("deepseek_predictions column migration complete")
+    finally:
+        _put(conn)
 
 
 def migrate_neutral_correct():
@@ -433,8 +458,10 @@ class StoragePG:
                     "INSERT INTO deepseek_predictions "
                     "(window_start, window_end, start_price, signal, confidence, reasoning, "
                     " narrative, free_observation, data_received, data_requests, "
-                    " latency_ms, window_count, created_at) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                    " latency_ms, window_count, created_at, "
+                    " chart_path, raw_response, full_prompt, strategy_snapshot, "
+                    " indicators_snapshot, dashboard_signals_snapshot) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                     "ON CONFLICT (window_start) DO NOTHING",
                     (
                         float(record.get("window_start") or 0),
@@ -450,7 +477,25 @@ class StoragePG:
                         record.get("latency_ms"),
                         record.get("window_count"),
                         time.time(),
+                        record.get("chart_path", ""),
+                        record.get("raw_response", ""),
+                        record.get("full_prompt", ""),
+                        record.get("strategy_snapshot", ""),
+                        record.get("indicators_snapshot", ""),
+                        record.get("dashboard_signals_snapshot", ""),
                     ),
+                )
+            conn.commit()
+        finally:
+            _put(conn)
+
+    def store_postmortem(self, window_start: float, postmortem: str):
+        conn = _conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE deepseek_predictions SET postmortem=%s WHERE window_start=%s",
+                    (postmortem, float(window_start)),
                 )
             conn.commit()
         finally:
