@@ -534,24 +534,28 @@ class StoragePG:
         conn = _conn()
         try:
             with conn.cursor() as cur:
+                # Directional predictions only (correct is set for UP/DOWN, NULL for NEUTRAL)
                 cur.execute(
-                    "SELECT signal, correct FROM deepseek_predictions "
-                    "WHERE correct IS NOT NULL AND window_start >= %s",
+                    "SELECT correct FROM deepseek_predictions "
+                    "WHERE correct IS NOT NULL AND signal != 'NEUTRAL' AND window_start >= %s",
                     (cutoff,),
                 )
-                rows = cur.fetchall()
+                directional_rows = cur.fetchall()
+                # Neutral count is separate — correct=NULL so excluded above
+                cur.execute(
+                    "SELECT COUNT(*) FROM deepseek_predictions "
+                    "WHERE signal = 'NEUTRAL' AND window_start >= %s",
+                    (cutoff,),
+                )
+                neutrals = cur.fetchone()[0] or 0
         finally:
             _put(conn)
-        if not rows:
-            return {"total": 0, "correct": 0, "accuracy": 0.0, "neutrals": 0, "directional": 0}
-        total = len(rows)
-        correct = sum(1 for _, c in rows if c)
-        neutrals = sum(1 for s, _ in rows if s == "NEUTRAL")
-        directional = total - neutrals
+        total = len(directional_rows)
+        correct = sum(1 for (c,) in directional_rows if c)
         return {
             "total": total, "correct": correct,
             "accuracy": correct / total if total > 0 else 0.0,
-            "neutrals": neutrals, "directional": directional,
+            "neutrals": neutrals, "directional": total,
         }
 
     def get_recent_deepseek_predictions(self, n: int = 50) -> List[Dict]:
