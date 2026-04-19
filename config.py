@@ -58,7 +58,6 @@ class Config:
     deepseek_enabled: bool = True
 
     # Dashboard signal API keys (for microstructure data fed into DeepSeek)
-    coinapi_key:   str = os.environ.get("COINAPI_KEY", "")
     coinalyze_key: str = os.environ.get("COINALYZE_KEY", "")
 
     # Feature engineering

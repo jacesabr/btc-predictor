@@ -1,15 +1,15 @@
 """
 Market Microstructure Signals
 ==============================
-Fetches 19 live market-microstructure signals in parallel from public APIs.
+Fetches live market-microstructure signals in parallel from public APIs.
 Used at every 5-minute bar open to give the AI full market context.
 
-Sources: Binance spot + futures, Bybit, OKX, Kraken, Fear&Greed, Mempool,
-         CoinGecko, CoinAPI (optional), Coinalyze (optional).
+Sources: Kraken, OKX, Bybit, Deribit, Fear&Greed, Mempool,
+         CoinGecko, Coinalyze (optional).
 
 Public exports:
-  fetch_dashboard_signals(coinapi_key, coinalyze_key) -> Dict
-  extract_signal_directions(ds)                       -> Dict[str, "UP"|"DOWN"|"NEUTRAL"]
+  fetch_dashboard_signals(coinalyze_key) -> Dict
+  extract_signal_directions(ds)          -> Dict[str, "UP"|"DOWN"|"NEUTRAL"]
 """
 
 import asyncio
@@ -34,9 +34,10 @@ async def _get(url: str, headers: Optional[Dict] = None) -> Any:
 
 
 async def _fetch_order_book() -> Dict:
-    data = await _get("https://api.binance.com/api/v3/depth?symbol=BTCUSDT&limit=20")
-    bv = sum(float(q) for _, q in data.get("bids", []))
-    av = sum(float(q) for _, q in data.get("asks", []))
+    data = await _get("https://api.kraken.com/0/public/Depth?pair=XBTUSD&count=20")
+    book = (data.get("result") or {}).get("XXBTZUSD", {})
+    bv = sum(float(b[1]) for b in book.get("bids", []))
+    av = sum(float(a[1]) for a in book.get("asks", []))
     imb = ((bv - av) / (bv + av)) * 100 if (bv + av) > 0 else 0.0
     sig = "BULLISH" if imb > 5 else "BEARISH" if imb < -5 else "NEUTRAL"
     interp = (
@@ -288,108 +289,55 @@ async def _fetch_mempool() -> Dict:
     }
 
 
-async def _fetch_coinapi(api_key: str) -> Dict:
+async def _fetch_deribit_dvol() -> Dict:
     data = await _get(
-        "https://rest.coinapi.io/v1/exchangerate/BTC/USD",
-        headers={"X-CoinAPI-Key": api_key},
+        "https://www.deribit.com/api/v2/public/get_index_price?index_name=btcdvol_usdc"
     )
-    return {
-        "aggregate_rate_usd": round(float(data.get("rate", 0)), 2),
-        "exchange_count":     "350+",
-    }
-
-
-async def _fetch_coinapi_momentum(api_key: str) -> Dict:
-    data = await _get(
-        "https://rest.coinapi.io/v1/exchangerate/BTC/USD/history"
-        "?period_id=5MIN&limit=4",
-        headers={"X-CoinAPI-Key": api_key},
-    )
-    if not data or len(data) < 2:
-        raise ValueError("Insufficient CoinAPI rate history")
-    closes = [float(bar.get("rate_close", bar.get("rate", 0))) for bar in data]
-    roc_1  = (closes[-1] - closes[-2]) / closes[-2] * 100 if closes[-2] else 0.0
-    roc_2  = (closes[-2] - closes[-3]) / closes[-3] * 100 if len(closes) >= 3 and closes[-3] else 0.0
-    accel  = roc_1 - roc_2
-    sig    = "BULLISH" if roc_1 > 0.05 else "BEARISH" if roc_1 < -0.05 else "NEUTRAL"
+    result = data.get("result") or {}
+    dvol = float(result.get("index_price", 60))
+    # DVOL = annualised implied volatility %. <40 calm, 40-80 normal, >80 fear
+    sig = "BEARISH" if dvol > 80 else "BULLISH" if dvol < 40 else "NEUTRAL"
     interp = (
-        f"Multi-exchange 5m rate rising {roc_1:+.3f}% "
-        f"({'accelerating' if accel > 0 else 'decelerating'}). "
-        "Aggregate buying pressure across 350+ exchanges."
-        if roc_1 > 0.05 else
-        f"Multi-exchange 5m rate falling {roc_1:+.3f}% "
-        f"({'accelerating' if accel < 0 else 'decelerating'}). "
-        "Aggregate selling pressure across 350+ exchanges."
-        if roc_1 < -0.05 else
-        f"Multi-exchange rate flat ({roc_1:+.3f}%). No directional momentum."
+        f"DVOL {dvol:.1f}% — extreme volatility regime. Options pricing in large moves. "
+        "High IV = elevated risk, typically bearish for near-term price stability."
+        if dvol > 80 else
+        f"DVOL {dvol:.1f}% — calm volatility regime. Low option premiums signal complacency. "
+        "Low IV historically precedes breakouts."
+        if dvol < 40 else
+        f"DVOL {dvol:.1f}% — normal volatility regime. No extreme option pricing in either direction."
     )
     return {
-        "rate_close":     round(closes[-1], 2),
-        "roc_1bar_pct":   round(roc_1, 4),
-        "roc_accel":      round(accel, 4),
+        "dvol_pct":       round(dvol, 2),
         "signal":         sig,
         "interpretation": interp,
     }
 
 
-async def _fetch_coinapi_large_trades(api_key: str) -> Dict:
-    data = await _get(
-        "https://rest.coinapi.io/v1/trades/BINANCE_SPOT_BTC_USDT/latest?limit=500",
-        headers={"X-CoinAPI-Key": api_key},
-    )
-    if not data:
-        raise ValueError("Empty CoinAPI trades response")
-    threshold = 2.0
-    large = [t for t in data if float(t.get("size", 0)) >= threshold]
-    buys  = sum(float(t["size"]) for t in large if (t.get("taker_side") or "").upper() == "BUY")
-    sells = sum(float(t["size"]) for t in large if (t.get("taker_side") or "").upper() == "SELL")
-    total = buys + sells
-    buy_pct = buys / total * 100 if total > 0 else 50.0
-    sig = "BULLISH" if buy_pct > 60 else "BEARISH" if buy_pct < 40 else "NEUTRAL"
-    interp = (
-        f"Whale buying dominates: {buy_pct:.1f}% of large (≥2 BTC) trades are buys "
-        f"({buys:.1f} BTC bought vs {sells:.1f} BTC sold). Institutional accumulation signal."
-        if buy_pct > 60 else
-        f"Whale selling dominates: only {buy_pct:.1f}% buys among large (≥2 BTC) trades "
-        f"({sells:.1f} BTC sold vs {buys:.1f} BTC bought). Distribution in progress."
-        if buy_pct < 40 else
-        f"Large trades balanced: {buy_pct:.1f}% buy / {100-buy_pct:.1f}% sell "
-        f"({len(large)} large orders). No clear institutional bias."
-    )
-    return {
-        "large_trade_count": len(large),
-        "large_buy_btc":     round(buys, 2),
-        "large_sell_btc":    round(sells, 2),
-        "large_buy_pct":     round(buy_pct, 1),
-        "signal":            sig,
-        "interpretation":    interp,
-    }
-
-
 async def _fetch_kraken_premium() -> Dict:
-    kraken_data, binance_data = await asyncio.gather(
+    kraken_data, okx_data = await asyncio.gather(
         _get("https://api.kraken.com/0/public/Ticker?pair=XBTUSD"),
-        _get("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"),
+        _get("https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT"),
     )
     k_price    = float(kraken_data["result"]["XXBTZUSD"]["c"][0])
-    b_price    = float(binance_data.get("price", 0))
-    spread_pct = (k_price - b_price) / b_price * 100 if b_price else 0.0
+    okx_rows   = okx_data.get("data") or []
+    o_price    = float(okx_rows[0]["last"]) if okx_rows else 0.0
+    spread_pct = (k_price - o_price) / o_price * 100 if o_price else 0.0
     sig = "BULLISH" if spread_pct > 0.05 else "BEARISH" if spread_pct < -0.05 else "NEUTRAL"
     interp = (
-        f"Kraken premium +{spread_pct:.3f}% over Binance. "
-        "US/EU regulated buyers paying above global average — institutional accumulation."
+        f"Kraken premium +{spread_pct:.3f}% over OKX. "
+        "EU/US regulated buyers paying above global average — institutional accumulation."
         if spread_pct > 0.05 else
-        f"Kraken discount {spread_pct:.3f}% vs Binance. "
-        "Regulated market selling pressure; bearish for US/EU demand outlook."
+        f"Kraken discount {spread_pct:.3f}% vs OKX. "
+        "Regulated market selling pressure; bearish for EU/US demand outlook."
         if spread_pct < -0.05 else
-        f"Kraken/Binance near-parity ({spread_pct:+.3f}%). "
+        f"Kraken/OKX near-parity ({spread_pct:+.3f}%). "
         "No cross-exchange arbitrage pressure — neutral signal."
     )
     return {
-        "kraken_price":  round(k_price, 2),
-        "binance_price": round(b_price, 2),
-        "spread_pct":    round(spread_pct, 4),
-        "signal":        sig,
+        "kraken_price": round(k_price, 2),
+        "okx_price":    round(o_price, 2),
+        "spread_pct":   round(spread_pct, 4),
+        "signal":       sig,
         "interpretation": interp,
     }
 
@@ -429,32 +377,32 @@ async def _fetch_oi_velocity() -> Dict:
 
 
 async def _fetch_spot_whale_flow() -> Dict:
-    data = await _get(
-        "https://api.binance.com/api/v3/aggTrades?symbol=BTCUSDT&limit=1000"
-    )
-    if not data:
-        raise ValueError("Empty aggTrades response")
-    threshold_btc = 5.0
+    data = await _get("https://api.kraken.com/0/public/Trades?pair=XBTUSD")
+    trades = (data.get("result") or {}).get("XXBTZUSD", [])
+    if not trades:
+        raise ValueError("Empty Kraken trades response")
+    threshold_btc = 2.0
     buy_vol = sell_vol = 0.0
-    for t in data:
-        qty = float(t.get("q", 0))
-        if qty < threshold_btc:
+    for t in trades:
+        # Format: [price, volume, time, buy/sell("b"/"s"), market/limit, misc, trade_id]
+        vol = float(t[1])
+        if vol < threshold_btc:
             continue
-        if t.get("m", False):
-            sell_vol += qty
+        if t[3] == "b":
+            buy_vol += vol
         else:
-            buy_vol += qty
+            sell_vol += vol
     total   = buy_vol + sell_vol
     buy_pct = buy_vol / total * 100 if total > 0 else 50.0
     sig = "BULLISH" if buy_pct > 60 else "BEARISH" if buy_pct < 40 else "NEUTRAL"
     interp = (
-        f"Spot whale buyers dominate: {buy_pct:.1f}% ({buy_vol:.1f} BTC) of large "
+        f"Kraken spot whale buyers dominate: {buy_pct:.1f}% ({buy_vol:.1f} BTC) of large "
         f"spot trades are buys. Genuine spot accumulation — no leverage involved."
         if buy_pct > 60 else
-        f"Spot whale sellers dominate: only {buy_pct:.1f}% buys ({sell_vol:.1f} BTC "
+        f"Kraken spot whale sellers dominate: only {buy_pct:.1f}% buys ({sell_vol:.1f} BTC "
         "sold). Spot distribution — real holders exiting."
         if buy_pct < 40 else
-        f"Spot whales balanced ({buy_pct:.1f}% buys, {total:.1f} BTC in large trades). "
+        f"Kraken spot whales balanced ({buy_pct:.1f}% buys, {total:.1f} BTC in large trades). "
         "No clear direction from block orders."
     )
     return {
@@ -696,8 +644,7 @@ def extract_signal_directions(ds: Dict[str, Any]) -> Dict[str, str]:
         ("coinalyze",            lambda d: _map(d.get("signal", ""))),
         ("coingecko",            lambda d: "UP" if float(d.get("change_24h_pct", 0) or 0) > 0 else
                                            "DOWN" if float(d.get("change_24h_pct", 0) or 0) < 0 else "NEUTRAL"),
-        ("coinapi_momentum",     lambda d: _map(d.get("signal", ""))),
-        ("coinapi_large_trades", lambda d: _map(d.get("signal", ""))),
+        ("deribit_dvol",         lambda d: _map(d.get("signal", ""))),
         ("kraken_premium",       lambda d: _map(d.get("signal", ""))),
         ("oi_velocity",          lambda d: _map(d.get("signal", ""))),
         ("spot_whale_flow",      lambda d: _map(d.get("signal", ""))),
@@ -717,10 +664,9 @@ def extract_signal_directions(ds: Dict[str, Any]) -> Dict[str, str]:
 
 
 async def fetch_dashboard_signals(
-    coinapi_key:   str = "",
     coinalyze_key: str = "",
 ) -> Dict[str, Any]:
-    """Fetch all 19 dashboard signals in parallel. Each key is None if its fetch fails."""
+    """Fetch all dashboard signals in parallel. Each key is None if its fetch fails."""
     tasks = {
         "order_book":         _fetch_order_book(),
         "long_short":         _fetch_long_short(),
@@ -738,11 +684,8 @@ async def fetch_dashboard_signals(
         "btc_dominance":      _fetch_btc_dominance(),
         "top_position_ratio": _fetch_top_position_ratio(),
         "funding_trend":      _fetch_funding_trend(),
+        "deribit_dvol":       _fetch_deribit_dvol(),
     }
-    if coinapi_key:
-        tasks["coinapi"]              = _fetch_coinapi(coinapi_key)
-        tasks["coinapi_momentum"]     = _fetch_coinapi_momentum(coinapi_key)
-        tasks["coinapi_large_trades"] = _fetch_coinapi_large_trades(coinapi_key)
     if coinalyze_key:
         tasks["coinalyze"] = _fetch_coinalyze(coinalyze_key)
 

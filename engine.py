@@ -61,7 +61,7 @@ CHARTS_DIR.mkdir(exist_ok=True)
 
 # ── Shared objects ────────────────────────────────────────────
 config          = Config()
-collector       = BinanceCollector(poll_interval=config.poll_interval_seconds, coinapi_key=config.coinapi_key)
+collector       = BinanceCollector(poll_interval=config.poll_interval_seconds)
 storage         = get_storage()
 ensemble        = EnsemblePredictor(config.initial_weights)
 lr_strategy     = LinearRegressionChannel()
@@ -317,7 +317,6 @@ async def _run_full_prediction(prices, is_force=False):
     dashboard_signals = None
     dashboard_task    = asyncio.create_task(
         fetch_dashboard_signals(
-            coinapi_key=config.coinapi_key,
             coinalyze_key=config.coinalyze_key,
         )
     )

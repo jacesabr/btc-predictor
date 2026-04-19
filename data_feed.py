@@ -48,14 +48,13 @@ class BinanceCollector:
     KRAKEN_URL  = "https://api.kraken.com/0/public/Ticker"
     BINANCE_URL = "https://api.binance.com/api/v3/ticker/price"
 
-    def __init__(self, poll_interval: float = 2.0, max_ticks: int = 10000, coinapi_key: str = ""):
+    def __init__(self, poll_interval: float = 2.0, max_ticks: int = 10000):
         self.poll_interval = poll_interval
         self.max_ticks = max_ticks
         self.ticks: List[Tick] = []
         self.callbacks: List[Callable] = []
         self._running = False
         self._last_real_price: Optional[float] = None
-        self._coinapi_key = coinapi_key
         logger.info("Collector using Bybit/Kraken price feed")
 
     def on_tick(self, callback: Callable[[Tick], None]):

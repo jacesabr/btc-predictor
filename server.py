@@ -229,21 +229,6 @@ async def get_polymarket():
     return polymarket_feed.to_dict()
 
 
-@app.get("/api/proxy/coinapi")
-async def proxy_coinapi():
-    import aiohttp
-    try:
-        connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
-        async with aiohttp.ClientSession(connector=connector) as session:
-            async with session.get(
-                "https://rest.coinapi.io/v1/exchangerate/BTC/USD",
-                headers={"X-CoinAPI-Key": config.coinapi_key},
-                timeout=aiohttp.ClientTimeout(total=8),
-            ) as resp:
-                return await resp.json(content_type=None)
-    except Exception as exc:
-        return {"error": str(exc)}
-
 
 @app.get("/api/proxy/coinalyze")
 async def proxy_coinalyze():
@@ -422,7 +407,7 @@ async def get_all_accuracy(n: int = 100):
         "dash:taker_flow":"Taker Flow","dash:oi_funding":"OI + Funding",
         "dash:liquidations":"Liquidations","dash:fear_greed":"Fear & Greed",
         "dash:mempool":"Mempool","dash:coinalyze":"Coinalyze",
-        "dash:coinapi":"CoinAPI","dash:coingecko":"CoinGecko",
+        "dash:deribit_dvol":"Deribit DVOL","dash:coingecko":"CoinGecko",
     }
 
     ai           = [_row(k, n, all_stats[k], wts.get(k)) for k, n in [("deepseek","DeepSeek AI"),("ensemble","Math Ensemble")] if k in all_stats]

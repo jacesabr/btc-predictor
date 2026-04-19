@@ -378,18 +378,12 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
             f"  → {cz.get('interpretation','')}", "",
         ]
 
-    ca = ds.get("coinapi")
-    if ca:
-        agg = ca.get("aggregate_rate_usd", 0)
-        if agg and window_start_price:
-            div_pct = ((window_start_price - agg) / agg) * 100
-            d_sig = ("BEARISH_ARBI" if div_pct > 0.05 else "BULLISH_ARBI" if div_pct < -0.05 else "NEUTRAL")
-        else:
-            div_pct = 0.0; d_sig = "NEUTRAL"
+    dv = ds.get("deribit_dvol")
+    if dv:
         lines += [
-            "  [COINAPI — Weighted aggregate rate (350+ exchanges)]",
-            f"  Aggregate rate : ${agg:,.2f}   Binance bar-open: ${window_start_price:,.2f}",
-            f"  Divergence     : {div_pct:+.4f}%   Signal: {d_sig}", "",
+            "  [DERIBIT DVOL — BTC 30-day implied volatility index]",
+            f"  DVOL: {dv.get('dvol_pct', 0):.1f}%   Signal: {dv.get('signal', 'NEUTRAL')}{_acc_tag('deribit_dvol')}",
+            f"  → {dv.get('interpretation', '')}", "",
         ]
 
     fg = ds.get("fear_greed")
@@ -423,9 +417,7 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
         ]
 
     for key, label in [
-        ("coinapi_momentum",   "[COINAPI MOMENTUM — 5-min rate-of-change across 350+ exchanges]"),
-        ("coinapi_large_trades", "[COINAPI LARGE TRADES — Binance spot trades ≥2 BTC]"),
-        ("kraken_premium",     "[KRAKEN PREMIUM — Kraken vs Binance institutional spread]"),
+        ("kraken_premium",     "[KRAKEN PREMIUM — Kraken vs OKX institutional spread]"),
         ("oi_velocity",        "[OI VELOCITY — Binance Futures OI change rate over 30 min]"),
         ("spot_whale_flow",    "[SPOT WHALE FLOW — Binance spot aggTrades ≥5 BTC]"),
         ("bybit_liquidations", "[BYBIT LIQUIDATIONS — cross-exchange cascade validation]"),
@@ -452,7 +444,7 @@ def _build_dashboard_accuracy_block(dashboard_accuracy):
         "order_book": "Order Book", "long_short": "Long/Short", "taker_flow": "Taker Flow",
         "oi_funding": "OI + Funding", "liquidations": "Liquidations", "fear_greed": "Fear & Greed",
         "mempool": "Mempool", "coinalyze": "Coinalyze", "coingecko": "CoinGecko",
-        "coinapi_momentum": "CoinAPI Momentum", "coinapi_large_trades": "CoinAPI Large Trades",
+        "deribit_dvol": "Deribit DVOL",
         "kraken_premium": "Kraken Premium", "oi_velocity": "OI Velocity",
         "spot_whale_flow": "Spot Whale Flow", "bybit_liquidations": "Bybit Liquidations",
         "okx_funding": "OKX Funding", "btc_dominance": "BTC Dominance",
@@ -1005,7 +997,7 @@ def _fmt_dashboard_directions(dash: Dict) -> str:
     _ABBREV = {
         "order_book":"ob","long_short":"ls","taker_flow":"tf","oi_funding":"oif",
         "liquidations":"liq","fear_greed":"fg","mempool":"mem","coinalyze":"cz",
-        "coingecko":"cg","coinapi_momentum":"mom","coinapi_large_trades":"lt",
+        "coingecko":"cg","deribit_dvol":"dvol",
         "kraken_premium":"krak","oi_velocity":"oiv","spot_whale_flow":"swf",
         "bybit_liquidations":"bybit","okx_funding":"okx","btc_dominance":"btcd",
         "top_position_ratio":"tpr","funding_trend":"ft",
