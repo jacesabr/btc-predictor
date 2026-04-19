@@ -257,6 +257,9 @@ async def _run_postmortem_background(
             ws = ds_record.get("window_start", 0)
             _safe_storage(storage.store_postmortem, ws, text)
             logger.info("Postmortem stored for bar %.0f", ws)
+            # Re-embed now that postmortem is available — this is the complete record
+            updated_rec = {**ds_record, "postmortem": text}
+            asyncio.create_task(_embed_bar_background(ws, updated_rec))
     except Exception as exc:
         logger.warning("Postmortem background task failed: %s", exc)
 
@@ -297,6 +300,7 @@ async def _run_deepseek(
     bar_ts = time.strftime("%H:%M:%S UTC", time.gmtime(window_start_time))
     logger.info(">>> DeepSeek FIRED for bar %s", bar_ts)
     try:
+        neutral_analysis = _safe_storage(storage.get_neutral_analysis, default={})
         result = await deepseek.predict(
             prices=prices, klines=klines, features=features,
             strategy_preds=strategy_preds, recent_accuracy=rolling_acc,
@@ -305,7 +309,7 @@ async def _run_deepseek(
             ensemble_result=ensemble_result, dashboard_signals=dashboard_signals,
             indicator_accuracy=indicator_accuracy, ensemble_weights=ensemble_weights,
             historical_analysis=historical_analysis, creative_edge=creative_edge,
-            dashboard_accuracy=dashboard_accuracy,
+            dashboard_accuracy=dashboard_accuracy, neutral_analysis=neutral_analysis,
         )
 
         # Stale-window guard
@@ -681,22 +685,32 @@ async def _resolve_window(
                 dashboard_signals=_pm_dash,
             ))
 
-        # Fire Cohere embedding in background for this resolved bar
+        # Fire Cohere embedding in background — includes full DeepSeek output + outcome
+        _ds_correct_embed = (
+            None if ds_pred_snap.get("signal") == "NEUTRAL"
+            else (actual == ds_pred_snap["signal"]) if ds_pred_snap.get("signal") in ("UP", "DOWN")
+            else None
+        )
         _embed_rec = {
-            "window_start":        window_start_time,
-            "actual_direction":    actual,
-            "start_price":         window_start_price,
-            "end_price":           end_price,
-            "ensemble_signal":     pred.get("signal", ""),
-            "ensemble_conf":       pred.get("confidence", 0),
-            "deepseek_signal":     ds_pred_snap.get("signal", ""),
-            "deepseek_conf":       ds_pred_snap.get("confidence", 0),
-            "indicators":          current_state.get("backend_snapshot", {}).get("features", {}),
-            "strategy_votes":      strategy_preds,
-            "specialist_signals":  current_state.get("bar_specialist_signals", {}),
+            "window_start":         window_start_time,
+            "actual_direction":     actual,
+            "start_price":          window_start_price,
+            "end_price":            end_price,
+            "ensemble_signal":      pred.get("signal", ""),
+            "ensemble_conf":        pred.get("confidence", 0),
+            "deepseek_signal":      ds_pred_snap.get("signal", ""),
+            "deepseek_conf":        ds_pred_snap.get("confidence", 0),
+            "deepseek_correct":     _ds_correct_embed,
+            "deepseek_reasoning":   ds_pred_snap.get("reasoning", ""),
+            "deepseek_narrative":   ds_pred_snap.get("narrative", ""),
+            "deepseek_free_obs":    ds_pred_snap.get("free_observation", ""),
+            "indicators":           current_state.get("backend_snapshot", {}).get("features", {}),
+            "strategy_votes":       strategy_preds,
+            "specialist_signals":   current_state.get("bar_specialist_signals", {}),
             "dashboard_signals_raw": snap_dash_raw,
-            "creative_edge":       current_state.get("bar_creative_edge", ""),
-            "session":             None,
+            "creative_edge":        current_state.get("bar_creative_edge", ""),
+            "session":              None,
+            "postmortem":           "",   # not available yet — re-embedded when postmortem arrives
         }
         asyncio.create_task(_embed_bar_background(window_start_time, _embed_rec))
 

@@ -588,7 +588,7 @@ def build_prompt(
     deepseek_accuracy, window_start_price, window_start_time,
     polymarket_slug=None, ensemble_result=None, dashboard_signals=None,
     indicator_accuracy=None, ensemble_weights=None, historical_analysis=None,
-    creative_edge=None, dashboard_accuracy=None,
+    creative_edge=None, dashboard_accuracy=None, neutral_analysis=None,
 ) -> str:
     f  = features
     fv = lambda k, d=0.0: f.get(k, d)
@@ -728,6 +728,28 @@ def build_prompt(
     historical_block = (historical_analysis.strip() if historical_analysis and historical_analysis.strip()
                         else "  (historical analyst did not fire this window — no resolved bars yet)")
 
+    # NEUTRAL abstention performance block
+    na = neutral_analysis or {}
+    na_total = na.get("total", 0)
+    if na_total > 0:
+        na_up   = na.get("market_went_up", 0)
+        na_down = na.get("market_went_down", 0)
+        pct_up  = na.get("pct_up", 0.0)
+        pct_down = na.get("pct_down", 0.0)
+        dominant = "UP" if na_up > na_down else ("DOWN" if na_down > na_up else "EVEN")
+        neutral_block = (
+            f"  Total NEUTRAL calls (abstentions): {na_total}\n"
+            f"  After those abstentions the market went:\n"
+            f"    UP   {na_up:>3} times  ({pct_up:.0f}%)\n"
+            f"    DOWN {na_down:>3} times  ({pct_down:.0f}%)\n"
+            f"  Dominant post-neutral direction: {dominant}\n"
+            f"  Implication: in {max(pct_up, pct_down):.0f}% of your past abstentions,\n"
+            f"  committing to {dominant} would have been the winning call.\n"
+            f"  Consider this when deciding whether to abstain again now."
+        )
+    else:
+        neutral_block = "  No NEUTRAL abstentions on record yet."
+
     ts_start = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(window_start_time))
     ts_end   = time.strftime("%H:%M:%S UTC", time.gmtime(window_start_time + 300))
     pm_url   = (f"https://polymarket.com/event/{polymarket_slug}"
@@ -842,6 +864,11 @@ All data below is REAL, computed from live Binance OHLCV + live market microstru
   Rows are oldest → newest. The last row is the current bar.
 ──────────────────────────────────────────────
 {csv_block}
+
+──────────────────────────────────────────────
+  YOUR NEUTRAL (ABSTENTION) PERFORMANCE
+──────────────────────────────────────────────
+{neutral_block}
 
 ──────────────────────────────────────────────
   TRACK RECORD
@@ -1343,7 +1370,15 @@ def _bar_feature_vector(record: Dict) -> Optional[np.ndarray]:
 
 
 def _bar_embed_text(record: Dict) -> str:
-    """Generate rich text description of a historical bar for Cohere embedding / reranking."""
+    """
+    Generate the full rich text for Cohere embedding / reranking.
+
+    Includes EVERYTHING that was known about the bar — market conditions,
+    all indicator/strategy/dashboard inputs, DeepSeek's full analysis,
+    whether the prediction was correct, and the post-mortem lesson.
+    The more complete this text, the more precisely Cohere can find similar
+    historical bars where the same logic played out the same way.
+    """
     ts     = record.get("window_start", 0)
     dt     = datetime.fromtimestamp(ts, tz=timezone.utc) if ts else None
     day    = _DAYS[dt.weekday()] if dt else "?"
@@ -1353,25 +1388,60 @@ def _bar_embed_text(record: Dict) -> str:
     sp     = record.get("start_price", 0) or 0
     ep     = record.get("end_price", 0) or 0
     chg    = ((ep - sp) / sp * 100) if sp and ep else 0.0
+
+    # ── Predictions & accuracy ──────────────────────────────────
     e_sig  = record.get("ensemble_signal", "?") or "?"
     e_conf = int((record.get("ensemble_conf") or 0) * 100)
-    d_sig  = record.get("deepseek_signal", "?") or "?"
-    d_conf = record.get("deepseek_conf", 0) or 0
-    ind    = record.get("indicators", {}) or {}
-    votes  = record.get("strategy_votes", {}) or {}
-    spec   = record.get("specialist_signals", {}) or {}
-    dash   = record.get("dashboard_signals_raw", {}) or {}
-    ce     = (record.get("creative_edge") or "").strip()[:200]
-    return (
-        f"BTC 5-min bar: {day} {time_s} session={ses} actual={actual} "
-        f"price=${sp:,.0f}→${ep:,.0f} ({chg:+.3f}%)\n"
-        f"Indicators: {_fmt_indicators(ind)}\n"
-        f"Strategies: {_fmt_strategy_votes(votes)}\n"
-        f"Specialists: {_fmt_specialists(spec)}\n"
-        f"Dashboard: {_fmt_dashboard_directions(dash)}\n"
-        f"Ensemble={e_sig} {e_conf}% DeepSeek={d_sig} {d_conf}%\n"
-        f"Edge: {ce}"
-    )
+    # Accept both semantic-store keys (deepseek_signal) and raw prediction keys (signal)
+    d_sig  = record.get("deepseek_signal") or record.get("signal", "?") or "?"
+    d_conf = record.get("deepseek_conf") or record.get("confidence", 0) or 0
+
+    # Outcome: was DeepSeek correct? Accept both key names
+    ds_correct = record.get("deepseek_correct") if "deepseek_correct" in record else record.get("correct")
+    if d_sig == "NEUTRAL":
+        outcome = "NO_TRADE"
+    elif ds_correct is True:
+        outcome = "CORRECT"
+    elif ds_correct is False:
+        outcome = "WRONG"
+    else:
+        outcome = "PENDING"
+
+    # ── Market inputs ───────────────────────────────────────────
+    ind   = record.get("indicators", {}) or {}
+    votes = record.get("strategy_votes", {}) or {}
+    spec  = record.get("specialist_signals", {}) or {}
+    dash  = record.get("dashboard_signals_raw", {}) or {}
+    ce    = (record.get("creative_edge") or "").strip()[:300]
+
+    # ── DeepSeek's analysis output ──────────────────────────────
+    # Accept both key names: semantic_store (deepseek_reasoning) and raw pred (reasoning)
+    reasoning    = (record.get("deepseek_reasoning") or record.get("reasoning") or "").strip()[:600]
+    narrative    = (record.get("deepseek_narrative") or record.get("narrative") or "").strip()[:300]
+    free_obs     = (record.get("deepseek_free_obs") or record.get("free_observation") or "").strip()[:300]
+    postmortem   = (record.get("postmortem") or "").strip()[:500]
+
+    parts = [
+        f"BTC 5-min bar: {day} {time_s} session={ses}",
+        f"Actual: {actual}  price=${sp:,.0f}→${ep:,.0f} ({chg:+.3f}%)",
+        f"Indicators: {_fmt_indicators(ind)}",
+        f"Strategies: {_fmt_strategy_votes(votes)}",
+        f"Specialists: {_fmt_specialists(spec)}",
+        f"Dashboard: {_fmt_dashboard_directions(dash)}",
+        f"Ensemble={e_sig} {e_conf}%  DeepSeek={d_sig} {d_conf}%  Outcome={outcome}",
+    ]
+    if ce:
+        parts.append(f"CreativeEdge: {ce}")
+    if reasoning:
+        parts.append(f"DeepSeekReasoning: {reasoning}")
+    if narrative:
+        parts.append(f"PriceNarrative: {narrative}")
+    if free_obs:
+        parts.append(f"FreeObservation: {free_obs}")
+    if postmortem:
+        parts.append(f"PostMortem: {postmortem}")
+
+    return "\n".join(parts)
 
 
 def _cohere_prefilter(
@@ -1655,6 +1725,7 @@ class DeepSeekPredictor:
         polymarket_slug=None, ensemble_result=None, dashboard_signals=None,
         indicator_accuracy=None, ensemble_weights=None,
         historical_analysis=None, creative_edge=None, dashboard_accuracy=None,
+        neutral_analysis=None,
     ) -> Dict:
         self.window_count += 1
         t0 = time.time()
@@ -1672,6 +1743,7 @@ class DeepSeekPredictor:
             dashboard_signals=dashboard_signals, indicator_accuracy=indicator_accuracy,
             ensemble_weights=ensemble_weights, historical_analysis=historical_analysis,
             creative_edge=creative_edge, dashboard_accuracy=dashboard_accuracy,
+            neutral_analysis=neutral_analysis,
         )
 
         ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
