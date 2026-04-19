@@ -2047,19 +2047,30 @@ function App() {
               {(() => {
                 // Shared accuracy footer — identical across all 4 columns
                 function AccuracyRow({ pct, wins, losses, total, label: lbl, noData }) {
-                  const neutral = (total != null && total > wins + losses) ? total - wins - losses : null;
+                  const neutral = (total != null && total > (wins||0) + (losses||0)) ? total - (wins||0) - (losses||0) : null;
+                  const barTotal = (wins||0) + (losses||0) + (neutral||0);
+                  const wPct = barTotal > 0 ? (wins||0) / barTotal * 100 : 0;
+                  const lPct = barTotal > 0 ? (losses||0) / barTotal * 100 : 0;
+                  const nPct = barTotal > 0 && neutral ? neutral / barTotal * 100 : 0;
                   return (<>
                     <div style={{ borderTop:`1px solid ${C.borderSoft}`, margin:"6px 0 4px" }} />
                     <div style={{ ...label, marginBottom:2 }}>{lbl}</div>
                     {noData
                       ? <div style={{ fontSize:10, color:C.muted }}>No historical data</div>
-                      : <div style={{ display:"flex", alignItems:"baseline", gap:5, flexWrap:"wrap" }}>
-                          <span style={{ fontSize:22, fontWeight:900, color:pct>=50?C.green:C.red }}>{pct.toFixed(1)}%</span>
-                          <span style={{ fontSize:10, fontWeight:700, color:C.green }}>{wins}W</span>
-                          <span style={{ fontSize:10, color:C.muted }}>/</span>
-                          <span style={{ fontSize:10, fontWeight:700, color:C.red }}>{losses}L</span>
-                          {neutral != null && <><span style={{ fontSize:10, color:C.muted }}>/</span><span style={{ fontSize:10, fontWeight:700, color:C.muted }}>{neutral}N</span></>}
-                        </div>
+                      : <>
+                          <div style={{ display:"flex", alignItems:"baseline", gap:5, flexWrap:"wrap" }}>
+                            <span style={{ fontSize:22, fontWeight:900, color:pct>=50?C.green:C.red }}>{pct.toFixed(1)}%</span>
+                            <span style={{ fontSize:10, fontWeight:700, color:C.green }}>{wins||0}W</span>
+                            <span style={{ fontSize:10, color:C.muted }}>/</span>
+                            <span style={{ fontSize:10, fontWeight:700, color:C.red }}>{losses||0}L</span>
+                            {neutral != null && <><span style={{ fontSize:10, color:C.muted }}>/</span><span style={{ fontSize:10, fontWeight:700, color:C.muted }}>{neutral}N</span></>}
+                          </div>
+                          <div style={{ display:"flex", height:5, borderRadius:3, overflow:"hidden", margin:"4px 0 0", background:C.borderSoft }}>
+                            {wPct > 0 && <div style={{ width:`${wPct}%`, background:C.green }} />}
+                            {lPct > 0 && <div style={{ width:`${lPct}%`, background:C.red }} />}
+                            {nPct > 0 && <div style={{ width:`${nPct}%`, background:C.muted }} />}
+                          </div>
+                        </>
                     }
                   </>);
                 }
@@ -2274,7 +2285,7 @@ function App() {
                                 color:C.amber, background:C.amberBg, border:`1px solid ${C.amberBorder}` }}>⚠ split</span>}
                             </div>
                             <AccuracyRow lbl="Accuracy (all-time)"
-                              pct={acc} wins={ref.wins} losses={ref.losses} total={ref.total} noData={false} />
+                              pct={acc} wins={ref.wins??ref.correct??0} losses={(ref.total??0)-(ref.wins??ref.correct??0)} total={ref.total} noData={false} />
                           </>);
                         })() : <div style={{ fontSize:10, color:C.muted }}>No historical data</div>}
                       </div>
