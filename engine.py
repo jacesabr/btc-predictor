@@ -43,6 +43,8 @@ from semantic_store import (
     load_all as load_pattern_history,
     compute_dashboard_accuracy,
     compute_all_indicator_accuracy,
+    store_embedding as store_bar_embedding,
+    search_similar as pgvector_search,
 )
 from strategies import (
     get_all_predictions, EnsemblePredictor, LinearRegressionChannel,
@@ -95,21 +97,9 @@ deepseek        = (
 ws_clients:    set  = set()
 binance_klines: List = []
 
-# ── In-memory Cohere embedding cache ─────────────────────────
-# Populated at startup and updated after each bar embeds.
-# Maps window_start (float) → unit-normalised 1024-dim np.ndarray.
-_embedding_cache: Dict = {}
+# In-memory error log — ERROR/UNAVAILABLE bars logged here, never embedded
+_error_log: list = []
 
-def _load_embedding_cache():
-    global _embedding_cache
-    try:
-        _embedding_cache = storage.get_all_embeddings()
-        logger.info("Embedding cache loaded: %d bars", len(_embedding_cache))
-    except Exception as exc:
-        logger.warning("Could not load embedding cache: %s", exc)
-        _embedding_cache = {}
-
-_load_embedding_cache()
 
 current_state: Dict = {
     "price":                      None,
@@ -254,33 +244,35 @@ async def _run_postmortem_background(
             updated_features=features or {},
             updated_dashboard=dashboard_signals or {},
         )
+        ws = ds_record.get("window_start", 0)
         if text:
-            ws = ds_record.get("window_start", 0)
             _safe_storage(storage.store_postmortem, ws, text)
             logger.info("Postmortem stored for bar %.0f", ws)
-            # Re-embed with full indicator/strategy data + postmortem — use embed_rec if available
-            base = embed_rec if embed_rec is not None else ds_record
-            asyncio.create_task(_embed_bar_background(ws, {**base, "postmortem": text}))
+        # Always embed after postmortem attempt — full record with postmortem if available
+        base = embed_rec if embed_rec is not None else ds_record
+        asyncio.create_task(_embed_bar_background(ws, {**base, "postmortem": text or ""}))
     except Exception as exc:
         logger.warning("Postmortem background task failed: %s", exc)
+        # Still embed even if postmortem failed — full record minus postmortem text
+        ws = ds_record.get("window_start", 0)
+        base = embed_rec if embed_rec is not None else ds_record
+        asyncio.create_task(_embed_bar_background(ws, {**base, "postmortem": ""}))
 
 
 # ── Cohere embedding background task ─────────────────────────
 
 async def _embed_bar_background(window_start: float, bar_record: dict):
     """
-    Fire after bar resolves: embed the bar's rich text via Cohere and store.
-    Updates the in-memory cache so the NEXT bar's similarity search benefits immediately.
+    Fire after bar resolves: embed full bar text via Cohere and store in
+    pattern_history.embedding via pgvector. No local cache — PostgreSQL owns it.
     """
     if not config.cohere_api_key:
         return
     try:
         text = _bar_embed_text(bar_record)
         vec  = await embed_text(config.cohere_api_key, text, input_type="search_document")
-        vec_list = vec.tolist()
-        _safe_storage(storage.store_embedding, window_start, vec_list)
-        _embedding_cache[window_start] = vec
-        logger.info("Cohere embedding stored for bar %.0f (%d dims)", window_start, len(vec))
+        await asyncio.to_thread(store_bar_embedding, window_start, vec)
+        logger.info("Cohere embedding stored in pgvector for bar %.0f (%d dims)", window_start, len(vec))
     except CohereUnavailableError as exc:
         logger.warning("Cohere embed background failed (bar %.0f): %s", window_start, exc)
     except Exception as exc:
@@ -410,6 +402,7 @@ async def _run_full_prediction(prices, is_force=False):
     dashboard_task    = asyncio.create_task(
         fetch_dashboard_signals(
             coinalyze_key=config.coinalyze_key,
+            coinglass_key=config.coinglass_key,
         )
     )
     dashboard_acc = compute_dashboard_accuracy(200)
@@ -444,7 +437,7 @@ async def _run_full_prediction(prices, is_force=False):
                 ensemble_signal="", ensemble_conf=0.0,
                 dashboard_directions=_prev_dash_raw or None,
                 cohere_api_key=config.cohere_api_key,
-                bar_embeddings=_embedding_cache,
+                pgvector_search_fn=pgvector_search,
             )
         )
 
@@ -667,6 +660,15 @@ async def _resolve_window(
                 "(signal=%s) — ensemble result still stored, but DS history is incomplete",
                 bar_ts, bar_num, ds_pred_snap.get("signal"),
             )
+            _error_log.append({
+                "window_start":  window_start_time,
+                "bar_time":      bar_ts,
+                "bar_num":       bar_num,
+                "signal":        ds_pred_snap.get("signal") or "NONE",
+                "reasoning":     ds_pred_snap.get("reasoning", ""),
+                "raw_response":  ds_pred_snap.get("raw_response", "")[:2000],
+                "logged_at":     time.time(),
+            })
 
         # Build embed record first — shared by initial embed AND postmortem re-embed
         _ds_correct_embed = (
@@ -701,12 +703,15 @@ async def _resolve_window(
             "specialist_signals":   current_state.get("bar_specialist_signals", {}),
             "dashboard_signals_raw": snap_dash_raw,
             "creative_edge":        current_state.get("bar_creative_edge", ""),
+            "historical_analysis":  current_state.get("bar_historical_analysis", ""),
+            "full_prompt":          ds_pred_snap.get("full_prompt", ""),
             "session":              None,
-            "postmortem":           "",   # not available yet — re-embedded when postmortem arrives
+            "postmortem":           "",   # filled in by postmortem handler before embedding
         }
-        asyncio.create_task(_embed_bar_background(window_start_time, _embed_rec))
 
         # Fire postmortem in background — non-blocking, best effort
+        # Embedding happens INSIDE the postmortem handler once the full record is complete.
+        # For bars with no postmortem (None/ERROR/UNAVAILABLE), embed now with what we have.
         if ds_pred_snap.get("signal") not in (None, "ERROR", "UNAVAILABLE"):
             _pm_record = {**ds_pred_snap, "window_start": window_start_time}
             _pm_klines = list(binance_klines) if binance_klines else []
@@ -724,6 +729,9 @@ async def _resolve_window(
                 dashboard_signals=_pm_dash,
                 embed_rec=_embed_rec,
             ))
+        else:
+            # ERROR/UNAVAILABLE/None — logged to error tab, never embedded
+            pass
 
         ens_at_total, ens_at_correct, ens_at_acc = (
             await _safe_storage_async(storage.get_total_accuracy, default=(0, 0, 0.0))

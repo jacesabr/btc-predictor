@@ -60,19 +60,32 @@ async def _fetch_order_book() -> Dict:
 
 
 async def _fetch_long_short() -> Dict:
-    gl, tp = await asyncio.gather(
-        _get("https://fapi.binance.com/futures/data/globalLongShortAccountRatio"
-             "?symbol=BTCUSDT&period=5m&limit=1"),
-        _get("https://fapi.binance.com/futures/data/topLongShortAccountRatio"
-             "?symbol=BTCUSDT&period=5m&limit=1"),
-    )
-    g   = (gl[0]  if gl  else {})
-    tp0 = (tp[0]  if tp  else {})
-    lsr  = float(g.get("longShortRatio", 1.0))
-    lp   = float(g.get("longAccount",    0.5)) * 100
-    sp   = 100.0 - lp
-    tlp  = float(tp0.get("longAccount", 0.5)) * 100
-    tsp  = 100.0 - tlp
+    try:
+        gl, tp = await asyncio.gather(
+            _get("https://fapi.binance.com/futures/data/globalLongShortAccountRatio"
+                 "?symbol=BTCUSDT&period=5m&limit=1"),
+            _get("https://fapi.binance.com/futures/data/topLongShortAccountRatio"
+                 "?symbol=BTCUSDT&period=5m&limit=1"),
+        )
+        g   = (gl[0]  if gl  else {})
+        tp0 = (tp[0]  if tp  else {})
+        lsr  = float(g.get("longShortRatio", 1.0))
+        lp   = float(g.get("longAccount",    0.5)) * 100
+        sp   = 100.0 - lp
+        tlp  = float(tp0.get("longAccount", 0.5)) * 100
+        tsp  = 100.0 - tlp
+    except Exception as _e:
+        logger.debug("Binance long/short failed, using Bybit fallback: %s", _e)
+        data = await _get(
+            "https://api.bybit.com/v5/market/account-ratio"
+            "?category=linear&symbol=BTCUSDT&period=5min&limit=1"
+        )
+        row  = ((data.get("result") or {}).get("list") or [{}])[0]
+        lp   = float(row.get("buyRatio",  0.5)) * 100
+        sp   = 100.0 - lp
+        lsr  = lp / sp if sp > 0 else 1.0
+        tlp  = lp
+        tsp  = sp
     div  = lp - tlp
     r_sig = (
         "BEARISH_CONTRARIAN" if lsr > 1.35 else
@@ -105,17 +118,34 @@ async def _fetch_long_short() -> Dict:
 
 
 async def _fetch_taker_flow() -> Dict:
-    data = await _get(
-        "https://fapi.binance.com/futures/data/takerlongshortRatio"
-        "?symbol=BTCUSDT&period=5m&limit=3"
-    )
-    latest = data[-1] if data else {}
-    bsr = float(latest.get("buySellRatio", 1.0))
-    bv  = float(latest.get("buyVol",  0.0))
-    sv  = float(latest.get("sellVol", 0.0))
+    try:
+        data = await _get(
+            "https://fapi.binance.com/futures/data/takerlongshortRatio"
+            "?symbol=BTCUSDT&period=5m&limit=3"
+        )
+        latest = data[-1] if data else {}
+        bsr = float(latest.get("buySellRatio", 1.0))
+        bv  = float(latest.get("buyVol",  0.0))
+        sv  = float(latest.get("sellVol", 0.0))
+        _data_for_trend = data
+    except Exception as _e:
+        logger.debug("Binance taker flow failed, using OKX fallback: %s", _e)
+        raw = await _get(
+            "https://www.okx.com/api/v5/rubik/stat/taker-volume"
+            "?ccy=BTC&instType=SWAP&period=5m&limit=3"
+        )
+        rows = raw.get("data") or []
+        if not rows:
+            raise ValueError("Empty OKX taker volume response")
+        bv, sv = float(rows[0][1]), float(rows[0][2])
+        bsr = bv / sv if sv > 0 else 1.0
+        _data_for_trend = [
+            {"buySellRatio": float(r[1]) / float(r[2]) if float(r[2]) > 0 else 1.0}
+            for r in reversed(rows)
+        ]
     sig = "BULLISH" if bsr > 1.12 else "BEARISH" if bsr < 0.90 else "NEUTRAL"
-    if len(data) >= 3:
-        ratios  = [float(d.get("buySellRatio", 1)) for d in data]
+    if len(_data_for_trend) >= 3:
+        ratios  = [float(d.get("buySellRatio", 1)) for d in _data_for_trend]
         min_chg = 0.02
         rising  = (ratios[-1] > ratios[-2] * (1 + min_chg) and
                    ratios[-2] > ratios[-3] * (1 + min_chg))
@@ -145,16 +175,39 @@ async def _fetch_taker_flow() -> Dict:
 
 
 async def _fetch_oi_funding() -> Dict:
-    oi, pi = await asyncio.gather(
-        _get("https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT"),
-        _get("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"),
-    )
-    oiv  = float(oi.get("openInterest", 0))
-    fr   = float(pi.get("lastFundingRate", 0))
-    mp   = float(pi.get("markPrice",  0))
-    ip   = float(pi.get("indexPrice", 0))
-    prem = ((mp - ip) / ip) * 100 if ip else 0.0
-    ntf  = pi.get("nextFundingTime", 0)
+    try:
+        oi, pi = await asyncio.gather(
+            _get("https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT"),
+            _get("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"),
+        )
+        oiv  = float(oi.get("openInterest", 0))
+        fr   = float(pi.get("lastFundingRate", 0))
+        mp   = float(pi.get("markPrice",  0))
+        ip   = float(pi.get("indexPrice", 0))
+        prem = ((mp - ip) / ip) * 100 if ip else 0.0
+        ntf  = pi.get("nextFundingTime", 0)
+    except Exception as _e:
+        logger.debug("Binance OI/funding failed, using OKX fallback: %s", _e)
+        oi_r, fr_r, mk_r, ix_r = await asyncio.gather(
+            _get("https://www.okx.com/api/v5/public/open-interest"
+                 "?instType=SWAP&instId=BTC-USDT-SWAP"),
+            _get("https://www.okx.com/api/v5/public/funding-rate"
+                 "?instId=BTC-USDT-SWAP"),
+            _get("https://www.okx.com/api/v5/public/mark-price"
+                 "?instType=SWAP&instId=BTC-USDT-SWAP"),
+            _get("https://www.okx.com/api/v5/market/index-tickers"
+                 "?instId=BTC-USDT"),
+        )
+        oi_row = (oi_r.get("data") or [{}])[0]
+        fr_row = (fr_r.get("data") or [{}])[0]
+        mk_row = (mk_r.get("data") or [{}])[0]
+        ix_row = (ix_r.get("data") or [{}])[0]
+        oiv  = float(oi_row.get("oiCcy") or oi_row.get("oi") or 0)
+        fr   = float(fr_row.get("fundingRate", 0))
+        mp   = float(mk_row.get("markPx", 0))
+        ip   = float(ix_row.get("idxPx", 0))
+        prem = ((mp - ip) / ip) * 100 if ip else 0.0
+        ntf  = int(fr_row.get("nextFundingTime", 0))
     fr_sig  = "BEARISH" if fr > 0.0006 else "BULLISH" if fr < 0 else "NEUTRAL"
     p_sig   = "BEARISH" if prem > 0.03 else "BULLISH" if prem < -0.03 else "NEUTRAL"
     return {
@@ -170,11 +223,14 @@ async def _fetch_oi_funding() -> Dict:
 
 
 async def _fetch_liquidations() -> Dict:
-    # OKX public liquidation endpoint — no auth, no VPN needed, covers BTC perp
-    data = await _get(
-        "https://www.okx.com/api/v5/public/liquidation-orders"
-        "?instType=SWAP&mgnMode=cross&instId=BTC-USDT-SWAP&state=filled&limit=100"
-    )
+    try:
+        data = await _get(
+            "https://www.okx.com/api/v5/public/liquidation-orders"
+            "?instType=SWAP&mgnMode=cross&instId=BTC-USDT-SWAP&state=filled&limit=100"
+        )
+    except Exception as _e:
+        logger.debug("OKX liquidations failed: %s", _e)
+        data = {}
     rows = []
     for event in (data.get("data") or []):
         for detail in (event.get("details") or []):
@@ -351,13 +407,24 @@ async def _fetch_kraken_premium() -> Dict:
 
 
 async def _fetch_oi_velocity() -> Dict:
-    data = await _get(
-        "https://fapi.binance.com/futures/data/openInterestHist"
-        "?symbol=BTCUSDT&period=5m&limit=6"
-    )
-    if not data or len(data) < 2:
-        raise ValueError("Insufficient OI history")
-    oi_vals    = [float(d.get("sumOpenInterest", 0)) for d in data]
+    try:
+        data = await _get(
+            "https://fapi.binance.com/futures/data/openInterestHist"
+            "?symbol=BTCUSDT&period=5m&limit=6"
+        )
+        if not data or len(data) < 2:
+            raise ValueError("Insufficient OI history")
+        oi_vals = [float(d.get("sumOpenInterest", 0)) for d in data]
+    except Exception as _e:
+        logger.debug("Binance OI velocity failed, using Bybit fallback: %s", _e)
+        raw = await _get(
+            "https://api.bybit.com/v5/market/open-interest"
+            "?category=linear&symbol=BTCUSDT&intervalTime=5min&limit=6"
+        )
+        rows = (raw.get("result") or {}).get("list") or []
+        if len(rows) < 2:
+            raise ValueError("Insufficient Bybit OI history")
+        oi_vals = [float(r.get("openInterest", 0)) for r in reversed(rows)]
     oi_chg_pct = (oi_vals[-1] - oi_vals[0]) / oi_vals[0] * 100 if oi_vals[0] else 0.0
     oi_bar_chg = (oi_vals[-1] - oi_vals[-2]) / oi_vals[-2] * 100 if oi_vals[-2] else 0.0
     sig = (
@@ -424,11 +491,14 @@ async def _fetch_spot_whale_flow() -> Dict:
 
 
 async def _fetch_bybit_liquidations() -> Dict:
-    # OKX 15-min window — second liquidation data point for cross-confirmation
-    data = await _get(
-        "https://www.okx.com/api/v5/public/liquidation-orders"
-        "?instType=SWAP&mgnMode=isolated&instId=BTC-USDT-SWAP&state=filled&limit=100"
-    )
+    try:
+        data = await _get(
+            "https://www.okx.com/api/v5/public/liquidation-orders"
+            "?instType=SWAP&mgnMode=isolated&instId=BTC-USDT-SWAP&state=filled&limit=100"
+        )
+    except Exception as _e:
+        logger.debug("OKX isolated liquidations failed: %s", _e)
+        data = {}
     rows = []
     for event in (data.get("data") or []):
         for detail in (event.get("details") or []):
@@ -516,23 +586,37 @@ async def _fetch_btc_dominance() -> Dict:
 
 
 async def _fetch_top_position_ratio() -> Dict:
-    data = await _get(
-        "https://fapi.binance.com/futures/data/topLongShortPositionRatio"
-        "?symbol=BTCUSDT&period=5m&limit=1"
-    )
-    row  = data[0] if data else {}
-    lsr  = float(row.get("longShortRatio", 1.0))
-    lp   = float(row.get("longAccount",   0.5)) * 100
-    sp   = 100.0 - lp
+    try:
+        data = await _get(
+            "https://fapi.binance.com/futures/data/topLongShortPositionRatio"
+            "?symbol=BTCUSDT&period=5m&limit=1"
+        )
+        row  = data[0] if data else {}
+        lsr  = float(row.get("longShortRatio", 1.0))
+        lp   = float(row.get("longAccount",   0.5)) * 100
+        sp   = 100.0 - lp
+        _approx = False
+    except Exception as _e:
+        logger.debug("Binance top position ratio failed, using Bybit fallback: %s", _e)
+        raw  = await _get(
+            "https://api.bybit.com/v5/market/account-ratio"
+            "?category=linear&symbol=BTCUSDT&period=5min&limit=1"
+        )
+        row  = ((raw.get("result") or {}).get("list") or [{}])[0]
+        lp   = float(row.get("buyRatio", 0.5)) * 100
+        sp   = 100.0 - lp
+        lsr  = lp / sp if sp > 0 else 1.0
+        _approx = True
     sig  = "BULLISH" if lsr > 1.3 else "BEARISH" if lsr < 0.77 else "NEUTRAL"
+    _src = " (Bybit approx)" if _approx else ""
     interp = (
-        f"Top traders {lp:.0f}% long by position notional (ratio {lsr:.3f}). "
+        f"Top traders {lp:.0f}% long by position notional (ratio {lsr:.3f}){_src}. "
         "Smart-money heavily positioned long — high-conviction directional bias."
         if lsr > 1.3 else
-        f"Top traders only {lp:.0f}% long by position notional (ratio {lsr:.3f}). "
+        f"Top traders only {lp:.0f}% long by position notional (ratio {lsr:.3f}){_src}. "
         "Smart-money short-positioned — bearish notional bias."
         if lsr < 0.77 else
-        f"Top traders {lp:.0f}% long by notional (ratio {lsr:.3f}). "
+        f"Top traders {lp:.0f}% long by notional (ratio {lsr:.3f}){_src}. "
         "No extreme positioning by large accounts."
     )
     return {
@@ -545,12 +629,23 @@ async def _fetch_top_position_ratio() -> Dict:
 
 
 async def _fetch_funding_trend() -> Dict:
-    data = await _get(
-        "https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=6"
-    )
-    if not data or len(data) < 2:
-        raise ValueError("Insufficient funding rate history")
-    rates  = [float(d.get("fundingRate", 0)) for d in data]
+    try:
+        data = await _get(
+            "https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=6"
+        )
+        if not data or len(data) < 2:
+            raise ValueError("Insufficient funding rate history")
+        rates = [float(d.get("fundingRate", 0)) for d in data]
+    except Exception as _e:
+        logger.debug("Binance funding trend failed, using Bybit fallback: %s", _e)
+        raw = await _get(
+            "https://api.bybit.com/v5/market/funding/history"
+            "?category=linear&symbol=BTCUSDT&limit=6"
+        )
+        rows = (raw.get("result") or {}).get("list") or []
+        if len(rows) < 2:
+            raise ValueError("Insufficient Bybit funding history")
+        rates = [float(r.get("fundingRate", 0)) for r in reversed(rows)]
     latest = rates[-1]
     avg    = sum(rates) / len(rates)
     trend  = rates[-1] - rates[0]
@@ -629,6 +724,169 @@ async def _fetch_coingecko() -> Dict:
     }
 
 
+async def _fetch_deribit_options() -> Dict:
+    summaries, idx_r = await asyncio.gather(
+        _get("https://www.deribit.com/api/v2/public/get_book_summary_by_currency"
+             "?currency=BTC&kind=option"),
+        _get("https://www.deribit.com/api/v2/public/get_index_price?index_name=btc_usd"),
+    )
+    rows = summaries.get("result") or []
+    if not rows:
+        raise ValueError("Empty Deribit options response")
+    spot = float((idx_r.get("result") or {}).get("index_price", 0))
+
+    call_oi = put_oi = 0.0
+    strikes: Dict[float, Dict] = {}
+    for s in rows:
+        name = s.get("instrument_name", "")
+        oi   = float(s.get("open_interest", 0))
+        parts = name.split("-")
+        if len(parts) < 4:
+            continue
+        opt_type = parts[-1]
+        try:
+            strike = float(parts[-2])
+        except ValueError:
+            continue
+        if opt_type == "C":
+            call_oi += oi
+            strikes.setdefault(strike, {"c": 0.0, "p": 0.0})["c"] += oi
+        elif opt_type == "P":
+            put_oi += oi
+            strikes.setdefault(strike, {"c": 0.0, "p": 0.0})["p"] += oi
+
+    total_oi = call_oi + put_oi
+    pcr = put_oi / call_oi if call_oi > 0 else 1.0
+
+    max_pain = spot
+    if strikes and spot > 0:
+        min_pain = float("inf")
+        for test_s in sorted(strikes):
+            pain = sum(
+                max(0.0, test_s - k) * v["c"] + max(0.0, k - test_s) * v["p"]
+                for k, v in strikes.items()
+            )
+            if pain < min_pain:
+                min_pain = pain
+                max_pain = test_s
+
+    dist = ((max_pain - spot) / spot * 100) if spot > 0 else 0.0
+    sig  = (
+        "BEARISH_CONTRARIAN" if pcr > 1.3 else
+        "BULLISH_CONTRARIAN" if pcr < 0.6 else
+        "NEUTRAL"
+    )
+    interp = (
+        f"Put/Call OI ratio {pcr:.3f} — heavy put buying. "
+        f"Contrarian BULLISH: institutional hedging = spot still supported. "
+        f"Max pain ${max_pain:,.0f} ({dist:+.1f}% from spot)."
+        if pcr > 1.3 else
+        f"Put/Call OI ratio {pcr:.3f} — call-heavy (complacency). "
+        f"Contrarian BEARISH: retail chasing calls = potential reversal risk. "
+        f"Max pain ${max_pain:,.0f} ({dist:+.1f}% from spot)."
+        if pcr < 0.6 else
+        f"Put/Call OI ratio {pcr:.3f} — balanced options positioning. "
+        f"Max pain ${max_pain:,.0f} ({dist:+.1f}% from spot). "
+        "Price gravitates toward max pain near expiry."
+    )
+    return {
+        "put_oi_btc":       round(put_oi,   1),
+        "call_oi_btc":      round(call_oi,  1),
+        "total_oi_btc":     round(total_oi, 1),
+        "put_call_ratio":   round(pcr,  4),
+        "max_pain_usd":     round(max_pain, 0),
+        "spot_price":       round(spot, 0),
+        "dist_to_pain_pct": round(dist, 2),
+        "signal":           sig,
+        "interpretation":   interp,
+    }
+
+
+async def _fetch_btc_onchain() -> Dict:
+    sopr_r, mvrv_r = await asyncio.gather(
+        _get("https://api.bitcoin-data.com/v1/sopr"),
+        _get("https://api.bitcoin-data.com/v1/mvrv-zscore"),
+    )
+    sopr_row = sopr_r[-1] if sopr_r else {}
+    mvrv_row = mvrv_r[-1] if mvrv_r else {}
+    sopr  = float(sopr_row.get("sopr",       1.0))
+    mvrv  = float(mvrv_row.get("mvrvZscore", 1.0))
+    sopr_date = sopr_row.get("d", "N/A")
+    mvrv_date = mvrv_row.get("d", "N/A")
+
+    sopr_sig = "BULLISH" if sopr > 1.02 else "BEARISH_CONTRARIAN" if sopr < 0.98 else "NEUTRAL"
+    mvrv_sig = "BEARISH_CONTRARIAN" if mvrv > 3.5 else "BULLISH" if mvrv < 0.5 else "NEUTRAL"
+
+    sopr_interp = (
+        f"SOPR {sopr:.4f} > 1.0 — holders spending at PROFIT. "
+        "Selling pressure possible but trend intact. Watch for SOPR collapse as reversal warning."
+        if sopr > 1.02 else
+        f"SOPR {sopr:.4f} < 1.0 — coins moving at LOSS (capitulation). "
+        "Historically strong accumulation zone — contrarian BULLISH."
+        if sopr < 0.98 else
+        f"SOPR {sopr:.4f} near 1.0 — breakeven spending. No strong on-chain directional bias."
+    )
+    mvrv_interp = (
+        f"MVRV Z-Score {mvrv:.3f} > 3.5 — historically overvalued. "
+        "Long-term holders sitting on large unrealized gains — elevated distribution risk."
+        if mvrv > 3.5 else
+        f"MVRV Z-Score {mvrv:.3f} < 0.5 — historically undervalued. "
+        "Market below realized value — strong long-term accumulation zone."
+        if mvrv < 0.5 else
+        f"MVRV Z-Score {mvrv:.3f} — fair value range. No extreme macro over/undervaluation."
+    )
+    return {
+        "sopr":               round(sopr, 5),
+        "sopr_date":          sopr_date,
+        "sopr_signal":        sopr_sig,
+        "sopr_interpretation":sopr_interp,
+        "mvrv_zscore":        round(mvrv, 4),
+        "mvrv_date":          mvrv_date,
+        "mvrv_signal":        mvrv_sig,
+        "mvrv_interpretation":mvrv_interp,
+        "signal":             sopr_sig,
+        "interpretation":     sopr_interp,
+    }
+
+
+async def _fetch_coinglass_liquidations(api_key: str) -> Dict:
+    data = await _get(
+        "https://open-api.coinglass.com/api/futures/liquidation/aggregated-history"
+        "?symbol=BTC&interval=5m&limit=3",
+        headers={"CG-API-KEY": api_key},
+    )
+    rows = data.get("data") or []
+    if isinstance(rows, dict):
+        rows = rows.get("list") or []
+    if not rows:
+        raise ValueError("Empty CoinGlass liquidation response")
+    latest = rows[-1]
+    long_usd  = float(latest.get("longLiqUsd",  latest.get("long",  0)) or 0)
+    short_usd = float(latest.get("shortLiqUsd", latest.get("short", 0)) or 0)
+    t3_long   = sum(float(r.get("longLiqUsd",  r.get("long",  0)) or 0) for r in rows)
+    t3_short  = sum(float(r.get("shortLiqUsd", r.get("short", 0)) or 0) for r in rows)
+
+    sig = "BEARISH" if long_usd > short_usd * 1.5 else "BULLISH" if short_usd > long_usd * 1.5 else "NEUTRAL"
+    interp = (
+        f"Cross-exchange long cascade: ${long_usd:,.0f} longs liquidated vs ${short_usd:,.0f} shorts (5min). "
+        "Forced long unwinding creates mechanical sell pressure."
+        if long_usd > short_usd * 1.5 else
+        f"Cross-exchange short squeeze: ${short_usd:,.0f} shorts force-covered vs ${long_usd:,.0f} longs (5min). "
+        "Forced buying from liquidated shorts — upside spike risk."
+        if short_usd > long_usd * 1.5 else
+        f"Mixed cross-exchange liquidations: ${long_usd:,.0f} long / ${short_usd:,.0f} short (5min). "
+        "No dominant cascade — market clearing both sides."
+    )
+    return {
+        "long_liq_usd":         round(long_usd,  0),
+        "short_liq_usd":        round(short_usd, 0),
+        "total_3bar_long_usd":  round(t3_long,   0),
+        "total_3bar_short_usd": round(t3_short,  0),
+        "signal":               sig,
+        "interpretation":       interp,
+    }
+
+
 # ─────────────────────────────────────────────────────────────
 # Public API
 # ─────────────────────────────────────────────────────────────
@@ -662,9 +920,12 @@ def extract_signal_directions(ds: Dict[str, Any]) -> Dict[str, str]:
         ("spot_whale_flow",      lambda d: _map(d.get("signal", ""))),
         ("bybit_liquidations",   lambda d: _map(d.get("signal", ""))),
         ("okx_funding",          lambda d: _map(d.get("signal", ""))),
-        ("btc_dominance",        lambda d: _map(d.get("signal", ""))),
-        ("top_position_ratio",   lambda d: _map(d.get("signal", ""))),
-        ("funding_trend",        lambda d: _map(d.get("signal", ""))),
+        ("btc_dominance",           lambda d: _map(d.get("signal", ""))),
+        ("top_position_ratio",      lambda d: _map(d.get("signal", ""))),
+        ("funding_trend",           lambda d: _map(d.get("signal", ""))),
+        ("deribit_options",         lambda d: _map(d.get("signal", ""))),
+        ("btc_onchain",             lambda d: _map(d.get("sopr_signal", ""))),
+        ("coinglass_liquidations",  lambda d: _map(d.get("signal", ""))),
     ]
 
     for key, fn in mappings:
@@ -676,7 +937,8 @@ def extract_signal_directions(ds: Dict[str, Any]) -> Dict[str, str]:
 
 
 async def fetch_dashboard_signals(
-    coinalyze_key: str = "",
+    coinalyze_key:  str = "",
+    coinglass_key:  str = "",
 ) -> Dict[str, Any]:
     """Fetch all dashboard signals in parallel. Each key is None if its fetch fails."""
     tasks = {
@@ -697,9 +959,13 @@ async def fetch_dashboard_signals(
         "top_position_ratio": _fetch_top_position_ratio(),
         "funding_trend":      _fetch_funding_trend(),
         "deribit_dvol":       _fetch_deribit_dvol(),
+        "deribit_options":    _fetch_deribit_options(),
+        "btc_onchain":        _fetch_btc_onchain(),
     }
     if coinalyze_key:
         tasks["coinalyze"] = _fetch_coinalyze(coinalyze_key)
+    if coinglass_key:
+        tasks["coinglass_liquidations"] = _fetch_coinglass_liquidations(coinglass_key)
 
     keys  = list(tasks.keys())
     coros = list(tasks.values())

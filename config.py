@@ -55,13 +55,14 @@ class Config:
 
     # DeepSeek AI integration
     deepseek_api_key: str = os.environ.get("DEEPSEEK_API_KEY", "")
-    deepseek_model: str = "deepseek-chat"
+    deepseek_model: str = "deepseek-reasoner"
     deepseek_vision_model: str = "deepseek-vl2"
     deepseek_use_vision: bool = False
     deepseek_enabled: bool = True
 
     # Dashboard signal API keys (for microstructure data fed into DeepSeek)
-    coinalyze_key: str = os.environ.get("COINALYZE_KEY", "")
+    coinalyze_key:  str = os.environ.get("COINALYZE_KEY",  "")
+    coinglass_key:  str = os.environ.get("COINGLASS_KEY",  "")
 
     # Feature engineering
     feature_windows: List[int] = field(default_factory=lambda: [5, 10, 15, 30, 60, 120])

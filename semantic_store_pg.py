@@ -189,6 +189,11 @@ def store_embedding(window_start: float, vector: np.ndarray):
                 "UPDATE pattern_history SET embedding = %s WHERE window_start = %s",
                 (vector.astype(np.float32), float(window_start)),
             )
+            if cur.rowcount == 0:
+                logger.warning(
+                    "store_embedding: no pattern_history row for window_start=%.0f — bar not embedded",
+                    window_start,
+                )
         conn.commit()
     finally:
         _put(conn)

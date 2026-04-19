@@ -37,7 +37,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
-DEEPSEEK_MODEL   = "deepseek-chat"
+DEEPSEEK_MODEL   = "deepseek-reasoner"
 
 COHERE_EMBED_URL  = "https://api.cohere.com/v2/embed"
 COHERE_RERANK_URL = "https://api.cohere.com/v2/rerank"
@@ -83,7 +83,7 @@ async def _api_call(
     api_key: str,
     prompt: str,
     max_tokens: int = 1000,
-    timeout_s: float = 45.0,
+    timeout_s: float = 90.0,
 ) -> str:
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload = {
@@ -122,7 +122,7 @@ async def embed_text(cohere_key: str, text: str, input_type: str = "search_docum
     }
     payload = {
         "model": COHERE_EMBED_MODEL,
-        "texts": [text[:4096]],
+        "texts": [text],
         "input_type": input_type,
         "embedding_types": ["float"],
     }
@@ -529,6 +529,40 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
         else:
             lines += [f"  {label.replace('[','[').replace(']',']')} unavailable", ""]
 
+    opt = ds.get("deribit_options")
+    if opt:
+        lines += [
+            "  [DERIBIT OPTIONS — BTC put/call OI ratio + max pain]",
+            f"  Put OI: {opt.get('put_oi_btc',0):,.0f} BTC   Call OI: {opt.get('call_oi_btc',0):,.0f} BTC   "
+            f"P/C ratio: {opt.get('put_call_ratio',1):.3f}",
+            f"  Max pain: ${opt.get('max_pain_usd',0):,.0f}  ({opt.get('dist_to_pain_pct',0):+.1f}% from spot)   "
+            f"Signal: {opt.get('signal','NEUTRAL')}{_acc_tag('deribit_options')}",
+            f"  → {opt.get('interpretation','')}", "",
+        ]
+    else:
+        lines += ["  [DERIBIT OPTIONS] unavailable", ""]
+
+    oc = ds.get("btc_onchain")
+    if oc:
+        lines += [
+            f"  [BTC ON-CHAIN — BGMetrics daily, as of {oc.get('sopr_date','N/A')}]",
+            f"  SOPR: {oc.get('sopr',1):.5f}  Signal: {oc.get('sopr_signal','NEUTRAL')}{_acc_tag('btc_onchain')}",
+            f"  → {oc.get('sopr_interpretation','')}",
+            f"  MVRV Z-Score: {oc.get('mvrv_zscore',0):.4f}  Signal: {oc.get('mvrv_signal','NEUTRAL')}",
+            f"  → {oc.get('mvrv_interpretation','')}", "",
+        ]
+    else:
+        lines += ["  [BTC ON-CHAIN] unavailable", ""]
+
+    cgl = ds.get("coinglass_liquidations")
+    if cgl:
+        lines += [
+            "  [COINGLASS LIQUIDATIONS — cross-exchange aggregate (5min)]",
+            f"  Long liq: {_fmt_usd(cgl.get('long_liq_usd',0))}   Short liq: {_fmt_usd(cgl.get('short_liq_usd',0))}   "
+            f"Signal: {cgl.get('signal','NEUTRAL')}{_acc_tag('coinglass_liquidations')}",
+            f"  → {cgl.get('interpretation','')}", "",
+        ]
+
     return "\n".join(lines).rstrip()
 
 
@@ -544,6 +578,8 @@ def _build_dashboard_accuracy_block(dashboard_accuracy):
         "spot_whale_flow": "Spot Whale Flow", "bybit_liquidations": "Bybit Liquidations",
         "okx_funding": "OKX Funding", "btc_dominance": "BTC Dominance",
         "top_position_ratio": "Top Position Ratio", "funding_trend": "Funding Rate Trend",
+        "deribit_options": "Deribit Options P/C", "btc_onchain": "BTC On-Chain SOPR",
+        "coinglass_liquidations": "CoinGlass Liquidations",
     }
     lines = []
     for key in _NAMES:
@@ -1519,13 +1555,6 @@ def _bar_embed_text(record: Dict) -> str:
 
     # ── Specialist signals ───────────────────────────────────────
     spec = record.get("specialist_signals", {}) or {}
-    _SPEC = [
-        ("alligator","Alligator (Bill Williams)"),
-        ("acc_dist","Accumulation/Distribution"),
-        ("dow_theory","Dow Theory structure"),
-        ("fib_pullback","Fibonacci pullback"),
-        ("harmonic","Harmonic pattern"),
-    ]
 
     # ── DeepSeek text ────────────────────────────────────────────
     reasoning  = (record.get("deepseek_reasoning") or record.get("reasoning") or "").strip()
@@ -1535,9 +1564,14 @@ def _bar_embed_text(record: Dict) -> str:
     ce         = (record.get("creative_edge") or "").strip()
     postmortem = (record.get("postmortem") or "").strip()
 
+    # ── Accuracy snapshot ────────────────────────────────────────
+    acc = record.get("accuracy_snapshot", {}) or {}
+
     # ── Assemble essay (most critical facts first) ───────────────
+    # Use session/day/hour only — specific date biases cosine toward time proximity
     L = []
-    L.append(f"BTC 5-MINUTE BAR #{bar_n} — {day} {t_s} ({ses} SESSION)")
+    hour_utc = dt.hour if dt else "?"
+    L.append(f"BTC 5-MINUTE BAR #{bar_n} — {day} {ses} SESSION  Hour UTC: {hour_utc:02d}")
     L.append("=" * 60)
     L.append("")
     L.append("OUTCOME & PREDICTIONS")
@@ -1547,6 +1581,13 @@ def _bar_embed_text(record: Dict) -> str:
     L.append(f"  Ensemble prediction: {e_sig} at {e_conf}%" + (f"  ({e_bull} bullish votes / {e_bear} bearish votes)" if e_bull or e_bear else ""))
     if h_sig:
         L.append(f"  Historical analyst signal: {h_sig} at {h_conf}%")
+    if acc:
+        ens_acc = acc.get("ensemble_accuracy"); ens_tot = acc.get("ensemble_total", 0)
+        ds_acc  = acc.get("deepseek_accuracy"); ds_tot  = acc.get("deepseek_total", 0)
+        ag_acc  = acc.get("agree_accuracy");    ag_tot  = acc.get("agree_total", 0)
+        best    = acc.get("best_indicator");    best_a  = acc.get("best_indicator_accuracy")
+        if ens_acc is not None: L.append(f"  System accuracy at bar time — Ensemble: {ens_acc}% ({ens_tot} bars)  DeepSeek: {ds_acc}% ({ds_tot} bars)  When agree: {ag_acc}% ({ag_tot} bars)")
+        if best: L.append(f"  Best signal at bar time: {best} at {best_a}%")
     L.append("")
     L.append("TECHNICAL INDICATORS")
     if rsi14  is not None: L.append(f"  RSI: {rsi14:.1f} — {rsi_label(rsi14)}")
@@ -1568,26 +1609,29 @@ def _bar_embed_text(record: Dict) -> str:
     if rets: L.append(f"  Recent returns: {' | '.join(f'{n}: {v:+.3f}%' for v, n in rets)}")
     if momacc is not None: L.append(f"  Momentum acceleration: {momacc:+.5f} — {'accelerating upward' if momacc > 0 else 'decelerating / reversing'}")
     L.append("")
-    L.append("STRATEGY VOTES (14 independent models)")
-    for k, name in _STRAT:
-        v = votes.get(k)
-        if isinstance(v, dict) and v.get("signal"):
-            conf = int(float(v.get("confidence") or 0.5) * 100)
-            L.append(f"  {name}: {v['signal']} at {conf}% confidence")
-    L.append("")
-    L.append("MARKET MICROSTRUCTURE (live derivatives & sentiment data)")
-    for k, name in _DASH:
-        v = (dash.get(k) or "").upper()
-        if v in ("UP", "DOWN", "NEUTRAL"):
-            L.append(f"  {name}: {v}")
-    L.append("")
-    L.append("SPECIALIST SIGNALS (DeepSeek pattern recognition)")
-    for k, name in _SPEC:
-        v = spec.get(k)
+    L.append("STRATEGY VOTES (all models)")
+    for key in sorted(votes.keys()):
+        v = votes[key]
         if isinstance(v, dict) and v.get("signal"):
             conf = int(float(v.get("confidence") or 0.5) * 100)
             rsn  = (v.get("reasoning") or "").strip()
-            L.append(f"  {name}: {v['signal']} at {conf}%" + (f" — {rsn}" if rsn else ""))
+            line = f"  {key}: {v['signal']} at {conf}%"
+            if rsn: line += f" — {rsn[:120]}"
+            L.append(line)
+    L.append("")
+    L.append("MARKET MICROSTRUCTURE (live derivatives & sentiment data)")
+    for key in sorted(dash.keys()):
+        v = (dash.get(key) or "").upper()
+        if v in ("UP", "DOWN", "NEUTRAL"):
+            L.append(f"  {key}: {v}")
+    L.append("")
+    L.append("SPECIALIST SIGNALS (DeepSeek pattern recognition)")
+    for key in sorted(spec.keys()):
+        v = spec[key]
+        if isinstance(v, dict) and v.get("signal"):
+            conf = int(float(v.get("confidence") or 0.5) * 100)
+            rsn  = (v.get("reasoning") or "").strip()
+            L.append(f"  {key}: {v['signal']} at {conf}%" + (f" — {rsn}" if rsn else ""))
     if ce:
         L.append("")
         L.append("CREATIVE EDGE (cross-pattern synthesis)")
@@ -1617,52 +1661,24 @@ def _bar_embed_text(record: Dict) -> str:
             l = line.strip()
             if l: L.append(f"  {l}")
 
+    hist_analysis = (record.get("historical_analysis") or "").strip()
+    if hist_analysis:
+        L.append("")
+        L.append("HISTORICAL ANALYST OUTPUT (similar past bars at time of prediction)")
+        for line in hist_analysis.split("\n"):
+            l = line.strip()
+            if l: L.append(f"  {l}")
+
+    full_prompt = (record.get("full_prompt") or "").strip()
+    if full_prompt:
+        L.append("")
+        L.append("FULL PROMPT SENT TO DEEPSEEK (complete market context at bar open)")
+        L.append(full_prompt)
+
     return "\n".join(L)
 
 
-def _cohere_prefilter(
-    current_vec: np.ndarray,
-    history: List[Dict],
-    bar_embeddings: Dict[int, np.ndarray],
-    pre_filter_k: int = COHERE_PRE_FILTER_K,
-) -> Tuple[List[Dict], List[str], int]:
-    """
-    Cosine similarity search using 1024-dim Cohere embeddings.
-    Returns (top_pre_filter_k bars, their embed texts, total history size).
-    Bars without stored embeddings are excluded from the search.
-    """
-    vecs, valid_bars = [], []
-    for bar in history:
-        ws = bar.get("window_start", 0)
-        v  = bar_embeddings.get(ws)
-        if v is not None:
-            vecs.append(v)
-            valid_bars.append(bar)
-
-    total = len(history)
-
-    if not vecs:
-        # No embeddings stored yet (fresh deployment) — use most recent bars as candidates
-        recent = history[-pre_filter_k:]
-        logger.info("Cohere prefilter: no embeddings stored yet, using %d most recent bars", len(recent))
-        return recent, [_bar_embed_text(b) for b in recent], total
-
-    matrix  = np.stack(vecs)                              # (N, 1024)
-    scores  = matrix @ current_vec                        # (N,) cosine similarities
-    k       = min(pre_filter_k, len(valid_bars))
-    top_idx = np.argsort(scores)[::-1][:k]
-    top_bars  = [valid_bars[i] for i in top_idx]
-    top_texts = [_bar_embed_text(b) for b in top_bars]
-
-    logger.info(
-        "Cohere prefilter: %d embedded bars → top %d candidates "
-        "(best sim=%.3f, worst=%.3f, %d bars had no embedding)",
-        len(valid_bars), len(top_bars),
-        float(scores[top_idx[0]]) if k else 0,
-        float(scores[top_idx[-1]]) if k else 0,
-        total - len(valid_bars),
-    )
-    return top_bars, top_texts, total
+# _cohere_prefilter removed — replaced by pgvector cosine search in PostgreSQL
 
 
 _KEY_DASH_COMPACT = [
@@ -1742,7 +1758,7 @@ def _build_current_bar(
     vote_s = _fmt_strategy_votes(current_strategy_votes)
     spec_s = _fmt_specialists(specialist_signals or {})
     dash_s = _fmt_dashboard_directions(dashboard_directions or {})
-    ce_s   = (creative_edge or "—").strip()[:120]
+    ce_s   = (creative_edge or "—").strip()
     return (
         f"  {day} {time_s}  {ses}\n"
         f"  Indicators   : {ind_s}\n  Strategies   : {vote_s}\n"
@@ -1790,14 +1806,14 @@ async def run_historical_analyst(
     ensemble_conf: float = 0.0,
     dashboard_directions: Optional[Dict] = None,
     cohere_api_key: str = "",
-    bar_embeddings: Optional[Dict[int, np.ndarray]] = None,
+    pgvector_search_fn=None,
 ) -> Tuple[Optional[Dict], Optional[str]]:
     """
-    Fire historical similarity analyst using Cohere embed + rerank.
+    Fire historical similarity analyst using Cohere embed + pgvector + Cohere rerank.
 
     Pipeline:
-      1. Embed current bar text via Cohere embed-english-v3.0 (1024 dims)
-      2. Cosine search over stored bar embeddings → top-50 candidates
+      1. Embed current bar opening text via Cohere embed-english-v3.0 (search_query)
+      2. pgvector cosine search in PostgreSQL → top-50 most similar stored bars
       3. Cohere rerank → final top-20 most contextually relevant bars
       4. Fire DeepSeek historical analyst on those 20 bars
 
@@ -1819,16 +1835,21 @@ async def run_historical_analyst(
         specialist_signals, creative_edge, ensemble_signal, ensemble_conf, dashboard_directions,
     )
 
-    # ── Step 1: Embed current bar (raises CohereUnavailableError if Cohere is down) ──
+    # ── Step 1: Embed current bar opening conditions via Cohere ──
     current_vec = await embed_text(cohere_api_key, current_bar, input_type="search_query")
     logger.info("Cohere embed: current bar encoded (%d dims)", len(current_vec))
 
-    # ── Step 2: Cosine prefilter → top-50 most similar bars ──
-    embeddings = bar_embeddings or {}
-    pre_bars, pre_texts, total_searched = _cohere_prefilter(
-        current_vec, history_records, embeddings,
-        pre_filter_k=COHERE_PRE_FILTER_K,
-    )
+    # ── Step 2: pgvector cosine search → top-50 most similar bars ──
+    total_searched = len(history_records)
+    if pgvector_search_fn is not None:
+        pre_bars = await asyncio.to_thread(pgvector_search_fn, current_vec, COHERE_PRE_FILTER_K)
+        if not pre_bars:
+            logger.info("pgvector: no embedded bars yet, falling back to most recent %d", COHERE_PRE_FILTER_K)
+            pre_bars = history_records[-COHERE_PRE_FILTER_K:]
+    else:
+        pre_bars = history_records[-COHERE_PRE_FILTER_K:]
+    pre_texts = [_bar_embed_text(b) for b in pre_bars]
+    logger.info("pgvector search: %d candidates from %d total bars", len(pre_bars), total_searched)
 
     # ── Step 3: Cohere rerank → final top-20 (raises CohereUnavailableError if down) ──
     if len(pre_bars) > COHERE_FINAL_K:
@@ -1849,7 +1870,7 @@ async def run_historical_analyst(
 
     ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
     _save(_HIST_SENT, (
-        f"# {ts_str}  |  Total: {total_searched} bars  |  Cohere pre-filter: {len(pre_bars)}  |  After rerank: {n}\n\n"
+        f"# {ts_str}  |  Total: {total_searched} bars  |  pgvector top-{len(pre_bars)}  |  After Cohere rerank: {n}\n\n"
         f"=== FULL HISTORY (saved, not sent to LLM) ===\n{history_table_full}\n\n"
         f"=== TOP-{n} AFTER COHERE EMBED+RERANK (sent to LLM) ===\n{history_table_compact}\n\n"
         f"=== CURRENT BAR ===\n{current_bar}"
