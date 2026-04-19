@@ -168,7 +168,7 @@ async def rerank_bars(
     payload = {
         "model":     COHERE_RERANK_MODEL,
         "query":     query_text[:2048],
-        "documents": [t[:1024] for t in candidate_texts],
+        "documents": [t[:16000] for t in candidate_texts],
         "top_n":     min(top_n, len(candidate_texts)),
     }
     timeout   = aiohttp.ClientTimeout(total=30.0)
