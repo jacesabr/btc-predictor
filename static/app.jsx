@@ -455,18 +455,24 @@ function DeepSeekAuditTab({ deepseekLog, deepseekAcc, deepseekPred, ensembleAccu
           <div style={{ color:C.muted, fontSize:11 }}>DeepSeek fires at each 5-minute bar open — results will appear here once the first bar resolves.</div>
         </div>
       ) : deepseekLog.map((row, idx) => {
-        const ws       = row.window_start;
-        const isUp     = row.signal === "UP";
-        const isNeutral= row.signal === "NEUTRAL";
-        const result   = isNeutral ? "NO TRADE" : row.correct == null ? "PENDING" : row.correct ? "WIN" : "LOSS";
-        const isExp    = !!expanded[ws];
-        const detail   = detailCache[ws] || null;
-        const barNum   = row.window_count || (total - idx);
-        const d        = new Date(ws * 1000);
-        const wDate    = d.toLocaleDateString([], { month:"short", day:"numeric" });
-        const wTime    = String(d.getUTCHours()).padStart(2,"0") + ":" + String(d.getUTCMinutes()).padStart(2,"0") + " UTC";
-        const delta    = row.end_price != null ? ((row.end_price - row.start_price) / row.start_price * 100) : null;
-        const bdrColor = result==="WIN"?C.green:result==="LOSS"?C.red:result==="NO TRADE"?C.muted:C.amberBorder;
+        const ws         = row.window_start;
+        const isUp       = row.signal === "UP";
+        const isNeutral  = row.signal === "NEUTRAL";
+        const result     = isNeutral ? "NO TRADE" : row.correct == null ? "PENDING" : row.correct ? "WIN" : "LOSS";
+        const isExp      = !!expanded[ws];
+        const detail     = detailCache[ws] || null;
+        const barNum     = row.window_count || (total - idx);
+        const d          = new Date(ws * 1000);
+        const wDate      = d.toLocaleDateString([], { month:"short", day:"numeric" });
+        const wTime      = String(d.getUTCHours()).padStart(2,"0") + ":" + String(d.getUTCMinutes()).padStart(2,"0") + " UTC";
+        const delta      = row.end_price != null ? ((row.end_price - row.start_price) / row.start_price * 100) : null;
+        const bdrColor   = result==="WIN"?C.green:result==="LOSS"?C.red:result==="NO TRADE"?C.muted:C.amberBorder;
+        // For NEUTRAL bars: what actually happened and what would have been correct
+        const actualDir  = row.actual_direction;  // "UP" or "DOWN" or null
+        const wouldWin   = isNeutral && actualDir != null;  // if we had picked actualDir we'd have won
+        const neutralTag = isNeutral && actualDir
+          ? (actualDir === "UP" ? "went ▲ UP" : "went ▼ DN")
+          : null;
 
         return (
           <div key={ws} style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:8,
@@ -500,7 +506,7 @@ function DeepSeekAuditTab({ deepseekLog, deepseekAcc, deepseekPred, ensembleAccu
                 background:result==="WIN"?C.greenBg:result==="LOSS"?C.redBg:result==="NO TRADE"?C.bg:C.amberBg,
                 color:result==="WIN"?C.green:result==="LOSS"?C.red:result==="NO TRADE"?C.muted:C.amber,
                 border:`1px solid ${result==="WIN"?C.greenBorder:result==="LOSS"?C.redBorder:result==="NO TRADE"?C.borderSoft:C.amberBorder}` }}>
-                {result==="WIN"?"✓ WIN":result==="LOSS"?"✕ LOSS":result==="NO TRADE"?"— N/A":"● PEND"}
+                {result==="WIN"?"✓ WIN":result==="LOSS"?"✕ LOSS":result==="NO TRADE" ? (neutralTag ? `— N/A (${neutralTag})` : "— N/A") :"● PEND"}
               </span>
               {row.latency_ms
                 ? <span style={{ fontSize:9, color:C.muted, flexShrink:0 }}>{row.latency_ms}ms</span>
@@ -566,6 +572,29 @@ function BarDetail({ row, ws, expanded, setExpanded }) {
           <div style={{ fontSize:15, fontWeight:900, color:C.text }}>{row.confidence ?? "—"}%</div>
         </div>
       </div>
+
+      {/* NEUTRAL outcome info */}
+      {isNeutral && (
+        <div style={{ background:C.amberBg, border:`1px solid ${C.amberBorder}`,
+          borderLeft:`3px solid ${C.amber}`, borderRadius:5, padding:"6px 10px", marginBottom:8 }}>
+          <div style={{ fontSize:8, fontWeight:700, color:C.amber, textTransform:"uppercase", letterSpacing:1, marginBottom:3 }}>
+            Abstention Outcome
+          </div>
+          {row.actual_direction ? (
+            <div style={{ fontSize:11, color:C.amber, lineHeight:1.75 }}>
+              DeepSeek abstained. The market actually went{" "}
+              <strong style={{ color: row.actual_direction==="UP" ? C.green : C.red }}>
+                {row.actual_direction==="UP" ? "▲ UP" : "▼ DOWN"}
+              </strong>.
+              {" "}Committing to <strong>{row.actual_direction}</strong> would have been a{" "}
+              <strong style={{ color:C.green }}>WIN</strong>.
+              {" "}This signal is fed back to DeepSeek so it can learn whether abstaining was optimal.
+            </div>
+          ) : (
+            <div style={{ fontSize:11, color:C.muted }}>Bar not yet resolved — outcome unknown.</div>
+          )}
+        </div>
+      )}
 
       {/* Strategy snapshot */}
       {Object.keys(snap).length > 0 && (
@@ -981,43 +1010,53 @@ function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, ca, cz,
 
 // ── Backend Tab ───────────────────────────────────────────────
 const MICRO_SRC_DEFS = [
-  ["order_book",   "Order Book",   "Binance spot · depth-20"],
-  ["long_short",   "Long/Short",   "Binance Futures · 5m"],
-  ["taker_flow",   "Taker Flow",   "Binance Futures aggressor"],
-  ["oi_funding",   "OI + Funding", "Binance Futures"],
-  ["liquidations", "Liquidations", "Binance Futures · last 5 min"],
-  ["fear_greed",   "Fear & Greed", "Alternative.me · daily"],
-  ["mempool",      "Mempool",      "mempool.space"],
-  ["coingecko",    "CoinGecko",    "24h market data"],
-  ["coinapi",      "CoinAPI",      "350+ exchange avg"],
-  ["coinalyze",    "Coinalyze",    "Cross-ex funding"],
+  ["order_book",        "Order Book",         "Binance spot · depth-20"],
+  ["long_short",        "Long/Short Ratio",   "Binance Futures · 5m"],
+  ["taker_flow",        "Taker Flow",         "Binance Futures aggressor"],
+  ["oi_funding",        "OI + Funding",       "Binance Futures"],
+  ["liquidations",      "Liquidations",       "OKX · last 5 min"],
+  ["bybit_liquidations","Cross-ex Liqs",      "OKX isolated-margin"],
+  ["fear_greed",        "Fear & Greed",       "Alternative.me · daily"],
+  ["mempool",           "Mempool",            "mempool.space"],
+  ["coingecko",         "CoinGecko",          "24h market data"],
+  ["btc_dominance",     "BTC Dominance",      "CoinGecko global"],
+  ["deribit_dvol",      "DVOL",               "Deribit implied vol"],
+  ["kraken_premium",    "Kraken Premium",     "Kraken vs OKX spread"],
+  ["oi_velocity",       "OI Velocity",        "Binance OI hist · 30m"],
+  ["spot_whale_flow",   "Spot Whale Flow",    "Kraken trades · 5m"],
+  ["okx_funding",       "OKX Funding",        "OKX funding rate"],
+  ["top_position_ratio","Top Trader Ratio",   "Binance top traders"],
+  ["funding_trend",     "Funding Trend",      "Binance 6-period avg"],
+  ["coinalyze",         "Coinalyze",          "Cross-ex funding"],
 ];
 
 function microSignalKey(key, d) {
   if (!d) return null;
-  if (key === "order_book")   return d.signal;
-  if (key === "long_short")   return d.retail_signal_contrarian;
-  if (key === "taker_flow")   return d.signal;
-  if (key === "oi_funding")   return d.funding_signal;
-  if (key === "liquidations") return d.signal;
-  if (key === "fear_greed")   return d.signal;
-  if (key === "mempool")      return d.signal;
-  if (key === "coinalyze")    return d.signal;
-  return null;
+  if (key === "long_short") return d.retail_signal_contrarian || d.signal;
+  if (key === "oi_funding") return d.funding_signal || d.signal;
+  return d.signal || null;
 }
 
 function microKV(key, d) {
   if (!d) return [];
-  if (key === "order_book")   return [["Bid",`${d.bid_vol_btc?.toFixed(0)} BTC`],["Imb",`${d.imbalance_pct>=0?"+":""}${d.imbalance_pct?.toFixed(1)}%`],["Ask",`${d.ask_vol_btc?.toFixed(0)} BTC`]];
-  if (key === "long_short")   return [["L/S",d.retail_lsr?.toFixed(3)],["Retail",`${d.retail_long_pct?.toFixed(0)}%L`],["Smart",`${d.smart_money_long_pct?.toFixed(0)}%L`],["Δ",`${(d.smart_vs_retail_div_pct>=0?"+":"")}${d.smart_vs_retail_div_pct?.toFixed(1)}%`]];
-  if (key === "taker_flow")   return [["BSR",d.buy_sell_ratio?.toFixed(4)],["Buy",`${d.taker_buy_vol_btc?.toFixed(0)} BTC`],["Sell",`${d.taker_sell_vol_btc?.toFixed(0)} BTC`],["3-bar",d.trend_3bars]];
-  if (key === "oi_funding")   return [["OI",`${d.open_interest_btc?.toFixed(0)} BTC`],["FR",`${(d.funding_rate_8h_pct??0).toFixed(4)}%`],["Prem",`${d.mark_premium_vs_index_pct?.toFixed(4)}%`]];
-  if (key === "liquidations") return [["Total",d.total],["Long liqs",`${d.long_liq_count} ($${(d.long_liq_usd??0).toLocaleString()})`],["Short liqs",`${d.short_liq_count} ($${(d.short_liq_usd??0).toLocaleString()})`],["Vel",`${(d.velocity_per_min??0).toFixed(1)}/min`]];
-  if (key === "fear_greed")   return [["Index",`${d.value} — ${d.label}`],["Prev",d.previous_day],["Δ",`${d.daily_delta>=0?"+":""}${d.daily_delta}`]];
-  if (key === "mempool")      return [["Fast",`${d.fastest_fee_sat_vb} sat/vB`],["Pending",`${d.pending_tx_count?.toLocaleString()} tx`],["Size",`${d.mempool_size_mb} MB`]];
-  if (key === "coingecko")    return [["24h Δ",`${d.change_24h_pct>=0?"+":""}${d.change_24h_pct?.toFixed(2)}%`],["Vol/MCap",`${d.vol_to_mcap_ratio_pct?.toFixed(2)}%`]];
-  if (key === "coinapi")      return [["Agg rate",`$${d.aggregate_rate_usd?.toLocaleString()}`]];
-  if (key === "coinalyze")    return [["X-ex FR",`${(d.funding_rate_8h_pct??0).toFixed(4)}%`]];
+  if (key === "order_book")         return [["Bid",`${d.bid_vol_btc?.toFixed(0)} BTC`],["Imb",`${d.imbalance_pct>=0?"+":""}${d.imbalance_pct?.toFixed(1)}%`],["Ask",`${d.ask_vol_btc?.toFixed(0)} BTC`]];
+  if (key === "long_short")         return [["L/S",d.retail_lsr?.toFixed(3)],["Retail",`${d.retail_long_pct?.toFixed(0)}%L`],["Smart",`${d.smart_money_long_pct?.toFixed(0)}%L`],["Δ",`${(d.smart_vs_retail_div_pct>=0?"+":"")}${d.smart_vs_retail_div_pct?.toFixed(1)}%`]];
+  if (key === "taker_flow")         return [["BSR",d.buy_sell_ratio?.toFixed(4)],["Buy",`${d.taker_buy_vol_btc?.toFixed(0)} BTC`],["Sell",`${d.taker_sell_vol_btc?.toFixed(0)} BTC`],["3-bar",d.trend_3bars]];
+  if (key === "oi_funding")         return [["OI",`${d.open_interest_btc?.toFixed(0)} BTC`],["FR",`${(d.funding_rate_8h_pct??0).toFixed(4)}%`],["Prem",`${d.mark_premium_vs_index_pct?.toFixed(4)}%`]];
+  if (key === "liquidations")       return [["Total",d.total],["Longs",`${d.long_liq_count} ($${(d.long_liq_usd??0).toLocaleString()})`],["Shorts",`${d.short_liq_count} ($${(d.short_liq_usd??0).toLocaleString()})`],["Vel",`${(d.velocity_per_min??0).toFixed(1)}/min`]];
+  if (key === "bybit_liquidations") return [["Total",d.total],["Long $",`$${(d.long_liq_usd??0).toLocaleString()}`],["Short $",`$${(d.short_liq_usd??0).toLocaleString()}`]];
+  if (key === "fear_greed")         return [["Index",`${d.value} — ${d.label}`],["Prev",d.previous_day],["Δ",`${d.daily_delta>=0?"+":""}${d.daily_delta}`]];
+  if (key === "mempool")            return [["Fast",`${d.fastest_fee_sat_vb} sat/vB`],["Pending",`${d.pending_tx_count?.toLocaleString()} tx`],["Size",`${d.mempool_size_mb} MB`]];
+  if (key === "coingecko")          return [["24h Δ",`${d.change_24h_pct>=0?"+":""}${d.change_24h_pct?.toFixed(2)}%`],["Vol/MCap",`${d.vol_to_mcap_ratio_pct?.toFixed(2)}%`]];
+  if (key === "btc_dominance")      return [["Dom",`${d.btc_dominance_pct?.toFixed(1)}%`],["Mkt 24h",`${d.market_change_24h_pct>=0?"+":""}${d.market_change_24h_pct?.toFixed(2)}%`]];
+  if (key === "deribit_dvol")       return [["DVOL",`${d.dvol_pct?.toFixed(1)}%`]];
+  if (key === "kraken_premium")     return [["Kraken",`$${d.kraken_price?.toLocaleString()}`],["OKX",`$${d.okx_price?.toLocaleString()}`],["Spread",`${(d.spread_pct??0).toFixed(4)}%`]];
+  if (key === "oi_velocity")        return [["30m Δ",`${(d.oi_change_30m_pct??0)>=0?"+":""}${(d.oi_change_30m_pct??0).toFixed(3)}%`],["1bar Δ",`${(d.oi_change_1bar_pct??0)>=0?"+":""}${(d.oi_change_1bar_pct??0).toFixed(3)}%`]];
+  if (key === "spot_whale_flow")    return [["Buy",`${d.whale_buy_btc?.toFixed(0)} BTC`],["Sell",`${d.whale_sell_btc?.toFixed(0)} BTC`],["Buy%",`${d.whale_buy_pct?.toFixed(0)}%`]];
+  if (key === "okx_funding")        return [["FR",`${(d.funding_rate_pct??0).toFixed(4)}%`]];
+  if (key === "top_position_ratio") return [["L/S",d.long_short_ratio?.toFixed(3)],["Long%",`${d.long_position_pct?.toFixed(0)}%`]];
+  if (key === "funding_trend")      return [["Latest",`${(d.funding_latest_pct??0).toFixed(4)}%`],["6p avg",`${(d.funding_avg_6p_pct??0).toFixed(4)}%`],["Trend",d.funding_trend]];
+  if (key === "coinalyze")          return [["X-ex FR",`${(d.funding_rate_8h_pct??0).toFixed(4)}%`]];
   return [];
 }
 
@@ -1207,7 +1246,17 @@ function BackendTab({ backendSnap, deepseekPred }) {
         {/* Microstructure signals */}
         {hasDash && (
           <div style={{ ...card, flexShrink:0 }}>
-            <div style={{ ...label, marginBottom:6 }}>Microstructure Signals · sent to DeepSeek</div>
+            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+              <div style={{ ...label }}>Microstructure · embedding inputs</div>
+              {(() => { const n = MICRO_SRC_DEFS.filter(([k])=>dashSigs[k]).length; const tot = MICRO_SRC_DEFS.length; return (
+                <span style={{ fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:3,
+                  background:n>=14?C.greenBg:n>=8?C.amberBg:C.redBg,
+                  color:n>=14?C.green:n>=8?C.amber:C.red,
+                  border:`1px solid ${n>=14?C.greenBorder:n>=8?C.amberBorder:C.redBorder}` }}>
+                  {n}/{tot} live
+                </span>
+              ); })()}
+            </div>
             <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
               {MICRO_SRC_DEFS.map(([key, name, src]) => {
                 const d = dashSigs[key];
@@ -1403,71 +1452,44 @@ function BackendTab({ backendSnap, deepseekPred }) {
 //  Source History Tab
 // ══════════════════════════════════════════════════════════════
 
-const SOURCE_DEFS = [
-  { key: "order_book",   label: "Order Book",    icon: "📖" },
-  { key: "long_short",   label: "L/S Ratio",     icon: "⚖️" },
-  { key: "taker_flow",   label: "Taker Flow",    icon: "💧" },
-  { key: "liquidations", label: "Liquidations",  icon: "💥" },
-  { key: "oi_funding",   label: "OI + Funding",  icon: "📈" },
-  { key: "coinalyze",    label: "Coinalyze",     icon: "🔗" },
-  { key: "coinapi",      label: "CoinAPI",       icon: "💱" },
-  { key: "fear_greed",   label: "Fear & Greed",  icon: "😨" },
-  { key: "mempool",      label: "Mempool",       icon: "⛏" },
-  { key: "coingecko",    label: "CoinGecko",     icon: "🦎" },
-];
+const SOURCE_DEFS = MICRO_SRC_DEFS.map(([key, label]) => ({ key, label }));
 
-function sigBadge(sig) {
-  if (!sig) return null;
-  const bull = ["BULLISH","BULLISH_CONTRARIAN","BULLISH_ARBI"].includes(sig);
-  const bear = ["BEARISH","BEARISH_CONTRARIAN","BEARISH_ARBI"].includes(sig);
-  const col = bull ? C.green : bear ? C.red : C.amber;
-  const bg  = bull ? C.greenBg : bear ? C.redBg : C.amberBg;
-  const bdr = bull ? C.greenBorder : bear ? C.redBorder : C.amberBorder;
-  return (
-    <span style={{ fontSize:9, fontWeight:700, padding:"1px 5px", borderRadius:3,
-      background:bg, border:`1px solid ${bdr}`, color:col }}>
-      {sig.replace(/_/g," ")}
-    </span>
-  );
-}
 
 function SourceCard({ def, data }) {
   if (!data) return (
-    <div style={{ ...card, opacity:0.4 }}>
-      <div style={{ fontSize:10, fontWeight:700, color:C.muted }}>{def.icon} {def.label}</div>
-      <div style={{ fontSize:9, color:C.muted, marginTop:4 }}>No data stored for this window</div>
+    <div style={{ ...card, opacity:0.35, borderLeft:`2px solid ${C.borderSoft}` }}>
+      <div style={{ fontSize:10, fontWeight:700, color:C.muted }}>{def.label}</div>
+      <div style={{ fontSize:8, color:C.muted, marginTop:3 }}>No data for this window</div>
     </div>
   );
 
-  const sig = data.signal;
-  const interp = data.interpretation || data.interp || "";
-
-  // Collect numeric/string fields to display (skip signal, interpretation, interp, fetched_at)
-  const skipKeys = new Set(["signal","interpretation","interp","error","fetched_at"]);
-  const entries = Object.entries(data).filter(([k]) => !skipKeys.has(k));
+  const sig   = microSignalKey(def.key, data);
+  const kvs   = microKV(def.key, data);
+  const interp = data.interpretation || "";
+  const sc    = sig ? sigColors(sig) : null;
 
   return (
-    <div style={{ ...card }}>
-      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:6 }}>
-        <span style={{ fontSize:11, fontWeight:700, color:C.text }}>{def.icon} {def.label}</span>
-        {sig && sigBadge(sig)}
+    <div style={{ ...card, borderLeft:`2px solid ${sc?.border || C.borderSoft}` }}>
+      <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:4 }}>
+        <span style={{ fontSize:10, fontWeight:700, color:C.text, flex:1 }}>{def.label}</span>
+        {sc && <span style={{ fontSize:8, fontWeight:700, padding:"1px 5px", borderRadius:3,
+          background:sc.bg, color:sc.color, border:`1px solid ${sc.border}`, flexShrink:0 }}>
+          {sig.replace(/_CONTRARIAN|_ARBI/,"")}
+        </span>}
       </div>
-      {interp && (
-        <div style={{ fontSize:10, color:C.textSec, marginBottom:6, lineHeight:1.45,
-          borderLeft:`2px solid ${C.borderSoft}`, paddingLeft:6 }}>
-          {interp}
+      {kvs.length > 0 && (
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom: interp ? 4 : 0 }}>
+          {kvs.map(([lbl,val]) => (
+            <span key={lbl} style={{ fontSize:9 }}>
+              <span style={{ color:C.muted }}>{lbl}: </span>
+              <span style={{ color:C.textSec, fontWeight:700 }}>{val}</span>
+            </span>
+          ))}
         </div>
       )}
-      <div style={{ display:"flex", flexWrap:"wrap", gap:"3px 12px" }}>
-        {entries.map(([k,v]) => (
-          <div key={k} style={{ fontSize:9, color:C.textSec }}>
-            <span style={{ color:C.muted, textTransform:"uppercase", letterSpacing:0.5 }}>{k.replace(/_/g," ")}: </span>
-            <span style={{ color:C.text, fontWeight:600 }}>
-              {typeof v === "number" ? (Number.isInteger(v) ? v : v.toFixed(4)) : String(v)}
-            </span>
-          </div>
-        ))}
-      </div>
+      {interp && (
+        <div style={{ fontSize:8, color:C.muted, lineHeight:1.4, fontStyle:"italic" }}>{interp}</div>
+      )}
     </div>
   );
 }
@@ -1626,7 +1648,17 @@ function SourceHistoryTab({ sourceHistory, selectedSource, setSelectedSource }) 
             </div>
 
             {/* Microstructure source cards */}
-            <div style={{ ...label, flexShrink:0 }}>Microstructure Snapshot (as fed to DeepSeek)</div>
+            <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
+              <div style={{ ...label }}>Microstructure Snapshot · embedding inputs</div>
+              {(() => { const n = SOURCE_DEFS.filter(d=>ds[d.key]).length; const tot = SOURCE_DEFS.length; return (
+                <span style={{ fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:3,
+                  background:n>=14?C.greenBg:n>=8?C.amberBg:C.redBg,
+                  color:n>=14?C.green:n>=8?C.amber:C.red,
+                  border:`1px solid ${n>=14?C.greenBorder:n>=8?C.amberBorder:C.redBorder}` }}>
+                  {n}/{tot} sources
+                </span>
+              ); })()}
+            </div>
             <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:6, flexShrink:0 }}>
               {SOURCE_DEFS.map(def => (
                 <SourceCard key={def.key} def={def} data={ds[def.key] || null} />
@@ -2125,7 +2157,7 @@ function App() {
             </div>
           )}
         </div>
-        {[["live","LIVE"],["history","HISTORY"],["ensemble","ENSEMBLE"],["sources","SOURCES"],["status","STATUS"]].map(([t,label])=>(
+        {[["live","LIVE"],["history","HISTORY"],["ensemble","ENSEMBLE"],["sources","SOURCES"]].map(([t,label])=>(
           <button key={t} onClick={()=>setTab(t)} style={{
             background:"none", border:"none",
             borderBottom:tab===t?`2px solid ${C.amber}`:"2px solid transparent",
@@ -2753,91 +2785,6 @@ function App() {
 
           </div>
           </ErrorBoundary>
-        )}
-
-        {/* ══ STATUS TAB ══ */}
-        {tab==="status" && (
-          <div style={{ height:"100%", overflowY:"auto", display:"flex", flexDirection:"column", gap:8, paddingBottom:8 }}>
-
-            {/* Top: quick health bar */}
-            <div style={{ ...card, flexShrink:0, display:"flex", gap:0 }}>
-              {[
-                ["WS Feed",      connected?"Live":"Reconnecting",   connected?C.green:C.amber],
-                ["Data Source",  dataSource,                         C.textSec],
-                ["Strategies",   `${strats.length}/${STRATEGY_META.length} active`, strats.length===STRATEGY_META.length?C.green:C.amber],
-                ["Ensemble",     allTimeTotal>0?`${allTimeTotal} bars · ${allTimeAccuracy.toFixed(1)}%`:"no data", allTimeTotal>0?(allTimeAccuracy>=50?C.green:C.red):C.muted],
-                ["DeepSeek",     deepseekAcc?.total>0?`${deepseekAcc.total} bars · ${(deepseekAcc.accuracy*100).toFixed(1)}% · ${deepseekAcc.neutrals??0}N`:"no data", deepseekAcc?.total>0?(deepseekAcc.accuracy>=0.5?C.green:C.red):C.muted],
-                ["Agree Only",   agreeAcc?.total_agree>0?`${agreeAcc.total_agree} bars · ${(agreeAcc.accuracy_agree*100).toFixed(1)}%`:"no data", agreeAcc?.total_agree>0?(agreeAcc.accuracy_agree>=0.5?C.green:C.red):C.muted],
-                ["Polymarket",   polyLive?`LIVE · UP=${(polymarket.yes_price*100).toFixed(1)}%`:"no market", polyLive?C.green:C.muted],
-              ].map(([lbl,val,col],i,arr)=>(
-                <div key={lbl} style={{ flex:1, padding:"8px 14px", borderRight:i<arr.length-1?`1px solid ${C.borderSoft}`:"none" }}>
-                  <div style={{ fontSize:9, color:C.muted, letterSpacing:1, textTransform:"uppercase", marginBottom:3 }}>{lbl}</div>
-                  <div style={{ fontSize:13, fontWeight:700, color:col }}>{val}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Main: two columns */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, flex:1, minHeight:0 }}>
-
-              {/* Left: system details */}
-              <div style={{ ...card, display:"flex", flexDirection:"column", gap:0 }}>
-                <div style={{ ...label, marginBottom:10 }}>System Details</div>
-                <div style={{ fontSize:12, lineHeight:2.1 }}>
-                  <Row label="WS feed"      val={connected?"Live":"Reconnecting…"}   c={connected?C.green:C.amber} />
-                  <Row label="Data source"  val={dataSource} />
-                  <Row label="Strategies"   val={`${strats.length}/${STRATEGY_META.length} active`} />
-                  <Row label="Ensemble"     val={allTimeTotal>0?`${allTimeTotal} resolved · ${allTimeAccuracy.toFixed(1)}%`:"no data yet"} c={allTimeTotal>0?(allTimeAccuracy>=50?C.green:C.red):C.muted} />
-                  <Row label="DeepSeek"     val={deepseekAcc?.total>0?`${deepseekAcc.total} resolved · ${(deepseekAcc.accuracy*100).toFixed(1)}%`:"no data yet"} c={deepseekAcc?.total>0?(deepseekAcc.accuracy>=0.5?C.green:C.red):C.muted} />
-                  <Row label="Agree only"   val={agreeAcc?.total_agree>0?`${agreeAcc.total_agree} resolved · ${(agreeAcc.accuracy_agree*100).toFixed(1)}%`:"no data yet"} c={agreeAcc?.total_agree>0?(agreeAcc.accuracy_agree>=0.5?C.green:C.red):C.muted} />
-                  <Row label="Polymarket"   val={polyLive?`LIVE · UP=${(polymarket.yes_price*100).toFixed(1)}% · 1:${polymarket.market_odds?.toFixed(3)}`:"no market"} c={polyLive?C.green:C.muted} />
-                  <div style={{ borderTop:`1px solid ${C.borderSoft}`, margin:"8px 0 6px" }} />
-                  <Row label="Window"       val={winStartTime ? new Date(winStartTime*1000).toUTCString().slice(17,25)+" UTC" : "—"} />
-                  <Row label="Bar closes"   val={barCloseUTC} c={timeLeft<60?C.red:timeLeft<120?C.amber:C.green} />
-                  <Row label="Time left"    val={`${mins}:${secs}`} c={timeLeft<60?C.red:timeLeft<120?C.amber:C.green} />
-                </div>
-              </div>
-
-              {/* Right: microstructure APIs */}
-              <div style={{ ...card, display:"flex", flexDirection:"column" }}>
-                <div style={{ ...label, marginBottom:10 }}>Microstructure Data Sources</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                  {[
-                    ["Order Book",    dots.ob,  "Binance spot · depth-20",              ob  ? `imb ${ob.imb>=0?"+":""}${ob.imb.toFixed(1)}% · bid ${ob.bv.toFixed(0)} / ask ${ob.av.toFixed(0)} BTC` : null],
-                    ["Taker Flow",    dots.tk,  "Binance Futures aggressor",             tk  ? `BSR ${tk.bsr.toFixed(4)} · trend ${tk.trend}` : null],
-                    ["L/S Ratio",     dots.ls,  "Binance Futures · retail + top 20%",   ls  ? `retail ${ls.retailLong.toFixed(1)}%L · smart ${ls.smartLong.toFixed(1)}%L` : null],
-                    ["Liquidations",  dots.lq,  "Binance Futures · last 10 orders",     lq  ? `${lq.total} total · long ${lq.longCount} / short ${lq.shortCount}` : null],
-                    ["OI + Funding",  dots.oif, "Binance Futures perpetual",            oif ? `OI ${oif.oi.toFixed(0)} BTC · FR ${(oif.fr*100).toFixed(5)}%` : null],
-                    ["Coinalyze",     dots.cz,  "Cross-ex aggregate funding",           cz  ? `FR ${(cz.fr*100).toFixed(5)}% · signal ${cz.sig}` : null],
-                    ["CoinAPI",       dots.ca,  "350+ exchange weighted avg",           ca  ? `$${ca.rate.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}` : null],
-                    ["Fear & Greed",  dots.fg,  "Alternative.me · daily",               fg  ? `${fg.value} — ${fg.label}` : null],
-                    ["Mempool",       dots.mp,  "mempool.space · on-chain fees",        mp  ? `${mp.fastest} sat/vB fastest · ${mp.count.toLocaleString()} pending` : null],
-                    ["CoinGecko",     dots.cg,  "24h macro context",                    cg  ? `${cg.ch>=0?"+":""}${cg.ch.toFixed(2)}% 24h · vol/mcap ${cg.vm.toFixed(2)}%` : null],
-                  ].map(([name, dot_, desc, detail]) => (
-                    <div key={name} style={{ display:"flex", alignItems:"center", gap:10,
-                      padding:"6px 8px", borderRadius:5,
-                      background:dot_==="live"?C.greenBg:dot_==="err"?C.redBg:C.bg,
-                      border:`1px solid ${dot_==="live"?C.greenBorder:dot_==="err"?C.redBorder:C.borderSoft}` }}>
-                      <span style={{ fontSize:11, color:dot_==="live"?C.green:dot_==="err"?C.red:C.muted, fontWeight:700, minWidth:10 }}>
-                        {dot_==="live"?"●":dot_==="err"?"✕":"○"}
-                      </span>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
-                          <span style={{ fontSize:11, fontWeight:700, color:C.text }}>{name}</span>
-                          <span style={{ fontSize:9, color:C.muted }}>{desc}</span>
-                        </div>
-                        {detail && <div style={{ fontSize:10, color:C.textSec, marginTop:1 }}>{detail}</div>}
-                      </div>
-                      <span style={{ fontSize:9, fontWeight:700, color:dot_==="live"?C.green:dot_==="err"?C.red:C.muted, flexShrink:0 }}>
-                        {dot_==="live"?"LIVE":dot_==="err"?"ERROR":"PENDING"}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-          </div>
         )}
 
         {/* ══ SOURCES TAB ══ */}

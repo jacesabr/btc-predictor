@@ -239,6 +239,7 @@ async def _run_postmortem_background(
     klines: list,
     features: dict,
     dashboard_signals,
+    embed_rec: Optional[dict] = None,
 ):
     """Fire after bar resolves: ask DeepSeek to explain itself, store result."""
     if not config.deepseek_api_key:
@@ -257,9 +258,9 @@ async def _run_postmortem_background(
             ws = ds_record.get("window_start", 0)
             _safe_storage(storage.store_postmortem, ws, text)
             logger.info("Postmortem stored for bar %.0f", ws)
-            # Re-embed now that postmortem is available — this is the complete record
-            updated_rec = {**ds_record, "postmortem": text}
-            asyncio.create_task(_embed_bar_background(ws, updated_rec))
+            # Re-embed with full indicator/strategy data + postmortem — use embed_rec if available
+            base = embed_rec if embed_rec is not None else ds_record
+            asyncio.create_task(_embed_bar_background(ws, {**base, "postmortem": text}))
     except Exception as exc:
         logger.warning("Postmortem background task failed: %s", exc)
 
@@ -667,6 +668,44 @@ async def _resolve_window(
                 bar_ts, bar_num, ds_pred_snap.get("signal"),
             )
 
+        # Build embed record first — shared by initial embed AND postmortem re-embed
+        _ds_correct_embed = (
+            None if ds_pred_snap.get("signal") == "NEUTRAL"
+            else (actual == ds_pred_snap["signal"]) if ds_pred_snap.get("signal") in ("UP", "DOWN")
+            else None
+        )
+        _n_bull = sum(1 for v in strategy_preds.values()
+                      if isinstance(v, dict) and v.get("signal") == "UP")
+        _n_bear = sum(1 for v in strategy_preds.values()
+                      if isinstance(v, dict) and v.get("signal") == "DOWN")
+        _embed_rec = {
+            "window_start":         window_start_time,
+            "window_count":         ds_pred_snap.get("window_count") or (deepseek.window_count if deepseek else 0),
+            "actual_direction":     actual,
+            "start_price":          window_start_price,
+            "end_price":            end_price,
+            "latency_ms":           ds_pred_snap.get("latency_ms", 0),
+            "ensemble_signal":      pred.get("signal", ""),
+            "ensemble_conf":        pred.get("confidence", 0),
+            "ensemble_bullish":     _n_bull,
+            "ensemble_bearish":     _n_bear,
+            "deepseek_signal":      ds_pred_snap.get("signal", ""),
+            "deepseek_conf":        ds_pred_snap.get("confidence", 0),
+            "deepseek_correct":     _ds_correct_embed,
+            "deepseek_reasoning":   ds_pred_snap.get("reasoning", ""),
+            "deepseek_narrative":   ds_pred_snap.get("narrative", ""),
+            "deepseek_free_obs":    ds_pred_snap.get("free_observation", ""),
+            "historical_analyst":   strategy_preds.get("historical_analyst", {}),
+            "indicators":           current_state.get("backend_snapshot", {}).get("features", {}),
+            "strategy_votes":       strategy_preds,
+            "specialist_signals":   current_state.get("bar_specialist_signals", {}),
+            "dashboard_signals_raw": snap_dash_raw,
+            "creative_edge":        current_state.get("bar_creative_edge", ""),
+            "session":              None,
+            "postmortem":           "",   # not available yet — re-embedded when postmortem arrives
+        }
+        asyncio.create_task(_embed_bar_background(window_start_time, _embed_rec))
+
         # Fire postmortem in background — non-blocking, best effort
         if ds_pred_snap.get("signal") not in (None, "ERROR", "UNAVAILABLE"):
             _pm_record = {**ds_pred_snap, "window_start": window_start_time}
@@ -683,36 +722,8 @@ async def _resolve_window(
                 klines=_pm_klines,
                 features=_pm_features,
                 dashboard_signals=_pm_dash,
+                embed_rec=_embed_rec,
             ))
-
-        # Fire Cohere embedding in background — includes full DeepSeek output + outcome
-        _ds_correct_embed = (
-            None if ds_pred_snap.get("signal") == "NEUTRAL"
-            else (actual == ds_pred_snap["signal"]) if ds_pred_snap.get("signal") in ("UP", "DOWN")
-            else None
-        )
-        _embed_rec = {
-            "window_start":         window_start_time,
-            "actual_direction":     actual,
-            "start_price":          window_start_price,
-            "end_price":            end_price,
-            "ensemble_signal":      pred.get("signal", ""),
-            "ensemble_conf":        pred.get("confidence", 0),
-            "deepseek_signal":      ds_pred_snap.get("signal", ""),
-            "deepseek_conf":        ds_pred_snap.get("confidence", 0),
-            "deepseek_correct":     _ds_correct_embed,
-            "deepseek_reasoning":   ds_pred_snap.get("reasoning", ""),
-            "deepseek_narrative":   ds_pred_snap.get("narrative", ""),
-            "deepseek_free_obs":    ds_pred_snap.get("free_observation", ""),
-            "indicators":           current_state.get("backend_snapshot", {}).get("features", {}),
-            "strategy_votes":       strategy_preds,
-            "specialist_signals":   current_state.get("bar_specialist_signals", {}),
-            "dashboard_signals_raw": snap_dash_raw,
-            "creative_edge":        current_state.get("bar_creative_edge", ""),
-            "session":              None,
-            "postmortem":           "",   # not available yet — re-embedded when postmortem arrives
-        }
-        asyncio.create_task(_embed_bar_background(window_start_time, _embed_rec))
 
         ens_at_total, ens_at_correct, ens_at_acc = (
             await _safe_storage_async(storage.get_total_accuracy, default=(0, 0, 0.0))

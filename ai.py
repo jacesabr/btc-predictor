@@ -1055,7 +1055,7 @@ LESSON: [one concrete rule to apply next time in a similar setup]"""
 
     try:
         t0 = time.time()
-        raw = await _api_call(api_key, prompt, max_tokens=600, timeout_s=40.0)
+        raw = await _api_call(api_key, prompt, max_tokens=1200, timeout_s=50.0)
         elapsed = int((time.time() - t0) * 1000)
         logger.info("Postmortem completed for bar %s (%s) in %dms", bar_ts, verdict, elapsed)
         _save(_PM_DIR / f"last_{int(window_start)}.txt", f"=== PROMPT ===\n{prompt}\n\n=== RESPONSE ===\n{raw}")
@@ -1371,77 +1371,253 @@ def _bar_feature_vector(record: Dict) -> Optional[np.ndarray]:
 
 def _bar_embed_text(record: Dict) -> str:
     """
-    Generate the full rich text for Cohere embedding / reranking.
+    Full natural-language essay about a resolved bar — every fact, in order of importance.
 
-    Includes EVERYTHING that was known about the bar — market conditions,
-    all indicator/strategy/dashboard inputs, DeepSeek's full analysis,
-    whether the prediction was correct, and the post-mortem lesson.
-    The more complete this text, the more precisely Cohere can find similar
-    historical bars where the same logic played out the same way.
+    This is intentionally the richest possible text. Cohere embed-english-v3.0 encodes
+    it into a 1024-dim semantic vector capturing the complete fingerprint of the bar:
+    market regime, all indicator states, strategy alignment, microstructure, DeepSeek's
+    reasoning, whether it was right or wrong, and the post-mortem lesson.
+
+    At 10,000+ bars this makes similarity search extraordinarily powerful — finding bars
+    where the same market regime produced the same reasoning which led to the same outcome,
+    something impossible with hand-crafted vectors.
+
+    Text is NOT manually truncated (no [:N] slicing). The outcome + predictions + key
+    indicators come first so the most critical semantics land within Cohere's token window.
+    The reranker sees the full text with no limit.
     """
-    ts     = record.get("window_start", 0)
-    dt     = datetime.fromtimestamp(ts, tz=timezone.utc) if ts else None
-    day    = _DAYS[dt.weekday()] if dt else "?"
-    time_s = dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "?"
-    ses    = record.get("session") or (_session(ts) if ts else "?")
+    ts    = record.get("window_start", 0)
+    dt    = datetime.fromtimestamp(ts, tz=timezone.utc) if ts else None
+    day   = _DAYS[dt.weekday()] if dt else "?"
+    t_s   = dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "?"
+    ses   = record.get("session") or (_session(ts) if ts else "?")
+    bar_n = record.get("window_count") or "?"
     actual = record.get("actual_direction", "?")
-    sp     = record.get("start_price", 0) or 0
-    ep     = record.get("end_price", 0) or 0
-    chg    = ((ep - sp) / sp * 100) if sp and ep else 0.0
+    sp    = float(record.get("start_price") or 0)
+    ep    = float(record.get("end_price") or 0)
+    chg   = ((ep - sp) / sp * 100) if sp and ep else 0.0
+    lat   = record.get("latency_ms") or record.get("deepseek_latency_ms") or ""
 
-    # ── Predictions & accuracy ──────────────────────────────────
-    e_sig  = record.get("ensemble_signal", "?") or "?"
-    e_conf = int((record.get("ensemble_conf") or 0) * 100)
-    # Accept both semantic-store keys (deepseek_signal) and raw prediction keys (signal)
-    d_sig  = record.get("deepseek_signal") or record.get("signal", "?") or "?"
-    d_conf = record.get("deepseek_conf") or record.get("confidence", 0) or 0
+    # ── Predictions & outcome ────────────────────────────────────
+    e_sig  = record.get("ensemble_signal") or "?"
+    e_conf = int(float(record.get("ensemble_conf") or 0) * 100)
+    e_bull = record.get("ensemble_bullish") or ""
+    e_bear = record.get("ensemble_bearish") or ""
+    d_sig  = record.get("deepseek_signal") or record.get("signal") or "?"
+    d_conf = record.get("deepseek_conf") or record.get("confidence") or 0
+    h_rec  = record.get("historical_analyst") or {}
+    h_sig  = h_rec.get("signal", "") if isinstance(h_rec, dict) else ""
+    h_conf = int(float(h_rec.get("confidence", 0)) * 100) if isinstance(h_rec, dict) else 0
 
-    # Outcome: was DeepSeek correct? Accept both key names
     ds_correct = record.get("deepseek_correct") if "deepseek_correct" in record else record.get("correct")
     if d_sig == "NEUTRAL":
-        outcome = "NO_TRADE"
+        outcome = "NO TRADE — DeepSeek abstained (NEUTRAL)"
     elif ds_correct is True:
-        outcome = "CORRECT"
+        outcome = f"CORRECT — predicted {d_sig}, price actually went {actual}"
     elif ds_correct is False:
-        outcome = "WRONG"
+        outcome = f"WRONG — predicted {d_sig}, price actually went {actual}"
     else:
-        outcome = "PENDING"
+        outcome = "PENDING (not yet resolved)"
 
-    # ── Market inputs ───────────────────────────────────────────
-    ind   = record.get("indicators", {}) or {}
+    # ── Indicator helpers ────────────────────────────────────────
+    ind = record.get("indicators", {}) or {}
+
+    def fv(k):
+        v = ind.get(k)
+        return float(v) if v is not None else None
+
+    def rsi_label(v):
+        if v is None: return ""
+        if v >= 80: return "EXTREMELY OVERBOUGHT"
+        if v >= 70: return "OVERBOUGHT"
+        if v >= 55: return "HIGH — leaning bullish"
+        if v >= 45: return "NEUTRAL"
+        if v >= 30: return "LOW — leaning bearish"
+        if v >= 20: return "OVERSOLD"
+        return "EXTREMELY OVERSOLD"
+
+    def bb_label(v):
+        if v is None: return ""
+        if v >= 1.0: return "ABOVE UPPER BAND — extreme extension"
+        if v >= 0.8: return "AT UPPER BAND — overbought stretch"
+        if v >= 0.6: return "UPPER HALF"
+        if v >= 0.4: return "MID BAND — balanced"
+        if v >= 0.2: return "LOWER HALF"
+        if v >= 0.0: return "AT LOWER BAND — oversold stretch"
+        return "BELOW LOWER BAND — extreme extension"
+
+    def macd_label(v):
+        if v is None: return ""
+        if v >  5: return "STRONG BULL momentum"
+        if v >  1: return "BULL momentum building"
+        if v > -1: return "NEUTRAL — no momentum edge"
+        if v > -5: return "BEAR momentum building"
+        return "STRONG BEAR momentum"
+
+    def vol_label(v):
+        if v is None: return ""
+        if v >= 3.0: return "EXTREME VOLUME SPIKE"
+        if v >= 2.0: return "HIGH VOLUME"
+        if v >= 1.3: return "ELEVATED VOLUME"
+        if v >= 0.7: return "NORMAL VOLUME"
+        return "LOW VOLUME — weak conviction"
+
+    def obv_label(v):
+        if v is None: return ""
+        return "ACCUMULATION — buying pressure" if v > 0 else "DISTRIBUTION — selling pressure"
+
+    rsi_v  = fv("rsi_4");    rsi14 = fv("rsi_14") or rsi_v
+    macdh  = fv("macd_histogram"); macds = fv("macd_signal")
+    stoch  = fv("stoch_k_5") or fv("stoch_k_14")
+    bbpct  = fv("bollinger_pct_b"); bbw = fv("bollinger_width")
+    mfi14  = fv("mfi_14");   mfi7 = fv("mfi_7")
+    vwap_p = fv("price_vs_vwap"); vwap_b = fv("vwap_band_pos")
+    obv    = fv("obv_slope"); vsurge = fv("volume_surge")
+    r2     = fv("trend_r_squared"); tslope = fv("trend_slope")
+    ecross = fv("ema_cross_8_21")
+    pve5   = fv("price_vs_ema_5");  pve8  = fv("price_vs_ema_8")
+    pve13  = fv("price_vs_ema_13"); pve21 = fv("price_vs_ema_21")
+    vol5   = fv("volatility_5");  vol10 = fv("volatility_10"); vol20 = fv("volatility_20")
+    pp10   = fv("price_position_10"); pp30 = fv("price_position_30"); pp60 = fv("price_position_60")
+    ret1   = fv("return_1");  ret2  = fv("return_2");  ret5  = fv("return_5")
+    ret10  = fv("return_10"); ret15 = fv("return_15"); ret30 = fv("return_30")
+    momacc = fv("momentum_acceleration")
+
+    # ── Strategy votes ───────────────────────────────────────────
     votes = record.get("strategy_votes", {}) or {}
-    spec  = record.get("specialist_signals", {}) or {}
-    dash  = record.get("dashboard_signals_raw", {}) or {}
-    ce    = (record.get("creative_edge") or "").strip()[:300]
-
-    # ── DeepSeek's analysis output ──────────────────────────────
-    # Accept both key names: semantic_store (deepseek_reasoning) and raw pred (reasoning)
-    reasoning    = (record.get("deepseek_reasoning") or record.get("reasoning") or "").strip()[:600]
-    narrative    = (record.get("deepseek_narrative") or record.get("narrative") or "").strip()[:300]
-    free_obs     = (record.get("deepseek_free_obs") or record.get("free_observation") or "").strip()[:300]
-    postmortem   = (record.get("postmortem") or "").strip()[:500]
-
-    parts = [
-        f"BTC 5-min bar: {day} {time_s} session={ses}",
-        f"Actual: {actual}  price=${sp:,.0f}→${ep:,.0f} ({chg:+.3f}%)",
-        f"Indicators: {_fmt_indicators(ind)}",
-        f"Strategies: {_fmt_strategy_votes(votes)}",
-        f"Specialists: {_fmt_specialists(spec)}",
-        f"Dashboard: {_fmt_dashboard_directions(dash)}",
-        f"Ensemble={e_sig} {e_conf}%  DeepSeek={d_sig} {d_conf}%  Outcome={outcome}",
+    _STRAT = [
+        ("rsi","RSI"), ("macd","MACD"), ("stochastic","Stochastic"),
+        ("ema_cross","EMA Fast/Slow"), ("supertrend","Supertrend"), ("adx","ADX"),
+        ("alligator","Alligator"), ("acc_dist","Accumulation/Distribution"),
+        ("dow_theory","Dow Theory"), ("fib_pullback","Fibonacci"),
+        ("harmonic","Harmonic Pattern"), ("vwap","VWAP"),
+        ("polymarket","Crowd (Polymarket)"), ("ml_logistic","Linear Regression"),
     ]
-    if ce:
-        parts.append(f"CreativeEdge: {ce}")
-    if reasoning:
-        parts.append(f"DeepSeekReasoning: {reasoning}")
-    if narrative:
-        parts.append(f"PriceNarrative: {narrative}")
-    if free_obs:
-        parts.append(f"FreeObservation: {free_obs}")
-    if postmortem:
-        parts.append(f"PostMortem: {postmortem}")
 
-    return "\n".join(parts)
+    # ── Dashboard signals ────────────────────────────────────────
+    dash = record.get("dashboard_signals_raw", {}) or {}
+    _DASH = [
+        ("order_book","Order book bid/ask imbalance"),
+        ("long_short","Long/short ratio"),
+        ("taker_flow","Taker buy/sell flow"),
+        ("fear_greed","Fear & greed index"),
+        ("mempool","Bitcoin mempool congestion"),
+        ("oi_funding","Open interest funding rate"),
+        ("okx_funding","OKX funding rate"),
+        ("btc_dominance","BTC market dominance"),
+        ("liquidations","Liquidation events"),
+        ("coinalyze","Coinalyze OI signal"),
+        ("coingecko","CoinGecko market sentiment"),
+        ("deribit_dvol","Deribit implied volatility"),
+        ("kraken_premium","Kraken BTC premium"),
+        ("oi_velocity","Open interest velocity"),
+        ("spot_whale_flow","Spot whale order flow"),
+        ("bybit_liquidations","Bybit liquidation cascade"),
+        ("top_position_ratio","Top trader position ratio"),
+        ("funding_trend","Funding rate trend"),
+    ]
+
+    # ── Specialist signals ───────────────────────────────────────
+    spec = record.get("specialist_signals", {}) or {}
+    _SPEC = [
+        ("alligator","Alligator (Bill Williams)"),
+        ("acc_dist","Accumulation/Distribution"),
+        ("dow_theory","Dow Theory structure"),
+        ("fib_pullback","Fibonacci pullback"),
+        ("harmonic","Harmonic pattern"),
+    ]
+
+    # ── DeepSeek text ────────────────────────────────────────────
+    reasoning  = (record.get("deepseek_reasoning") or record.get("reasoning") or "").strip()
+    narrative  = (record.get("deepseek_narrative") or record.get("narrative") or "").strip()
+    free_obs   = (record.get("deepseek_free_obs") or record.get("free_observation") or "").strip()
+    data_req   = (record.get("data_requests") or "").strip()
+    ce         = (record.get("creative_edge") or "").strip()
+    postmortem = (record.get("postmortem") or "").strip()
+
+    # ── Assemble essay (most critical facts first) ───────────────
+    L = []
+    L.append(f"BTC 5-MINUTE BAR #{bar_n} — {day} {t_s} ({ses} SESSION)")
+    L.append("=" * 60)
+    L.append("")
+    L.append("OUTCOME & PREDICTIONS")
+    L.append(f"  {outcome}")
+    L.append(f"  Price: ${sp:,.2f} → ${ep:,.2f}  ({chg:+.4f}%)  Actual direction: {actual}")
+    L.append(f"  DeepSeek prediction: {d_sig} at {d_conf}% confidence" + (f"  (latency: {lat}ms)" if lat else ""))
+    L.append(f"  Ensemble prediction: {e_sig} at {e_conf}%" + (f"  ({e_bull} bullish votes / {e_bear} bearish votes)" if e_bull or e_bear else ""))
+    if h_sig:
+        L.append(f"  Historical analyst signal: {h_sig} at {h_conf}%")
+    L.append("")
+    L.append("TECHNICAL INDICATORS")
+    if rsi14  is not None: L.append(f"  RSI: {rsi14:.1f} — {rsi_label(rsi14)}")
+    if macdh  is not None: L.append(f"  MACD histogram: {macdh:+.3f} — {macd_label(macdh)}" + (f"  signal line: {macds:.3f}" if macds is not None else ""))
+    if stoch  is not None: L.append(f"  Stochastic K: {stoch:.1f} — {rsi_label(stoch)}")
+    if bbpct  is not None: L.append(f"  Bollinger %B: {bbpct:.3f} — {bb_label(bbpct)}" + (f"  width: {bbw:.4f}" if bbw is not None else ""))
+    if mfi14  is not None: L.append(f"  Money Flow Index (14): {mfi14:.1f} — {rsi_label(mfi14)}" + (f"  MFI(7): {mfi7:.1f}" if mfi7 is not None else ""))
+    if vwap_p is not None: L.append(f"  Price vs VWAP: {vwap_p:+.3f}%  {'above VWAP — bullish bias' if vwap_p > 0 else 'below VWAP — bearish bias'}" + (f"  band position: {vwap_b:+.2f}σ" if vwap_b is not None else ""))
+    if obv    is not None: L.append(f"  OBV slope: {obv:+.1f} — {obv_label(obv)}")
+    if vsurge is not None: L.append(f"  Volume surge: {vsurge:.2f}x average — {vol_label(vsurge)}")
+    if r2     is not None: L.append(f"  Trend R²: {r2:.3f}" + (f"  slope: {tslope:+.5f}" if tslope is not None else ""))
+    if ecross is not None: L.append(f"  EMA(8/21) cross: {ecross:+.3f} — {'bullish: fast above slow' if ecross > 0 else 'bearish: fast below slow'}")
+    if pve5   is not None: L.append(f"  Price vs EMA5: {pve5:+.3f}%  vs EMA8: {pve8:+.3f}%" + (f"  vs EMA13: {pve13:+.3f}%  vs EMA21: {pve21:+.3f}%" if pve13 is not None else ""))
+    vols = [(v, n) for v, n in [(vol5,"5-bar"),(vol10,"10-bar"),(vol20,"20-bar")] if v is not None]
+    if vols: L.append(f"  Volatility: {' | '.join(f'{n}: {v:.4f}%' for v, n in vols)}")
+    pps = [(v, n) for v, n in [(pp10,"10-bar"),(pp30,"30-bar"),(pp60,"60-bar")] if v is not None]
+    if pps: L.append(f"  Price position in range: {' | '.join(f'{n}: {v:.2f}' for v, n in pps)}  (0=bottom 1=top)")
+    rets = [(v, n) for v, n in [(ret1,"1m"),(ret2,"2m"),(ret5,"5m"),(ret10,"10m"),(ret15,"15m"),(ret30,"30m")] if v is not None]
+    if rets: L.append(f"  Recent returns: {' | '.join(f'{n}: {v:+.3f}%' for v, n in rets)}")
+    if momacc is not None: L.append(f"  Momentum acceleration: {momacc:+.5f} — {'accelerating upward' if momacc > 0 else 'decelerating / reversing'}")
+    L.append("")
+    L.append("STRATEGY VOTES (14 independent models)")
+    for k, name in _STRAT:
+        v = votes.get(k)
+        if isinstance(v, dict) and v.get("signal"):
+            conf = int(float(v.get("confidence") or 0.5) * 100)
+            L.append(f"  {name}: {v['signal']} at {conf}% confidence")
+    L.append("")
+    L.append("MARKET MICROSTRUCTURE (live derivatives & sentiment data)")
+    for k, name in _DASH:
+        v = (dash.get(k) or "").upper()
+        if v in ("UP", "DOWN", "NEUTRAL"):
+            L.append(f"  {name}: {v}")
+    L.append("")
+    L.append("SPECIALIST SIGNALS (DeepSeek pattern recognition)")
+    for k, name in _SPEC:
+        v = spec.get(k)
+        if isinstance(v, dict) and v.get("signal"):
+            conf = int(float(v.get("confidence") or 0.5) * 100)
+            rsn  = (v.get("reasoning") or "").strip()
+            L.append(f"  {name}: {v['signal']} at {conf}%" + (f" — {rsn}" if rsn else ""))
+    if ce:
+        L.append("")
+        L.append("CREATIVE EDGE (cross-pattern synthesis)")
+        L.append(f"  {ce}")
+    if reasoning:
+        L.append("")
+        L.append("DEEPSEEK FULL REASONING")
+        for bullet in reasoning.split("\n"):
+            b = bullet.strip()
+            if b: L.append(f"  {b}")
+    if narrative:
+        L.append("")
+        L.append("PRICE NARRATIVE")
+        L.append(f"  {narrative}")
+    if free_obs:
+        L.append("")
+        L.append("FREE OBSERVATION")
+        L.append(f"  {free_obs}")
+    if data_req and data_req.upper() not in ("", "NONE"):
+        L.append("")
+        L.append("DATA GAPS (additional data AI requested)")
+        L.append(f"  {data_req}")
+    if postmortem:
+        L.append("")
+        L.append("POST-MORTEM — DeepSeek self-analysis after outcome was revealed")
+        for line in postmortem.split("\n"):
+            l = line.strip()
+            if l: L.append(f"  {l}")
+
+    return "\n".join(L)
 
 
 def _cohere_prefilter(
@@ -1681,7 +1857,7 @@ async def run_historical_analyst(
     _save(_HIST_PROMPT_OUT, f"# {ts_str}\n\n{prompt}")
 
     try:
-        raw     = await _api_call(api_key, prompt, max_tokens=500, timeout_s=60.0)
+        raw     = await _api_call(api_key, prompt, max_tokens=800, timeout_s=60.0)
         elapsed = time.time() - t0
         _save(_HIST_RESPONSE, f"# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}  elapsed={elapsed:.1f}s\n\n{raw}")
         for line in raw.splitlines():
@@ -1752,7 +1928,7 @@ class DeepSeekPredictor:
         raw_response: Optional[str] = None
         error_msg    = ""
         try:
-            raw_response = await _api_call(self.api_key, prompt, max_tokens=2200, timeout_s=45.0)
+            raw_response = await _api_call(self.api_key, prompt, max_tokens=2500, timeout_s=50.0)
         except Exception as exc:
             error_msg = str(exc)
             logger.error("DeepSeek call failed: %s", exc)

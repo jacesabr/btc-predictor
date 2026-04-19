@@ -281,6 +281,39 @@ def compute_dashboard_accuracy(n: Optional[int] = None) -> Dict[str, Dict]:
     return result
 
 
+def clean_incomplete_windows(window_starts) -> int:
+    """
+    Remove pattern_history records whose window_start is in window_starts.
+    Returns the number of records removed.
+    """
+    ws_set = set(window_starts)
+    if not ws_set:
+        return 0
+    with _lock:
+        if not _HIST_FILE.exists():
+            return 0
+        records = []
+        removed = 0
+        with open(_HIST_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    r = json.loads(line)
+                    if r.get("window_start") in ws_set:
+                        removed += 1
+                    else:
+                        records.append(r)
+                except Exception:
+                    pass
+        if removed:
+            with open(_HIST_FILE, "w", encoding="utf-8") as f:
+                for r in records:
+                    f.write(json.dumps(r, default=str) + "\n")
+    return removed
+
+
 # ── Backend routing ───────────────────────────────────────────────────────────
 # When DATABASE_URL is present (Railway), transparently swap every public
 # function to its PostgreSQL equivalent. Local dev is completely unaffected.
