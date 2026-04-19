@@ -100,7 +100,10 @@ async def _api_call(
             if resp.status != 200:
                 raise RuntimeError(f"HTTP {resp.status}: {body[:300]}")
             data = await resp.json(content_type=None)
-            return data["choices"][0]["message"]["content"]
+            choice = data["choices"][0]
+            if choice.get("finish_reason") == "length":
+                logger.warning("_api_call: response truncated at token limit (max_tokens=%d)", max_tokens)
+            return choice["message"]["content"]
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -934,6 +937,8 @@ def parse_response(text: str) -> Tuple[str, int, str, str, str, str, str]:
     numbered: List[str] = []
     data_received = data_requests = narrative = free_observation = ""
     in_reasons = False
+    in_narrative = False
+    in_free_obs  = False
 
     for line in text.strip().splitlines():
         s = line.strip()
@@ -943,19 +948,29 @@ def parse_response(text: str) -> Tuple[str, int, str, str, str, str, str]:
             if "ABOVE" in val:     signal = "UP"
             elif "BELOW" in val:   signal = "DOWN"
             elif "NEUTRAL" in val: signal = "NEUTRAL"
+            in_narrative = in_free_obs = in_reasons = False
         elif u.startswith("CONFIDENCE:"):
             try: confidence = int(float(u.replace("CONFIDENCE:", "").replace("%", "").strip()))
             except: pass
+            in_narrative = in_free_obs = in_reasons = False
         elif s.upper().startswith("DATA_RECEIVED:"):
-            data_received = s[len("DATA_RECEIVED:"):].strip(); in_reasons = False
+            data_received = s[len("DATA_RECEIVED:"):].strip()
+            in_narrative = in_free_obs = in_reasons = False
         elif s.upper().startswith("DATA_REQUESTS:"):
-            data_requests = s[len("DATA_REQUESTS:"):].strip(); in_reasons = False
+            data_requests = s[len("DATA_REQUESTS:"):].strip()
+            in_narrative = in_free_obs = in_reasons = False
         elif s.upper().startswith("NARRATIVE:"):
-            narrative = s[len("NARRATIVE:"):].strip(); in_reasons = False
+            narrative = s[len("NARRATIVE:"):].strip()
+            in_narrative = True; in_free_obs = in_reasons = False
         elif s.upper().startswith("FREE_OBSERVATION:"):
-            free_observation = s[len("FREE_OBSERVATION:"):].strip(); in_reasons = False
+            free_observation = s[len("FREE_OBSERVATION:"):].strip()
+            in_free_obs = True; in_narrative = in_reasons = False
         elif u.startswith("REASONS:") or u.startswith("REASON:"):
-            in_reasons = True
+            in_reasons = True; in_narrative = in_free_obs = False
+        elif in_narrative and s:
+            narrative += " " + s
+        elif in_free_obs and s:
+            free_observation += " " + s
         elif in_reasons and re.match(r"^\d+\.", s):
             numbered.append(re.sub(r"^\d+\.\s*", "", s))
         elif in_reasons and s and not numbered:
@@ -972,10 +987,10 @@ def parse_response(text: str) -> Tuple[str, int, str, str, str, str, str]:
         logger.info("parse_response: overriding %s@%d%% → NEUTRAL (below 65%% threshold)", signal, confidence)
         signal = "NEUTRAL"
 
-    reasoning = "\n".join(numbered).strip()[:1400]
+    reasoning = "\n".join(numbered).strip()
     if not reasoning:
         m = re.search(r"REASONS?:\s*(.*)", text, re.IGNORECASE | re.DOTALL)
-        if m: reasoning = m.group(1).strip()[:1400]
+        if m: reasoning = m.group(1).strip()
 
     return signal, confidence, reasoning, data_received, data_requests, narrative, free_observation
 
@@ -1057,9 +1072,9 @@ Be ruthlessly honest. Identify exactly what went wrong or right and how to impro
 ══ ORIGINAL PREDICTION (bar {bar_ts}) ══════════════════════════════
 Signal     : {signal}  ({confidence}%)
 Start price: ${start_price:,.2f}
-Reasoning  : {reasoning[:800]}
-Narrative  : {narrative[:400]}
-Free obs   : {free_obs[:300]}
+Reasoning  : {reasoning}
+Narrative  : {narrative}
+Free obs   : {free_obs}
 Data recv  : {data_recv}
 Data req   : {data_req}
 
@@ -1616,7 +1631,7 @@ def _bar_embed_text(record: Dict) -> str:
             conf = int(float(v.get("confidence") or 0.5) * 100)
             rsn  = (v.get("reasoning") or "").strip()
             line = f"  {key}: {v['signal']} at {conf}%"
-            if rsn: line += f" — {rsn[:120]}"
+            if rsn: line += f" — {rsn}"
             L.append(line)
     L.append("")
     L.append("MARKET MICROSTRUCTURE (live derivatives & sentiment data)")
