@@ -170,10 +170,16 @@ async def _fetch_oi_funding() -> Dict:
 
 
 async def _fetch_liquidations() -> Dict:
+    # OKX public liquidation endpoint — no auth, no VPN needed, covers BTC perp
     data = await _get(
-        "https://fapi.binance.com/fapi/v1/allForceOrders?symbol=BTCUSDT&limit=100"
+        "https://www.okx.com/api/v5/public/liquidation-orders"
+        "?instType=SWAP&mgnMode=cross&instId=BTC-USDT-SWAP&state=filled&limit=100"
     )
-    if not data:
+    rows = []
+    for event in (data.get("data") or []):
+        for detail in (event.get("details") or []):
+            rows.append(detail)
+    if not rows:
         return {
             "total": 0, "long_liq_count": 0, "short_liq_count": 0,
             "long_liq_usd": 0, "short_liq_usd": 0,
@@ -181,23 +187,25 @@ async def _fetch_liquidations() -> Dict:
             "signal": "NEUTRAL",
             "interpretation": "No recent liquidations — stable market, no cascades detected.",
         }
-    now_ms  = time.time() * 1000
-    cutoff  = now_ms - 300_000
-    recent  = [x for x in data if float(x.get("time", 0)) >= cutoff]
-    window  = recent if recent else data
-    longs   = [x for x in window if x.get("side") == "SELL"]
-    shorts  = [x for x in window if x.get("side") == "BUY"]
-    lvol    = sum(float(x.get("origQty", 0)) * float(x.get("averagePrice", 0)) for x in longs)
-    svol    = sum(float(x.get("origQty", 0)) * float(x.get("averagePrice", 0)) for x in shorts)
+    now_ms = time.time() * 1000
+    cutoff = now_ms - 300_000
+    recent = [r for r in rows if float(r.get("ts", 0)) >= cutoff]
+    window = recent if recent else rows
+    # OKX: posSide="long" + side="sell" → forced long liquidation (bearish)
+    #       posSide="short" + side="buy" → forced short liquidation (bullish squeeze)
+    longs  = [r for r in window if r.get("posSide", "").lower() == "long"]
+    shorts = [r for r in window if r.get("posSide", "").lower() == "short"]
+    lvol   = sum(float(r.get("sz", 0)) * float(r.get("bkPx", 0)) for r in longs)
+    svol   = sum(float(r.get("sz", 0)) * float(r.get("bkPx", 0)) for r in shorts)
     if recent and len(recent) >= 2:
-        times    = sorted(float(x.get("time", 0)) for x in recent if x.get("time"))
+        times    = sorted(float(r.get("ts", 0)) for r in recent if r.get("ts"))
         span_min = max((times[-1] - times[0]) / 60_000, 0.1)
         velocity = round(len(recent) / span_min, 1)
     else:
         velocity = round(len(window) / 5.0, 1)
-    sig     = "BEARISH" if lvol > svol * 1.5 else "BULLISH" if svol > lvol * 1.5 else "NEUTRAL"
-    prices  = [float(x.get("averagePrice", 0)) for x in window if x.get("averagePrice")]
-    p_range = (f"${min(prices):,.0f}–${max(prices):,.0f}" if prices else "N/A")
+    sig    = "BEARISH" if lvol > svol * 1.5 else "BULLISH" if svol > lvol * 1.5 else "NEUTRAL"
+    prices = [float(r.get("bkPx", 0)) for r in window if r.get("bkPx")]
+    p_range = (f"${min(prices):,.0f}-${max(prices):,.0f}" if prices else "N/A")
     cascade_note = (
         f" CASCADE ACTIVE ({velocity:.0f}/min — extremely high velocity)."
         if velocity >= 20 else
@@ -416,34 +424,38 @@ async def _fetch_spot_whale_flow() -> Dict:
 
 
 async def _fetch_bybit_liquidations() -> Dict:
+    # OKX 15-min window — second liquidation data point for cross-confirmation
     data = await _get(
-        "https://api.bybit.com/v5/market/liquidation"
-        "?category=linear&symbol=BTCUSDT&limit=200"
+        "https://www.okx.com/api/v5/public/liquidation-orders"
+        "?instType=SWAP&mgnMode=isolated&instId=BTC-USDT-SWAP&state=filled&limit=100"
     )
-    rows = (data.get("result") or {}).get("list") or []
+    rows = []
+    for event in (data.get("data") or []):
+        for detail in (event.get("details") or []):
+            rows.append(detail)
     if not rows:
         return {
             "total": 0, "long_liq_usd": 0, "short_liq_usd": 0,
             "signal": "NEUTRAL",
-            "interpretation": "No Bybit liquidations in recent window.",
+            "interpretation": "No isolated-margin liquidations in recent window.",
         }
     now_ms = time.time() * 1000
-    cutoff = now_ms - 300_000
-    recent = [r for r in rows if float(r.get("time", now_ms)) >= cutoff] or rows
-    longs  = [r for r in recent if r.get("side", "").upper() == "SELL"]
-    shorts = [r for r in recent if r.get("side", "").upper() == "BUY"]
-    l_usd  = sum(float(r.get("size", 0)) * float(r.get("price", 0)) for r in longs)
-    s_usd  = sum(float(r.get("size", 0)) * float(r.get("price", 0)) for r in shorts)
+    cutoff = now_ms - 900_000  # 15-min window for isolated margin
+    recent = [r for r in rows if float(r.get("ts", now_ms)) >= cutoff] or rows
+    longs  = [r for r in recent if r.get("posSide", "").lower() == "long"]
+    shorts = [r for r in recent if r.get("posSide", "").lower() == "short"]
+    l_usd  = sum(float(r.get("sz", 0)) * float(r.get("bkPx", 0)) for r in longs)
+    s_usd  = sum(float(r.get("sz", 0)) * float(r.get("bkPx", 0)) for r in shorts)
     sig    = "BEARISH" if l_usd > s_usd * 1.5 else "BULLISH" if s_usd > l_usd * 1.5 else "NEUTRAL"
     interp = (
-        f"Bybit long cascade: ${l_usd:,.0f} longs liquidated vs ${s_usd:,.0f} shorts. "
-        "Cross-exchange confirmation of downward cascade."
+        f"Isolated-margin long cascade: ${l_usd:,.0f} longs liquidated vs ${s_usd:,.0f} shorts. "
+        "Cross-margin confirmation of downward cascade."
         if l_usd > s_usd * 1.5 else
-        f"Bybit short squeeze: ${s_usd:,.0f} shorts force-covered vs ${l_usd:,.0f} longs. "
-        "Cross-exchange squeeze confirmation — forced buying pressure."
+        f"Isolated-margin short squeeze: ${s_usd:,.0f} shorts force-covered vs ${l_usd:,.0f} longs. "
+        "Cross-margin squeeze confirmation — forced buying pressure."
         if s_usd > l_usd * 1.5 else
-        f"Bybit mixed liqs: ${l_usd:,.0f} long / ${s_usd:,.0f} short. "
-        "No directional cascade on Bybit."
+        f"Isolated-margin mixed liqs: ${l_usd:,.0f} long / ${s_usd:,.0f} short. "
+        "No directional cascade in isolated margin book."
     )
     return {
         "total":          len(recent),

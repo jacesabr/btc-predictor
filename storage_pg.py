@@ -431,7 +431,7 @@ class StoragePG:
                 signal, start_price = row
                 if actual is None:
                     actual = "UP" if end_price >= start_price else "DOWN"
-                correct = actual == signal
+                correct = None if signal == "NEUTRAL" else (actual == signal)
                 cur.execute(
                     "UPDATE deepseek_predictions "
                     "SET end_price=%s, actual_direction=%s, correct=%s "

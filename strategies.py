@@ -271,7 +271,11 @@ class EMACrossStrategy(BaseStrategy):
     SLOW_SHORT, SLOW_LONG = 21, 55
 
     def predict(self, prices: List[float], **kwargs) -> Dict:
-        p = np.array(prices, dtype=float)
+        ohlcv = kwargs.get("ohlcv", [])
+        if ohlcv and len(ohlcv) >= self.SLOW_LONG + 2:
+            p = np.array([float(k[4]) for k in ohlcv], dtype=float)
+        else:
+            p = np.array(prices, dtype=float)
         if len(p) < self.SLOW_LONG + 2:
             return self._no_data()
 
@@ -533,7 +537,10 @@ class WilliamsAlligatorStrategy(BaseStrategy):
 
     def predict(self, prices: List[float], **kwargs) -> Dict:
         ohlcv = kwargs.get("ohlcv", [])
-        p     = np.array(prices, dtype=float)
+        if ohlcv and len(ohlcv) >= 15:
+            p = np.array([float(k[4]) for k in ohlcv], dtype=float)
+        else:
+            p = np.array(prices, dtype=float)
         if len(p) < 15:
             return self._no_data()
         jaw = self._smma(p, 13); teeth = self._smma(p, 8); lips = self._smma(p, 5)
@@ -615,7 +622,10 @@ class DowTheoryStrategy(BaseStrategy):
 
     def predict(self, prices: List[float], **kwargs) -> Dict:
         ohlcv = kwargs.get("ohlcv", [])
-        p     = np.array(prices, dtype=float)
+        if ohlcv and len(ohlcv) >= self.SWING_N * 2 + 2:
+            p = np.array([float(k[4]) for k in ohlcv], dtype=float)
+        else:
+            p = np.array(prices, dtype=float)
         if len(p) < self.SWING_N * 2 + 2:
             return self._no_data()
 
@@ -661,7 +671,11 @@ class FibPullbackStrategy(BaseStrategy):
     TOL = 0.0030; LOOKBACK = 30
 
     def predict(self, prices: List[float], **kwargs) -> Dict:
-        p = np.array(prices, dtype=float)
+        ohlcv = kwargs.get("ohlcv", [])
+        if ohlcv and len(ohlcv) >= self.LOOKBACK:
+            p = np.array([float(k[4]) for k in ohlcv], dtype=float)
+        else:
+            p = np.array(prices, dtype=float)
         if len(p) < self.LOOKBACK:
             return self._no_data()
         window  = p[-self.LOOKBACK:]; sw_high = float(window.max()); sw_low = float(window.min())
@@ -701,7 +715,11 @@ class HarmonicPatternStrategy(BaseStrategy):
     }
 
     def predict(self, prices: List[float], **kwargs) -> Dict:
-        p = np.array(prices, dtype=float)
+        ohlcv = kwargs.get("ohlcv", [])
+        if ohlcv and len(ohlcv) >= 30:
+            p = np.array([float(k[4]) for k in ohlcv], dtype=float)
+        else:
+            p = np.array(prices, dtype=float)
         if len(p) < 30:
             return self._no_data()
         window = p[-min(50, len(p)):]; n_sw = 3; pivots: List = []

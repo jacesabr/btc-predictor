@@ -5,7 +5,7 @@ All background tasks and shared state. Imported by server.py for REST endpoints.
 
 Background tasks started at startup:
   run_collector()          — tick feed from Binance REST, stores prices
-  run_binance_feed()       — 1-min OHLCV klines, refreshed every 60s
+  run_binance_feed()       — 1-min OHLCV klines, refreshed every 60s (Bybit→OKX→Kraken→Binance)
   run_indicator_refresh()  — strategy signals refreshed every 15s
   run_prediction_loop()    — 5-minute bar loop: predict → wait → resolve
   polymarket_feed.run()    — polls Polymarket Gamma API for BTC Up/Down market
@@ -683,7 +683,7 @@ async def _refresh_indicators():
 
 
 async def run_binance_feed():
-    """Fetch 1m OHLCV every 60s — Bybit primary, Kraken fallback, Binance last resort."""
+    """Fetch 1m OHLCV every 60s — Bybit primary, OKX fallback, Kraken fallback, Binance last resort."""
     global binance_klines
     while True:
         fetched = False
@@ -710,9 +710,35 @@ async def run_binance_feed():
                         await _refresh_indicators()
                         fetched = True
         except Exception as exc:
-            logger.warning("Bybit klines error: %s — trying Kraken", exc)
+            logger.warning("Bybit klines error: %s — trying OKX", exc)
 
-        # 2. Kraken OHLC fallback [time, open, high, low, close, vwap, volume, count]
+        # 2. OKX klines fallback — no API key, India-accessible, returns oldest-first
+        # Response: [[ts_ms, open, high, low, close, vol, volCcy, volCcyQuote, confirm], ...]
+        if not fetched:
+            try:
+                connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+                async with aiohttp.ClientSession(connector=connector) as session:
+                    async with session.get(
+                        "https://www.okx.com/api/v5/market/history-candles",
+                        params={"instId": "BTC-USDT", "bar": "1m", "limit": "300"},
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            # OKX returns newest-first; reverse so oldest-first
+                            bars = list(reversed(data["data"]))
+                            # Convert to Binance format: [open_time_ms, o, h, l, close, vol]
+                            klines = [[int(b[0]), b[1], b[2], b[3], b[4], b[5]] for b in bars]
+                            binance_klines.clear()
+                            binance_klines.extend(klines)
+                            logger.info("OKX klines updated: %d candles", len(klines))
+                            collector.seed_from_klines(binance_klines)
+                            await _refresh_indicators()
+                            fetched = True
+            except Exception as exc:
+                logger.warning("OKX klines error: %s — trying Kraken", exc)
+
+        # 3. Kraken OHLC fallback [time, open, high, low, close, vwap, volume, count]
         if not fetched:
             try:
                 connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
@@ -736,7 +762,7 @@ async def run_binance_feed():
             except Exception as exc:
                 logger.warning("Kraken klines error: %s", exc)
 
-        # 3. Binance last resort
+        # 4. Binance last resort
         if not fetched:
             try:
                 connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())

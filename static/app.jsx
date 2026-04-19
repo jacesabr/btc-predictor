@@ -23,9 +23,9 @@ const STRATEGY_META = [
 
 // Per-strategy explanations shown inside each indicator card
 const STRATEGY_DESC = {
-  rsi:          { short:"Momentum oscillator (14 bars).", how:"Above 70 = overbought, may reverse down. Below 30 = oversold, bounce likely. Divergence from price is the strongest signal." },
+  rsi:          { short:"Fast RSI(4) on 1m closed bars.", how:"Above 80 = overbought, may reverse down. Below 20 = oversold, bounce likely. Crossovers at OB/OS boundaries are the strongest signal." },
   macd:         { short:"EMA difference reveals momentum shifts early.", how:"Histogram crossing zero or diverging from price = high-conviction trend change before price confirms." },
-  stochastic:   { short:"Compares close to recent high-low range.", how:"Above 80 = exhausted buyers (sell pressure). Below 20 = exhausted sellers (buyers step in). K crossing D = entry trigger." },
+  stochastic:   { short:"Fast Stochastic K(5)/D(3) on 1m H/L/C.", how:"Above 80 = exhausted buyers (sell pressure). Below 20 = exhausted sellers (buyers step in). K crossing D = entry trigger." },
   ema_cross:    { short:"Fast EMA (5/13) filters near-term direction.", how:"5 EMA crossing above 13 EMA = bullish momentum shift. Below = bearish. HTF alignment multiplies conviction." },
   ema_slow:     { short:"Slower EMA (21/55) tracks institutional trend.", how:"When aligned with Fast EMA the signal has multi-timeframe confirmation, dramatically reducing false entries." },
   supertrend:   { short:"Volatility-adaptive trailing stop that flips on breakouts.", how:"Green (price above band) = bull trend. Red (below band) = bear. Self-adjusts to ATR so it works across volatility regimes." },
@@ -105,7 +105,7 @@ function getStratOBOS(key, rawValue) {
   const v = parseFloat(rawValue);
   if (isNaN(v)) return null;
   const T = {
-    rsi:        { ob:70, os:30, lob:57, los:43 },
+    rsi:        { ob:80, os:20, lob:65, los:35 },
     stochastic: { ob:80, os:20, lob:65, los:35 },
   };
   const t = T[key];
@@ -435,8 +435,8 @@ function DeepSeekAuditTab({ deepseekLog, deepseekAcc, deepseekPred, ensembleAccu
           <div style={{ color:C.muted, fontSize:11 }}>DeepSeek fires at each 5-minute bar open — results will appear here once the first bar resolves.</div>
         </div>
       ) : deepseekLog.map(row => {
-        const ws=row.window_start, isUp=row.signal==="UP";
-        const result=row.correct==null?"PENDING":row.correct?"WIN":"LOSS";
+        const ws=row.window_start, isUp=row.signal==="UP", isNeutral=row.signal==="NEUTRAL";
+        const result=isNeutral?"NO TRADE":row.correct==null?"PENDING":row.correct?"WIN":"LOSS";
         const reasons=(String(row.reasoning||"")).split("\n").filter(Boolean);
         const snap=(() => { try { return JSON.parse(row.strategy_snapshot||"{}"); } catch(_) { return {}; } })();
         const bullish=Object.values(snap).filter(s=>s?.signal==="UP").length;
@@ -448,16 +448,16 @@ function DeepSeekAuditTab({ deepseekLog, deepseekAcc, deepseekPred, ensembleAccu
         const wDate=new Date(ws*1000).toLocaleDateString([],{month:"short",day:"numeric"});
         return (
           <div key={ws} style={{ ...card, flexShrink:0,
-            borderLeft:`3px solid ${result==="WIN"?C.green:result==="LOSS"?C.red:C.amberBorder}` }}>
+            borderLeft:`3px solid ${result==="WIN"?C.green:result==="LOSS"?C.red:result==="NO TRADE"?C.muted:C.amberBorder}` }}>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6, flexWrap:"wrap" }}>
               <span style={{ fontSize:11, fontWeight:900, color:C.muted }}>#{row.window_count||"—"}</span>
               <span style={{ fontSize:11, fontWeight:700, color:C.textSec }}>{wDate} {wTime}</span>
               <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
                 <span style={{ fontSize:16, fontWeight:900, borderRadius:5, padding:"4px 14px",
-                  background:result==="WIN"?C.greenBg:result==="LOSS"?C.redBg:C.amberBg,
-                  color:result==="WIN"?C.green:result==="LOSS"?C.red:C.amber,
-                  border:`2px solid ${result==="WIN"?C.greenBorder:result==="LOSS"?C.redBorder:C.amberBorder}` }}>
-                  {result==="WIN"?"✓ WIN":result==="LOSS"?"✕ LOSS":"● PENDING"}
+                  background:result==="WIN"?C.greenBg:result==="LOSS"?C.redBg:result==="NO TRADE"?C.bg:C.amberBg,
+                  color:result==="WIN"?C.green:result==="LOSS"?C.red:result==="NO TRADE"?C.muted:C.amber,
+                  border:`2px solid ${result==="WIN"?C.greenBorder:result==="LOSS"?C.redBorder:result==="NO TRADE"?C.borderSoft:C.amberBorder}` }}>
+                  {result==="WIN"?"✓ WIN":result==="LOSS"?"✕ LOSS":result==="NO TRADE"?"— NO TRADE":"● PENDING"}
                 </span>
               </div>
             </div>
@@ -480,10 +480,10 @@ function DeepSeekAuditTab({ deepseekLog, deepseekAcc, deepseekPred, ensembleAccu
               </>) : <span style={{ fontSize:14, color:C.muted, alignSelf:"flex-end", paddingBottom:4 }}>→ PENDING</span>}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
-              <div style={{ fontSize:22, fontWeight:900, color:isUp?C.green:C.red }}>{isUp?"▲ UP":"▼ DOWN"}</div>
+              <div style={{ fontSize:22, fontWeight:900, color:isUp?C.green:isNeutral?C.amber:C.red }}>{isUp?"▲ UP":isNeutral?"— NEUTRAL":"▼ DOWN"}</div>
               <div style={{ fontSize:18, fontWeight:900, color:C.text }}>{row.confidence??"—"}%</div>
               <div style={{ flex:1, height:5, background:C.borderSoft, borderRadius:3, overflow:"hidden" }}>
-                <div style={{ width:`${row.confidence??50}%`, height:"100%", borderRadius:3, background:isUp?C.green:C.red }} />
+                <div style={{ width:`${row.confidence??50}%`, height:"100%", borderRadius:3, background:isUp?C.green:isNeutral?C.amber:C.red }} />
               </div>
               {row.latency_ms && <span style={{ fontSize:9, color:C.muted }}>{row.latency_ms}ms</span>}
             </div>
@@ -917,14 +917,16 @@ function microKV(key, d) {
 const FEAT_GROUPS = [
   { label:"Returns",  keys:[{k:"return_1",n:"1m"},{k:"return_2",n:"2m"},{k:"return_5",n:"5m"},{k:"return_10",n:"10m"},{k:"return_15",n:"15m"},{k:"return_30",n:"30m"}],
     fmt:(k,v)=>`${v>=0?"+":""}${v.toFixed(3)}%`, color:(k,v)=>v>0?C.green:v<0?C.red:C.muted },
-  { label:"RSI",      keys:[{k:"rsi_14",n:"RSI 14"},{k:"rsi_7",n:"RSI 7"}],
-    fmt:(k,v)=>v.toFixed(1), color:(k,v)=>v>70?C.red:v<30?C.green:C.textSec },
+  { label:"RSI(4)",   keys:[{k:"rsi_4",n:"RSI 4"}],
+    fmt:(k,v)=>v.toFixed(1), color:(k,v)=>v>80?C.red:v<20?C.green:C.textSec },
+  { label:"Stoch K(5)", keys:[{k:"stoch_k_5",n:"K(5)"}],
+    fmt:(k,v)=>v.toFixed(1), color:(k,v)=>v>80?C.red:v<20?C.green:C.textSec },
   { label:"MACD",     keys:[{k:"macd",n:"MACD"},{k:"macd_signal",n:"Signal"},{k:"macd_histogram",n:"Hist"}],
     fmt:(k,v)=>v.toFixed(4), color:(k,v)=>v>0?C.green:C.red },
   { label:"Bollinger",keys:[{k:"bollinger_pct_b",n:"%B"},{k:"bollinger_width",n:"Width"}],
     fmt:(k,v)=>v.toFixed(4), color:(k,v)=>k==="bollinger_pct_b"?(v>0.8?C.red:v<0.2?C.green:C.textSec):C.textSec },
-  { label:"Vol/VWAP", keys:[{k:"vwap_deviation",n:"VWAP Dev"},{k:"volume_ratio",n:"Vol Ratio"}],
-    fmt:(k,v)=>v.toFixed(4), color:(k,v)=>v>0?C.green:v<0?C.red:C.muted },
+  { label:"Vol/VWAP", keys:[{k:"vwap_ref",n:"VWAP"},{k:"price_vs_vwap",n:"Δ%"}],
+    fmt:(k,v)=>k==="vwap_ref"?`$${v.toFixed(2)}`:`${v>=0?"+":""}${v.toFixed(3)}%`, color:(k,v)=>k==="price_vs_vwap"?(v>0?C.green:v<0?C.red:C.muted):C.textSec },
 ];
 const FEAT_KNOWN = new Set(FEAT_GROUPS.flatMap(g=>g.keys.map(x=>x.k)));
 
@@ -1933,6 +1935,7 @@ function App() {
   const accuracy       = totalPreds>0?correctPreds/totalPreds*100:0;
   const allTimeTotal   = backtest?.all_time_total??0;
   const allTimeCorrect = backtest?.all_time_correct??0;
+  const allTimeNeutral = backtest?.all_time_neutral??0;
   const allTimeAccuracy= allTimeTotal>0?allTimeCorrect/allTimeTotal*100:0;
   const mins  = String(Math.floor(timeLeft/60)).padStart(2,"0");
   const secs  = String(timeLeft%60).padStart(2,"0");
@@ -2122,6 +2125,7 @@ function App() {
                           </div>
                           <AccuracyRow lbl="All-time accuracy"
                             pct={allTimeAccuracy} wins={allTimeCorrect} losses={allTimeTotal-allTimeCorrect}
+                            total={allTimeTotal+allTimeNeutral}
                             noData={allTimeTotal===0} />
                         </>) : <div style={{ fontSize:11, color:C.muted }}>Warming up…</div>}
                       </div>
@@ -2556,7 +2560,7 @@ function App() {
                 {[
                   ["Math Ensemble",
                     allTimeTotal>0?`${allTimeAccuracy.toFixed(1)}%`:"—",
-                    allTimeTotal>0?`${allTimeCorrect}W · ${allTimeTotal-allTimeCorrect}L`:"no data",
+                    allTimeTotal>0?`${allTimeCorrect}W · ${allTimeTotal-allTimeCorrect}L · ${allTimeNeutral}N`:"no data",
                     allTimeTotal>0?(allTimeAccuracy>=50?C.green:C.red):C.muted],
                   ["DeepSeek AI",
                     deepseekAcc?.total>0?`${(deepseekAcc.accuracy*100).toFixed(1)}%`:"—",
@@ -2653,16 +2657,20 @@ function App() {
                             return (
                               <tr key={i} style={{ borderBottom:`1px solid ${C.borderSoft}` }}>
                                 <td style={td}>{t}</td>
-                                <td style={{ ...td, color:p.signal==="UP"?C.green:C.red, fontWeight:700 }}>{p.signal==="UP"?"▲ UP":"▼ DN"}</td>
+                                <td style={{ ...td, color:p.signal==="UP"?C.green:p.signal==="NEUTRAL"?C.amber:C.red, fontWeight:700 }}>{p.signal==="UP"?"▲ UP":p.signal==="NEUTRAL"?"— N":"▼ DN"}</td>
                                 <td style={td}>{(p.confidence*100).toFixed(0)}%</td>
                                 <td style={td}>${p.start_price.toFixed(0)}</td>
                                 <td style={td}>{p.end_price!=null?`$${p.end_price.toFixed(0)}`:"—"}</td>
                                 <td style={{ ...td, color:delta>=0?C.green:C.red }}>{delta>=0?"+":""}{delta.toFixed(0)}</td>
                                 <td style={td}>
-                                  <span style={{ padding:"2px 7px", borderRadius:4, fontSize:9, fontWeight:700,
-                                    background:p.correct?C.greenBg:C.redBg,
-                                    border:`1px solid ${p.correct?C.greenBorder:C.redBorder}`,
-                                    color:p.correct?C.green:C.red }}>{p.correct?"✓ WIN":"✕ LOSS"}</span>
+                                  {p.signal==="NEUTRAL"
+                                    ? <span style={{ padding:"2px 7px", borderRadius:4, fontSize:9, fontWeight:700,
+                                        background:C.bg, border:`1px solid ${C.borderSoft}`, color:C.muted }}>— N/A</span>
+                                    : <span style={{ padding:"2px 7px", borderRadius:4, fontSize:9, fontWeight:700,
+                                        background:p.correct?C.greenBg:C.redBg,
+                                        border:`1px solid ${p.correct?C.greenBorder:C.redBorder}`,
+                                        color:p.correct?C.green:C.red }}>{p.correct?"✓ WIN":"✕ LOSS"}</span>
+                                  }
                                 </td>
                               </tr>
                             );

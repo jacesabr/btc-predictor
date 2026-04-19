@@ -131,7 +131,8 @@ class Storage:
                     actual = "UP" if end_price >= r["start_price"] else "DOWN"
                     r["end_price"] = end_price
                     r["actual_direction"] = actual
-                    r["correct"] = 1 if actual == r["signal"] else 0
+                    # NEUTRAL is an abstention — not scored as correct or wrong
+                    r["correct"] = None if r.get("signal") == "NEUTRAL" else (1 if actual == r["signal"] else 0)
                     updated = True
                     break
             if updated:
@@ -141,7 +142,7 @@ class Storage:
         cutoff = _score_reset_at()
         with self._lock:
             records = _read_ndjson(self._preds_path)
-        resolved = [r for r in records if r.get("correct") is not None and r["window_start"] >= cutoff]
+        resolved = [r for r in records if r.get("correct") is not None and r.get("signal") != "NEUTRAL" and r["window_start"] >= cutoff]
         resolved.sort(key=lambda r: r["window_start"], reverse=True)
         resolved = resolved[:n]
         if not resolved:
@@ -150,16 +151,18 @@ class Storage:
         correct = sum(1 for r in resolved if r["correct"])
         return total, correct, correct / total
 
-    def get_total_accuracy(self) -> Tuple[int, int, float]:
+    def get_total_accuracy(self) -> Tuple[int, int, float, int]:
         cutoff = _score_reset_at()
         with self._lock:
             records = _read_ndjson(self._preds_path)
-        resolved = [r for r in records if r.get("correct") is not None and r["window_start"] >= cutoff]
+        scoped   = [r for r in records if r["window_start"] >= cutoff]
+        resolved = [r for r in scoped if r.get("correct") is not None and r.get("signal") != "NEUTRAL"]
+        neutral  = sum(1 for r in scoped if r.get("signal") == "NEUTRAL")
         if not resolved:
-            return 0, 0, 0.0
-        total = len(resolved)
+            return 0, 0, 0.0, neutral
+        total   = len(resolved)
         correct = sum(1 for r in resolved if r["correct"])
-        return total, correct, correct / total
+        return total, correct, correct / total, neutral
 
     def get_strategy_rolling_accuracy(self, n: int = 20) -> Dict[str, float]:
         cutoff = _score_reset_at()
@@ -290,7 +293,8 @@ class Storage:
                     actual = "UP" if end_price >= r["start_price"] else "DOWN"
                     r["end_price"] = end_price
                     r["actual_direction"] = actual
-                    r["correct"] = 1 if actual == r["signal"] else 0
+                    # NEUTRAL is an abstention — not scored as correct or wrong
+                    r["correct"] = None if r.get("signal") == "NEUTRAL" else (1 if actual == r["signal"] else 0)
                     updated = True
                     break
             if updated:
@@ -309,6 +313,9 @@ class Storage:
         for r in ens_records:
             ws = r["window_start"]
             if ws in ds_map and r.get("actual_direction") and ws >= cutoff:
+                # Only count agreement on directional predictions — skip NEUTRAL on either side
+                if r.get("signal") == "NEUTRAL" or ds_map[ws].get("signal") == "NEUTRAL":
+                    continue
                 if ds_map[ws]["signal"] == r["signal"]:
                     total += 1
                     if r["actual_direction"] == r["signal"]:
@@ -324,15 +331,15 @@ class Storage:
         with self._lock:
             records = _read_ndjson(self._ds_path)
         scoped   = [r for r in records if r["window_start"] >= cutoff]
-        resolved = [r for r in scoped if r.get("correct") is not None]
-        if not resolved:
-            return {"total": 0, "correct": 0, "accuracy": 0.0}
-        total = len(resolved)
-        correct = sum(1 for r in resolved if r["correct"])
         neutrals = sum(1 for r in scoped if r.get("signal") == "NEUTRAL")
-        directional = total - sum(1 for r in resolved if r.get("signal") == "NEUTRAL")
+        # Only score directional predictions — NEUTRAL is an abstention
+        resolved = [r for r in scoped if r.get("correct") is not None and r.get("signal") != "NEUTRAL"]
+        if not resolved:
+            return {"total": 0, "correct": 0, "accuracy": 0.0, "neutrals": neutrals, "directional": 0}
+        total   = len(resolved)
+        correct = sum(1 for r in resolved if r["correct"])
         return {"total": total, "correct": correct, "accuracy": correct / total if total > 0 else 0.0,
-                "neutrals": neutrals, "directional": directional}
+                "neutrals": neutrals, "directional": total}
 
     def get_recent_deepseek_predictions(self, n: int = 50) -> List[Dict]:
         with self._lock:

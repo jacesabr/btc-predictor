@@ -197,19 +197,26 @@ class FeatureEngine:
         features = {}
         p = np.array(prices)
 
-        for lookback in [1, 2, 5, 10, 15, 30]:
-            if len(p) > lookback:
-                features[f"return_{lookback}"] = (p[-1] / p[-1 - lookback] - 1) * 100
+        # All bar-based indicators use 1m kline closes as the canonical source.
+        # Raw tick prices (p) are only used as a last resort when klines are unavailable.
+        if ohlcv and len(ohlcv) >= 10:
+            p_bar = np.array([float(k[4]) for k in ohlcv], dtype=float)
+        else:
+            p_bar = p
 
-        features["rsi_14"] = FeatureEngine._rsi(p, 14)
-        features["rsi_7"]  = FeatureEngine._rsi(p, 7)
+        for lookback in [1, 2, 5, 10, 15, 30]:
+            if len(p_bar) > lookback:
+                features[f"return_{lookback}"] = (p_bar[-1] / p_bar[-1 - lookback] - 1) * 100
+
+        # RSI(4) on 1m closes — matches RSIStrategy.PERIOD
+        features["rsi_4"] = FeatureEngine._rsi(p_bar, 4)
 
         k12 = 2 / (12 + 1); k26 = 2 / (26 + 1)
-        ema12 = np.empty(len(p)); ema26 = np.empty(len(p))
-        ema12[0] = ema26[0] = p[0]
-        for i in range(1, len(p)):
-            ema12[i] = p[i] * k12 + ema12[i-1] * (1 - k12)
-            ema26[i] = p[i] * k26 + ema26[i-1] * (1 - k26)
+        ema12 = np.empty(len(p_bar)); ema26 = np.empty(len(p_bar))
+        ema12[0] = ema26[0] = p_bar[0]
+        for i in range(1, len(p_bar)):
+            ema12[i] = p_bar[i] * k12 + ema12[i-1] * (1 - k12)
+            ema26[i] = p_bar[i] * k26 + ema26[i-1] * (1 - k26)
         macd_s = ema12 - ema26
         k9 = 2 / (9 + 1)
         sig_s = np.empty(len(macd_s)); sig_s[0] = macd_s[0]
@@ -219,37 +226,45 @@ class FeatureEngine:
         features["macd_signal"]     = float(sig_s[-1])
         features["macd_histogram"]  = float(macd_s[-1] - sig_s[-1])
 
-        sma20 = np.mean(p[-20:]); std20 = np.std(p[-20:])
-        if std20 > 0:
-            features["bollinger_pct_b"] = (p[-1] - (sma20 - 2*std20)) / (4*std20)
-            features["bollinger_width"] = (4*std20) / sma20
-        else:
-            features["bollinger_pct_b"] = 0.5
-            features["bollinger_width"] = 0
+        if len(p_bar) >= 20:
+            sma20 = np.mean(p_bar[-20:]); std20 = np.std(p_bar[-20:])
+            if std20 > 0:
+                features["bollinger_pct_b"] = (p_bar[-1] - (sma20 - 2*std20)) / (4*std20)
+                features["bollinger_width"] = (4*std20) / sma20
+            else:
+                features["bollinger_pct_b"] = 0.5
+                features["bollinger_width"] = 0
 
-        for period in [14, 7]:
-            window = p[-period:]
-            lo, hi = np.min(window), np.max(window)
-            features[f"stoch_k_{period}"] = ((p[-1] - lo) / (hi - lo) * 100) if hi != lo else 50
+        # Stochastic K(5) using true High/Low from 1m klines, matching StochasticStrategy
+        if ohlcv and len(ohlcv) >= 5:
+            bars = ohlcv[-5:]
+            lo = min(float(b[3]) for b in bars)
+            hi = max(float(b[2]) for b in bars)
+            c  = float(ohlcv[-1][4])
+            features["stoch_k_5"] = ((c - lo) / (hi - lo) * 100) if hi != lo else 50.0
+        elif len(p_bar) >= 5:
+            window = p_bar[-5:]
+            lo, hi = float(np.min(window)), float(np.max(window))
+            features["stoch_k_5"] = ((float(p_bar[-1]) - lo) / (hi - lo) * 100) if hi != lo else 50.0
 
         for period in [5, 8, 13, 21]:
-            features[f"ema_{period}"] = FeatureEngine._ema(p, period)
-            features[f"price_vs_ema_{period}"] = (p[-1] / features[f"ema_{period}"] - 1) * 100
+            features[f"ema_{period}"] = FeatureEngine._ema(p_bar, period)
+            features[f"price_vs_ema_{period}"] = (p_bar[-1] / features[f"ema_{period}"] - 1) * 100
         features["ema_cross_8_21"] = features["ema_8"] - features["ema_21"]
 
         for lookback in [5, 10, 20]:
-            if len(p) > lookback:
-                returns = np.diff(p[-lookback:]) / p[-lookback:-1]
+            if len(p_bar) > lookback:
+                returns = np.diff(p_bar[-lookback:]) / p_bar[-lookback:-1]
                 features[f"volatility_{lookback}"] = np.std(returns) * 100
 
         for lookback in [10, 30, 60]:
-            if len(p) > lookback:
-                window = p[-lookback:]
+            if len(p_bar) > lookback:
+                window = p_bar[-lookback:]
                 lo, hi = np.min(window), np.max(window)
-                features[f"price_position_{lookback}"] = ((p[-1] - lo) / (hi - lo)) if hi != lo else 0.5
+                features[f"price_position_{lookback}"] = ((p_bar[-1] - lo) / (hi - lo)) if hi != lo else 0.5
 
-        if len(p) > 10:
-            mom5 = p[-1] - p[-6]; mom5_prev = p[-2] - p[-7]
+        if len(p_bar) > 10:
+            mom5 = p_bar[-1] - p_bar[-6]; mom5_prev = p_bar[-2] - p_bar[-7]
             features["momentum_acceleration"] = mom5 - mom5_prev
 
         if spreads and len(spreads) > 10:
@@ -264,7 +279,7 @@ class FeatureEngine:
             vwap = FeatureEngine._vwap(ohlcv[-20:])
             if vwap > 0:
                 features["vwap_ref"]      = vwap
-                features["price_vs_vwap"] = (p[-1] / vwap - 1) * 100
+                features["price_vs_vwap"] = (p_bar[-1] / vwap - 1) * 100
             obv_slope = FeatureEngine._obv(ohlcv[-10:]) - FeatureEngine._obv(ohlcv[-20:-10])
             features["obv_slope"] = obv_slope
             vols = [float(k[5]) for k in ohlcv[-20:]]
@@ -273,14 +288,14 @@ class FeatureEngine:
             if vwap > 0:
                 tp_vals = [(float(k[2])+float(k[3])+float(k[4]))/3 for k in ohlcv[-20:]]
                 std_tp = float(np.std(tp_vals))
-                features["vwap_band_pos"] = (p[-1] - vwap) / (2 * std_tp) if std_tp > 0 else 0
+                features["vwap_band_pos"] = (p_bar[-1] - vwap) / (2 * std_tp) if std_tp > 0 else 0
 
-        if len(p) > 20:
+        if len(p_bar) > 20:
             x = np.arange(20)
-            slope, intercept = np.polyfit(x, p[-20:], 1)
+            slope, intercept = np.polyfit(x, p_bar[-20:], 1)
             predicted = slope * x + intercept
-            ss_res = np.sum((p[-20:] - predicted) ** 2)
-            ss_tot = np.sum((p[-20:] - np.mean(p[-20:])) ** 2)
+            ss_res = np.sum((p_bar[-20:] - predicted) ** 2)
+            ss_tot = np.sum((p_bar[-20:] - np.mean(p_bar[-20:])) ** 2)
             features["trend_r_squared"] = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
             features["trend_slope"]     = slope
 

@@ -94,6 +94,7 @@ class BacktestResponse(BaseModel):
     all_time_total: int
     all_time_correct: int
     all_time_accuracy: float
+    all_time_neutral: int
     strategy_accuracies: Dict[str, float]
 
 class EVRequest(BaseModel):
@@ -175,11 +176,12 @@ async def calculate_expected_value(req: EVRequest):
 @app.get("/backtest", response_model=BacktestResponse)
 async def get_backtest():
     total, correct, accuracy = _safe_storage(storage.get_rolling_accuracy, config.rolling_window_size, default=(0, 0, 0.0))
-    at_total, at_correct, at_accuracy = _safe_storage(storage.get_total_accuracy, default=(0, 0, 0.0))
+    at_total, at_correct, at_accuracy, at_neutral = _safe_storage(storage.get_total_accuracy, default=(0, 0, 0.0, 0))
     strategy_acc = _safe_storage(storage.get_strategy_rolling_accuracy, default={})
     return BacktestResponse(
         total_predictions=total, correct_predictions=correct, accuracy=accuracy,
         all_time_total=at_total, all_time_correct=at_correct, all_time_accuracy=at_accuracy,
+        all_time_neutral=at_neutral,
         strategy_accuracies=strategy_acc,
     )
 
@@ -473,6 +475,27 @@ async def reset_scores():
         reset_path = pathlib.Path(__file__).parent / "score_reset.json"
         reset_path.write_text(_json.dumps({"reset_at": now, "reset_note": note}))
     return {"status": "ok", "reset_at": now, "note": note}
+
+
+@app.post("/admin/fix-neutral-correct")
+async def fix_neutral_correct():
+    """One-time migration: set correct=NULL for all NEUTRAL deepseek predictions."""
+    try:
+        from storage_pg import _conn, _put
+        conn = _conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE deepseek_predictions SET correct = NULL "
+                    "WHERE signal = 'NEUTRAL' AND correct IS NOT NULL"
+                )
+                updated = cur.rowcount
+            conn.commit()
+        finally:
+            _put(conn)
+        return {"status": "ok", "rows_updated": updated}
+    except Exception as exc:
+        return {"status": "error", "detail": str(exc)}
 
 
 @app.post("/admin/reset")
