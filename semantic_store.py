@@ -90,6 +90,7 @@ def append_resolved_window(
     accuracy_snapshot:      Optional[Dict]       = None,
     full_prompt:            str                  = "",
     trade_action:           str                  = "",
+    window_count:           int                  = 0,
 ):
     """Append one fully resolved bar to the history file. Thread-safe."""
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -97,6 +98,7 @@ def append_resolved_window(
     record = {
         "window_start":       window_start,
         "window_end":         window_end or window_start + 300,
+        "window_count":       window_count,
         "actual_direction":   actual_direction,
         "start_price":        start_price,
         "end_price":          end_price,

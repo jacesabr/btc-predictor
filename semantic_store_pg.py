@@ -108,12 +108,14 @@ def append_resolved_window(
     accuracy_snapshot:      Optional[Dict]       = None,
     full_prompt:            str                  = "",
     trade_action:           str                  = "",
+    window_count:           int                  = 0,
 ):
     _init()
     dt = datetime.fromtimestamp(window_start, tz=timezone.utc)
     record = {
         "window_start":       window_start,
         "window_end":         window_end or window_start + 300,
+        "window_count":       window_count,
         "actual_direction":   actual_direction,
         "start_price":        start_price,
         "end_price":          end_price,

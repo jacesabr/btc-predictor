@@ -786,6 +786,7 @@ async def _resolve_window(
                 accuracy_snapshot  = accuracy_snapshot,
                 full_prompt        = ds_pred_snap.get("full_prompt", ""),
                 trade_action       = _trade_action,
+                window_count       = ds_pred_snap.get("window_count") or (deepseek.window_count if deepseek else 0),
             )
         except Exception as ph_exc:
             logger.warning("Pattern history append failed: %s", ph_exc)
