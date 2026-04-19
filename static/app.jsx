@@ -405,251 +405,322 @@ function MicroSummary({ ob, tk, ls, lq, oif, cz, ca, fg, mp, cg, dots, caDivPct,
 
 // ── DeepSeek Audit Tab ────────────────────────────────────────
 function DeepSeekAuditTab({ deepseekLog, deepseekAcc, deepseekPred, ensembleAccuracy, totalPreds, correctPreds, agreeAcc }) {
-  const [expanded, setExpanded] = useState({});
+  const [expanded, setExpanded]     = useState({});
   const [detailCache, setDetailCache] = useState({});
-  function chartOpen(ws) { return expanded[`${ws}_chart`] !== false; }
-  function toggle(key) { setExpanded(e => ({ ...e, [key]: !e[key] })); }
-  function toggleChart(ws) { setExpanded(e => ({ ...e, [`${ws}_chart`]: e[`${ws}_chart`]===false })); }
 
-  async function toggleDetail(ws, field) {
-    const key = `${ws}_${field}`;
-    if (expanded[key]) { toggle(key); return; }
-    // Fetch full record if not cached
+  async function toggleBar(ws) {
+    if (expanded[ws]) { setExpanded(e => ({ ...e, [ws]: false })); return; }
     if (!detailCache[ws]) {
       try {
         const r = await fetch(`/deepseek/predictions/${ws}`);
         if (r.ok) setDetailCache(c => ({ ...c, [ws]: await r.json() }));
       } catch(_) {}
     }
-    toggle(key);
+    setExpanded(e => ({ ...e, [ws]: true }));
   }
 
   const pending = deepseekPred && deepseekPred.signal !== "ERROR";
+  const total   = deepseekLog ? deepseekLog.length : 0;
 
   return (
-    <div style={{ height:"100%", overflowY:"auto", display:"flex", flexDirection:"column", gap:6 }}>
-      <div style={{ display:"flex", gap:6, flexShrink:0 }}>
-        {pending && (
-          <div style={{ ...card, flex:1, display:"flex", alignItems:"center", gap:12 }}>
-            <div style={{ fontSize:22, fontWeight:900, color:deepseekPred.signal==="UP"?C.green:deepseekPred.signal==="NEUTRAL"?C.amber:C.red }}>
-              {deepseekPred.signal==="UP"?"▲ UP":deepseekPred.signal==="NEUTRAL"?"— NEUTRAL":"▼ DOWN"}
-            </div>
-            <div>
-              <div style={{ fontSize:18, fontWeight:800, color:C.text }}>{deepseekPred.confidence}%</div>
-              <div style={{ fontSize:9, color:C.muted }}>#{deepseekPred.window_count} · {deepseekPred.latency_ms}ms</div>
-            </div>
-            <div style={{ marginLeft:"auto", fontSize:10, fontWeight:700, color:C.amber,
-              background:C.amberBg, border:`1px solid ${C.amberBorder}`, borderRadius:4, padding:"2px 8px" }}>PENDING</div>
+    <div style={{ height:"100%", overflowY:"auto", display:"flex", flexDirection:"column", gap:3 }}>
+      {/* Pending banner */}
+      {pending && (
+        <div style={{ ...card, flexShrink:0, display:"flex", alignItems:"center", gap:12, padding:"7px 12px" }}>
+          <div style={{ fontSize:20, fontWeight:900, color:deepseekPred.signal==="UP"?C.green:deepseekPred.signal==="NEUTRAL"?C.amber:C.red }}>
+            {deepseekPred.signal==="UP"?"▲ UP":deepseekPred.signal==="NEUTRAL"?"— NEUTRAL":"▼ DOWN"}
           </div>
-        )}
-      </div>
+          <div>
+            <div style={{ fontSize:16, fontWeight:800, color:C.text }}>{deepseekPred.confidence}%</div>
+            <div style={{ fontSize:9, color:C.muted }}>#{deepseekPred.window_count} · {deepseekPred.latency_ms}ms</div>
+          </div>
+          <div style={{ marginLeft:"auto", fontSize:10, fontWeight:700, color:C.amber,
+            background:C.amberBg, border:`1px solid ${C.amberBorder}`, borderRadius:4, padding:"2px 8px" }}>PENDING</div>
+        </div>
+      )}
+
+      {/* Count header */}
+      {total > 0 && (
+        <div style={{ ...card, flexShrink:0, padding:"4px 12px", display:"flex", alignItems:"center", gap:10 }}>
+          <span style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase", letterSpacing:1 }}>
+            {total} bars logged
+          </span>
+          <span style={{ fontSize:9, color:C.muted }}>· click any row to expand full record</span>
+        </div>
+      )}
 
       {(!deepseekLog || !deepseekLog.length) ? (
         <div style={{ ...card, textAlign:"center", padding:30 }}>
           <div style={{ color:C.muted, fontSize:13, fontWeight:700, marginBottom:6 }}>No historical data found</div>
           <div style={{ color:C.muted, fontSize:11 }}>DeepSeek fires at each 5-minute bar open — results will appear here once the first bar resolves.</div>
         </div>
-      ) : deepseekLog.map(row => {
-        const ws=row.window_start, isUp=row.signal==="UP", isNeutral=row.signal==="NEUTRAL";
-        const result=isNeutral?"NO TRADE":row.correct==null?"PENDING":row.correct?"WIN":"LOSS";
-        const reasons=(String(row.reasoning||"")).split("\n").filter(Boolean);
-        const snap=(() => { try { return JSON.parse(row.strategy_snapshot||"{}"); } catch(_) { return {}; } })();
-        const bullish=Object.values(snap).filter(s=>s?.signal==="UP").length;
-        const bearish=Object.values(snap).filter(s=>s?.signal==="DOWN").length;
-        const imgUrl = row.chart_path ? ("/charts/" + String(row.chart_path).replace(/\\/g,"/").split("/").pop()) : null;
-        const dataReq = row.data_requests && String(row.data_requests).toUpperCase()!=="NONE" ? row.data_requests : "";
-        const showPrompt=!!expanded[`${ws}_prompt`], showRaw=!!expanded[`${ws}_raw`];
-        const detail = detailCache[ws] || {};
-        const fullPrompt = detail.full_prompt || row.full_prompt || "";
-        const rawResponse = detail.raw_response || row.raw_response || "";
-        const wTime=new Date(ws*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});
-        const wDate=new Date(ws*1000).toLocaleDateString([],{month:"short",day:"numeric"});
+      ) : deepseekLog.map((row, idx) => {
+        const ws       = row.window_start;
+        const isUp     = row.signal === "UP";
+        const isNeutral= row.signal === "NEUTRAL";
+        const result   = isNeutral ? "NO TRADE" : row.correct == null ? "PENDING" : row.correct ? "WIN" : "LOSS";
+        const isExp    = !!expanded[ws];
+        const detail   = detailCache[ws] || null;
+        const barNum   = row.window_count || (total - idx);
+        const d        = new Date(ws * 1000);
+        const wDate    = d.toLocaleDateString([], { month:"short", day:"numeric" });
+        const wTime    = String(d.getUTCHours()).padStart(2,"0") + ":" + String(d.getUTCMinutes()).padStart(2,"0") + " UTC";
+        const delta    = row.end_price != null ? ((row.end_price - row.start_price) / row.start_price * 100) : null;
+        const bdrColor = result==="WIN"?C.green:result==="LOSS"?C.red:result==="NO TRADE"?C.muted:C.amberBorder;
+
         return (
-          <div key={ws} style={{ ...card, flexShrink:0,
-            borderLeft:`3px solid ${result==="WIN"?C.green:result==="LOSS"?C.red:result==="NO TRADE"?C.muted:C.amberBorder}` }}>
-            <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6, flexWrap:"wrap" }}>
-              <span style={{ fontSize:11, fontWeight:900, color:C.muted }}>#{row.window_count||"—"}</span>
-              <span style={{ fontSize:11, fontWeight:700, color:C.textSec }}>{wDate} {wTime}</span>
-              <div style={{ marginLeft:"auto", display:"flex", gap:6, alignItems:"center" }}>
-                <span style={{ fontSize:16, fontWeight:900, borderRadius:5, padding:"4px 14px",
-                  background:result==="WIN"?C.greenBg:result==="LOSS"?C.redBg:result==="NO TRADE"?C.bg:C.amberBg,
-                  color:result==="WIN"?C.green:result==="LOSS"?C.red:result==="NO TRADE"?C.muted:C.amber,
-                  border:`2px solid ${result==="WIN"?C.greenBorder:result==="LOSS"?C.redBorder:result==="NO TRADE"?C.borderSoft:C.amberBorder}` }}>
-                  {result==="WIN"?"✓ WIN":result==="LOSS"?"✕ LOSS":result==="NO TRADE"?"— NO TRADE":"● PENDING"}
-                </span>
-              </div>
+          <div key={ws} style={{ background:C.surface, border:`1px solid ${C.border}`, borderRadius:8,
+            borderLeft:`3px solid ${bdrColor}`, flexShrink:0, overflow:"hidden" }}>
+
+            {/* ── Collapsed summary row (always visible) ── */}
+            <div onClick={() => toggleBar(ws)} style={{
+              display:"flex", alignItems:"center", gap:6, padding:"6px 10px",
+              cursor:"pointer", userSelect:"none",
+              background: isExp ? (result==="WIN"?C.greenBg:result==="LOSS"?C.redBg:result==="NO TRADE"?C.bg:C.amberBg) : C.surface,
+            }}>
+              <span style={{ fontSize:10, fontWeight:900, color:C.muted, minWidth:38, flexShrink:0 }}>
+                #{String(barNum).padStart(3,"0")}
+              </span>
+              <span style={{ fontSize:9, color:C.textSec, minWidth:96, flexShrink:0 }}>
+                {wDate} {wTime}
+              </span>
+              <span style={{ fontSize:11, fontWeight:800, color:isUp?C.green:isNeutral?C.amber:C.red, minWidth:48, flexShrink:0 }}>
+                {isUp?"▲ UP":isNeutral?"— N":"▼ DN"}
+              </span>
+              <span style={{ fontSize:10, color:C.textSec, minWidth:36, flexShrink:0 }}>
+                {row.confidence ?? "—"}%
+              </span>
+              {delta != null
+                ? <span style={{ fontSize:10, fontWeight:700, color:delta>=0?C.green:C.red, minWidth:58, flexShrink:0 }}>
+                    {delta>=0?"+":""}{delta.toFixed(3)}%
+                  </span>
+                : <span style={{ minWidth:58, flexShrink:0 }} />
+              }
+              <span style={{ fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:3, flexShrink:0,
+                background:result==="WIN"?C.greenBg:result==="LOSS"?C.redBg:result==="NO TRADE"?C.bg:C.amberBg,
+                color:result==="WIN"?C.green:result==="LOSS"?C.red:result==="NO TRADE"?C.muted:C.amber,
+                border:`1px solid ${result==="WIN"?C.greenBorder:result==="LOSS"?C.redBorder:result==="NO TRADE"?C.borderSoft:C.amberBorder}` }}>
+                {result==="WIN"?"✓ WIN":result==="LOSS"?"✕ LOSS":result==="NO TRADE"?"— N/A":"● PEND"}
+              </span>
+              {row.latency_ms
+                ? <span style={{ fontSize:9, color:C.muted, flexShrink:0 }}>{row.latency_ms}ms</span>
+                : null}
+              <span style={{ marginLeft:"auto", fontSize:9, color:C.muted, flexShrink:0 }}>
+                {isExp ? "▲" : "▼"}
+              </span>
             </div>
-            <div style={{ display:"flex", alignItems:"baseline", gap:10, marginBottom:10, flexWrap:"wrap" }}>
-              <div>
-                <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase" }}>Start</div>
-                <div style={{ fontSize:22, fontWeight:900, color:C.text }}>${row.start_price?.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-              </div>
-              {row.end_price!=null ? (<>
-                <span style={{ fontSize:20, color:C.muted }}>→</span>
-                <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase" }}>End</div>
-                  <div style={{ fontSize:22, fontWeight:900, color:row.end_price>=row.start_price?C.green:C.red }}>
-                    ${row.end_price?.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
-                  </div>
-                </div>
-                <span style={{ fontSize:14, fontWeight:800, color:row.end_price>=row.start_price?C.green:C.red, alignSelf:"flex-end", paddingBottom:2 }}>
-                  {row.end_price>=row.start_price?"+":""}{((row.end_price-row.start_price)/row.start_price*100).toFixed(3)}%
-                </span>
-              </>) : <span style={{ fontSize:14, color:C.muted, alignSelf:"flex-end", paddingBottom:4 }}>→ PENDING</span>}
-            </div>
-            <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:8 }}>
-              <div style={{ fontSize:22, fontWeight:900, color:isUp?C.green:isNeutral?C.amber:C.red }}>{isUp?"▲ UP":isNeutral?"— NEUTRAL":"▼ DOWN"}</div>
-              <div style={{ fontSize:18, fontWeight:900, color:C.text }}>{row.confidence??"—"}%</div>
-              <div style={{ flex:1, height:5, background:C.borderSoft, borderRadius:3, overflow:"hidden" }}>
-                <div style={{ width:`${row.confidence??50}%`, height:"100%", borderRadius:3, background:isUp?C.green:isNeutral?C.amber:C.red }} />
-              </div>
-              {row.latency_ms && <span style={{ fontSize:9, color:C.muted }}>{row.latency_ms}ms</span>}
-            </div>
-            {Object.keys(snap).length>0 && (
-              <div style={{ background:C.bg, border:`1px solid ${C.borderSoft}`, borderRadius:5, padding:"5px 8px", marginBottom:8 }}>
-                <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                  <span style={{ fontSize:9, color:C.muted, fontWeight:700, letterSpacing:1, textTransform:"uppercase" }}>Strategies</span>
-                  <span style={{ fontSize:10, fontWeight:800, color:C.green }}>{bullish}↑</span>
-                  <span style={{ fontSize:10, fontWeight:800, color:C.red }}>{bearish}↓</span>
-                  <div style={{ marginLeft:"auto", display:"flex", gap:3, flexWrap:"wrap" }}>
-                    {Object.entries(snap).slice(0,13).map(([k,s]) => {
-                      const meta=STRATEGY_META.find(m=>m.key===k);
-                      if (!s?.signal) return null;
-                      return (
-                        <span key={k} style={{ fontSize:8, fontWeight:700, padding:"1px 4px", borderRadius:3,
-                          color:s.signal==="UP"?C.green:C.red,
-                          background:s.signal==="UP"?C.greenBg:C.redBg,
-                          border:`1px solid ${s.signal==="UP"?C.greenBorder:C.redBorder}` }}>
-                          {meta?.name||k} {s.signal==="UP"?"▲":"▼"}
-                        </span>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-            {imgUrl && (
-              <div style={{ marginBottom:8 }}>
-                <div style={{ fontSize:9, color:C.muted, fontWeight:700, letterSpacing:1, textTransform:"uppercase", marginBottom:4 }}>
-                  Chart at prediction time · 30 min 1m candles
-                </div>
-                <img src={imgUrl} alt="BTC chart at prediction time"
-                  style={{ width:"100%", borderRadius:5, border:`1px solid ${C.borderSoft}`,
-                    display:"block", cursor:"pointer" }}
-                  onClick={()=>window.open(imgUrl,"_blank")}
-                />
-              </div>
-            )}
-            {reasons.length>0 && (
-              <div style={{ marginBottom:8 }}>
-                <div style={{ fontSize:9, color:C.muted, fontWeight:700, letterSpacing:1, textTransform:"uppercase", marginBottom:5 }}>Analysis</div>
-                {reasons.map((line,i) => (
-                  <div key={i} style={{ display:"flex", gap:8, marginBottom:i<reasons.length-1?6:0, alignItems:"flex-start" }}>
-                    <span style={{ fontSize:10, fontWeight:900, color:C.amber, minWidth:16, flexShrink:0 }}>{i+1}.</span>
-                    <span style={{ fontSize:11, color:C.textSec, lineHeight:1.6 }}><BoldAnalysis text={line} color={C.text} /></span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {row.narrative && (
-              <div style={{ background:C.blueBg, border:`1px solid ${C.blueBorder}`,
-                borderLeft:`3px solid ${C.blue}`, borderRadius:5, padding:"6px 10px", marginBottom:8 }}>
-                <div style={{ fontSize:8, fontWeight:700, color:C.blue, textTransform:"uppercase", letterSpacing:1, marginBottom:3 }}>Price Narrative</div>
-                <div style={{ fontSize:11, color:"#1E40AF", lineHeight:1.75, fontStyle:"italic" }}>{row.narrative}</div>
-              </div>
-            )}
-            {row.free_observation && (
-              <div style={{ background:C.amberBg, border:`1px solid ${C.amberBorder}`,
-                borderLeft:`3px solid ${C.amber}`, borderRadius:5, padding:"6px 10px", marginBottom:8 }}>
-                <div style={{ fontSize:8, fontWeight:700, color:C.amber, textTransform:"uppercase", letterSpacing:1, marginBottom:3 }}>AI Free Observation</div>
-                <div style={{ fontSize:11, color:C.amber, lineHeight:1.75 }}>{row.free_observation}</div>
-              </div>
-            )}
-            {row.postmortem ? (
-              <div style={{ background:"#F5F3FF", border:"1px solid #C4B5FD",
-                borderLeft:"3px solid #7C3AED", borderRadius:5, padding:"6px 10px", marginBottom:8 }}>
-                <div style={{ fontSize:8, fontWeight:700, color:"#7C3AED", textTransform:"uppercase", letterSpacing:1, marginBottom:5 }}>
-                  Post-Mortem · DeepSeek Self-Analysis
-                </div>
-                {row.postmortem.split("\n").filter(Boolean).map((line, i) => {
-                  const colonIdx = line.indexOf(":");
-                  if (colonIdx > 0 && colonIdx < 25) {
-                    const label = line.slice(0, colonIdx);
-                    const body  = line.slice(colonIdx + 1).trim();
-                    return (
-                      <div key={i} style={{ marginBottom:4, lineHeight:1.6 }}>
-                        <span style={{ fontSize:9, fontWeight:900, color:"#7C3AED", textTransform:"uppercase", letterSpacing:0.5 }}>{label}: </span>
-                        <span style={{ fontSize:11, color:"#4C1D95" }}>{body}</span>
-                      </div>
-                    );
-                  }
-                  return <div key={i} style={{ fontSize:11, color:"#4C1D95", lineHeight:1.6, marginBottom:2 }}>{line}</div>;
-                })}
-              </div>
-            ) : row.actual_direction && row.signal && row.signal !== "NEUTRAL" && (
-              <div style={{ background:"#F5F3FF", border:"1px dashed #C4B5FD", borderRadius:5,
-                padding:"5px 10px", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
-                <span style={{ fontSize:9, color:"#A78BFA" }}>⏳</span>
-                <span style={{ fontSize:9, color:"#7C3AED", fontWeight:700 }}>Post-mortem pending — DeepSeek is analyzing this result in background</span>
-              </div>
-            )}
-            {(row.data_received || dataReq) && (
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
-                {row.data_received && (
-                  <div style={{ flex:1, background:C.blueBg, border:`1px solid ${C.blueBorder}`, borderRadius:4, padding:"4px 7px" }}>
-                    <div style={{ fontSize:8, fontWeight:700, color:C.blue, letterSpacing:1, textTransform:"uppercase", marginBottom:2 }}>AI confirmed data</div>
-                    <div style={{ fontSize:10, color:"#1E40AF" }}>{row.data_received}</div>
-                  </div>
-                )}
-                {dataReq && (
-                  <div style={{ flex:1, background:C.amberBg, border:`1px solid ${C.amberBorder}`, borderRadius:4, padding:"4px 7px" }}>
-                    <div style={{ fontSize:8, fontWeight:700, color:C.amber, letterSpacing:1, textTransform:"uppercase", marginBottom:2 }}>AI requested additional data</div>
-                    <div style={{ fontSize:10, color:C.amber }}>{dataReq}</div>
-                  </div>
-                )}
-              </div>
-            )}
-            <div style={{ display:"flex", gap:5, borderTop:`1px solid ${C.borderSoft}`, paddingTop:6, flexWrap:"wrap", alignItems:"center" }}>
-              <button onClick={()=>toggleDetail(ws,"prompt")} style={{
-                fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:4, cursor:"pointer",
-                background:showPrompt?C.indigo:C.bg, color:showPrompt?"#fff":C.textSec,
-                border:`1px solid ${showPrompt?C.indigo:C.border}`, fontFamily:"inherit" }}>
-                {showPrompt?"▲ Full Prompt":"▼ Full Prompt"}
-              </button>
-              <button onClick={()=>toggleDetail(ws,"raw")} style={{
-                fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:4, cursor:"pointer",
-                background:showRaw?C.indigo:C.bg, color:showRaw?"#fff":C.textSec,
-                border:`1px solid ${showRaw?C.indigo:C.border}`, fontFamily:"inherit" }}>
-                {showRaw?"▲ Raw Response":"▼ Raw Response"}
-              </button>
-            </div>
-            {showPrompt && (
-              <div style={{ marginTop:8 }}>
-                <div style={{ fontSize:8, color:C.muted, marginBottom:3, fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>
-                  Exact prompt sent to DeepSeek{fullPrompt ? ` · ${fullPrompt.length.toLocaleString()} chars` : ""}
-                </div>
-                {fullPrompt
-                  ? <pre style={{ fontSize:9, color:C.textSec, background:C.bg, border:`1px solid ${C.borderSoft}`,
-                      borderRadius:5, padding:8, overflowX:"auto", whiteSpace:"pre-wrap", wordBreak:"break-word",
-                      maxHeight:400, overflowY:"auto", lineHeight:1.55 }}>{fullPrompt}</pre>
-                  : <div style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>Loading…</div>}
-              </div>
-            )}
-            {showRaw && (
-              <div style={{ marginTop:8 }}>
-                <div style={{ fontSize:8, color:C.muted, marginBottom:3, fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>
-                  Exact response from DeepSeek{rawResponse ? ` · ${rawResponse.length.toLocaleString()} chars` : ""}
-                </div>
-                {rawResponse
-                  ? <pre style={{ fontSize:9, color:C.textSec, background:C.bg, border:`1px solid ${C.borderSoft}`,
-                      borderRadius:5, padding:8, overflowX:"auto", whiteSpace:"pre-wrap", wordBreak:"break-word",
-                      maxHeight:300, overflowY:"auto", lineHeight:1.55 }}>{rawResponse}</pre>
-                  : <div style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>Loading…</div>}
+
+            {/* ── Expanded full record ── */}
+            {isExp && (
+              <div style={{ borderTop:`1px solid ${C.borderSoft}`, padding:"10px 12px" }}>
+                {!detail
+                  ? <div style={{ color:C.muted, fontSize:10, fontStyle:"italic", padding:"8px 0" }}>Loading full record…</div>
+                  : <BarDetail row={detail} ws={ws} expanded={expanded} setExpanded={setExpanded} />
+                }
               </div>
             )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── Full bar detail panel (rendered inside expanded row) ───────
+function BarDetail({ row, ws, expanded, setExpanded }) {
+  const showPrompt = !!expanded[`${ws}_prompt`];
+  const showRaw    = !!expanded[`${ws}_raw`];
+  function toggle(key) { setExpanded(e => ({ ...e, [key]: !e[key] })); }
+
+  const snap     = (() => { try { return JSON.parse(row.strategy_snapshot || "{}"); } catch(_) { return {}; } })();
+  const bullish  = Object.values(snap).filter(s => s?.signal === "UP").length;
+  const bearish  = Object.values(snap).filter(s => s?.signal === "DOWN").length;
+  const reasons  = (String(row.reasoning || "")).split("\n").filter(Boolean);
+  const imgUrl   = row.chart_path ? ("/charts/" + String(row.chart_path).replace(/\\/g,"/").split("/").pop()) : null;
+  const dataReq  = row.data_requests && String(row.data_requests).toUpperCase() !== "NONE" ? row.data_requests : "";
+  const isUp     = row.signal === "UP";
+  const isNeutral= row.signal === "NEUTRAL";
+
+  return (
+    <div>
+      {/* Price block */}
+      <div style={{ display:"flex", alignItems:"baseline", gap:10, marginBottom:10, flexWrap:"wrap" }}>
+        <div>
+          <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase" }}>Open</div>
+          <div style={{ fontSize:20, fontWeight:900, color:C.text }}>${row.start_price?.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+        </div>
+        {row.end_price != null ? (<>
+          <span style={{ fontSize:16, color:C.muted }}>→</span>
+          <div>
+            <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase" }}>Close</div>
+            <div style={{ fontSize:20, fontWeight:900, color:row.end_price>=row.start_price?C.green:C.red }}>
+              ${row.end_price?.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
+            </div>
+          </div>
+          <span style={{ fontSize:13, fontWeight:800, color:row.end_price>=row.start_price?C.green:C.red, alignSelf:"flex-end", paddingBottom:2 }}>
+            {row.end_price>=row.start_price?"+":""}{((row.end_price-row.start_price)/row.start_price*100).toFixed(3)}%
+          </span>
+        </>) : <span style={{ fontSize:12, color:C.muted, alignSelf:"flex-end", paddingBottom:4 }}>→ PENDING</span>}
+        <div style={{ marginLeft:"auto", textAlign:"right" }}>
+          <div style={{ fontSize:20, fontWeight:900, color:isUp?C.green:isNeutral?C.amber:C.red }}>{isUp?"▲ UP":isNeutral?"— NEUTRAL":"▼ DOWN"}</div>
+          <div style={{ fontSize:15, fontWeight:900, color:C.text }}>{row.confidence ?? "—"}%</div>
+        </div>
+      </div>
+
+      {/* Strategy snapshot */}
+      {Object.keys(snap).length > 0 && (
+        <div style={{ background:C.bg, border:`1px solid ${C.borderSoft}`, borderRadius:5, padding:"5px 8px", marginBottom:8 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+            <span style={{ fontSize:9, color:C.muted, fontWeight:700, letterSpacing:1, textTransform:"uppercase" }}>Strategies</span>
+            <span style={{ fontSize:10, fontWeight:800, color:C.green }}>{bullish}↑</span>
+            <span style={{ fontSize:10, fontWeight:800, color:C.red }}>{bearish}↓</span>
+            <div style={{ marginLeft:"auto", display:"flex", gap:3, flexWrap:"wrap" }}>
+              {Object.entries(snap).slice(0,13).map(([k,s]) => {
+                const meta = STRATEGY_META.find(m => m.key === k);
+                if (!s?.signal) return null;
+                return (
+                  <span key={k} style={{ fontSize:8, fontWeight:700, padding:"1px 4px", borderRadius:3,
+                    color:s.signal==="UP"?C.green:C.red,
+                    background:s.signal==="UP"?C.greenBg:C.redBg,
+                    border:`1px solid ${s.signal==="UP"?C.greenBorder:C.redBorder}` }}>
+                    {meta?.name||k} {s.signal==="UP"?"▲":"▼"}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Chart */}
+      {imgUrl && (
+        <div style={{ marginBottom:8 }}>
+          <div style={{ fontSize:9, color:C.muted, fontWeight:700, letterSpacing:1, textTransform:"uppercase", marginBottom:4 }}>
+            Chart at prediction time · 30 min 1m candles
+          </div>
+          <img src={imgUrl} alt="BTC chart at prediction time"
+            style={{ width:"100%", borderRadius:5, border:`1px solid ${C.borderSoft}`, display:"block", cursor:"pointer" }}
+            onClick={() => window.open(imgUrl, "_blank")} />
+        </div>
+      )}
+
+      {/* Analysis */}
+      {reasons.length > 0 && (
+        <div style={{ marginBottom:8 }}>
+          <div style={{ fontSize:9, color:C.muted, fontWeight:700, letterSpacing:1, textTransform:"uppercase", marginBottom:5 }}>Analysis</div>
+          {reasons.map((line, i) => (
+            <div key={i} style={{ display:"flex", gap:8, marginBottom:i<reasons.length-1?6:0, alignItems:"flex-start" }}>
+              <span style={{ fontSize:10, fontWeight:900, color:C.amber, minWidth:16, flexShrink:0 }}>{i+1}.</span>
+              <span style={{ fontSize:11, color:C.textSec, lineHeight:1.6 }}><BoldAnalysis text={line} color={C.text} /></span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Narrative */}
+      {row.narrative && (
+        <div style={{ background:C.blueBg, border:`1px solid ${C.blueBorder}`,
+          borderLeft:`3px solid ${C.blue}`, borderRadius:5, padding:"6px 10px", marginBottom:8 }}>
+          <div style={{ fontSize:8, fontWeight:700, color:C.blue, textTransform:"uppercase", letterSpacing:1, marginBottom:3 }}>Price Narrative</div>
+          <div style={{ fontSize:11, color:"#1E40AF", lineHeight:1.75, fontStyle:"italic" }}>{row.narrative}</div>
+        </div>
+      )}
+
+      {/* Free observation */}
+      {row.free_observation && (
+        <div style={{ background:C.amberBg, border:`1px solid ${C.amberBorder}`,
+          borderLeft:`3px solid ${C.amber}`, borderRadius:5, padding:"6px 10px", marginBottom:8 }}>
+          <div style={{ fontSize:8, fontWeight:700, color:C.amber, textTransform:"uppercase", letterSpacing:1, marginBottom:3 }}>AI Free Observation</div>
+          <div style={{ fontSize:11, color:C.amber, lineHeight:1.75 }}>{row.free_observation}</div>
+        </div>
+      )}
+
+      {/* Postmortem */}
+      {row.postmortem ? (
+        <div style={{ background:"#F5F3FF", border:"1px solid #C4B5FD",
+          borderLeft:"3px solid #7C3AED", borderRadius:5, padding:"6px 10px", marginBottom:8 }}>
+          <div style={{ fontSize:8, fontWeight:700, color:"#7C3AED", textTransform:"uppercase", letterSpacing:1, marginBottom:5 }}>
+            Post-Mortem · DeepSeek Self-Analysis
+          </div>
+          {row.postmortem.split("\n").filter(Boolean).map((line, i) => {
+            const ci = line.indexOf(":");
+            if (ci > 0 && ci < 25) {
+              return (
+                <div key={i} style={{ marginBottom:4, lineHeight:1.6 }}>
+                  <span style={{ fontSize:9, fontWeight:900, color:"#7C3AED", textTransform:"uppercase", letterSpacing:0.5 }}>{line.slice(0,ci)}: </span>
+                  <span style={{ fontSize:11, color:"#4C1D95" }}>{line.slice(ci+1).trim()}</span>
+                </div>
+              );
+            }
+            return <div key={i} style={{ fontSize:11, color:"#4C1D95", lineHeight:1.6, marginBottom:2 }}>{line}</div>;
+          })}
+        </div>
+      ) : row.actual_direction && row.signal && row.signal !== "NEUTRAL" && (
+        <div style={{ background:"#F5F3FF", border:"1px dashed #C4B5FD", borderRadius:5,
+          padding:"5px 10px", marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
+          <span style={{ fontSize:9, color:"#A78BFA" }}>⏳</span>
+          <span style={{ fontSize:9, color:"#7C3AED", fontWeight:700 }}>Post-mortem pending — DeepSeek is analyzing this result in background</span>
+        </div>
+      )}
+
+      {/* Data received / requested */}
+      {(row.data_received || dataReq) && (
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:8 }}>
+          {row.data_received && (
+            <div style={{ flex:1, background:C.blueBg, border:`1px solid ${C.blueBorder}`, borderRadius:4, padding:"4px 7px" }}>
+              <div style={{ fontSize:8, fontWeight:700, color:C.blue, letterSpacing:1, textTransform:"uppercase", marginBottom:2 }}>AI confirmed data</div>
+              <div style={{ fontSize:10, color:"#1E40AF" }}>{row.data_received}</div>
+            </div>
+          )}
+          {dataReq && (
+            <div style={{ flex:1, background:C.amberBg, border:`1px solid ${C.amberBorder}`, borderRadius:4, padding:"4px 7px" }}>
+              <div style={{ fontSize:8, fontWeight:700, color:C.amber, letterSpacing:1, textTransform:"uppercase", marginBottom:2 }}>AI requested additional data</div>
+              <div style={{ fontSize:10, color:C.amber }}>{dataReq}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Prompt / Raw toggle buttons */}
+      <div style={{ display:"flex", gap:5, borderTop:`1px solid ${C.borderSoft}`, paddingTop:6, flexWrap:"wrap", alignItems:"center" }}>
+        <button onClick={() => toggle(`${ws}_prompt`)} style={{
+          fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:4, cursor:"pointer",
+          background:showPrompt?C.indigo:C.bg, color:showPrompt?"#fff":C.textSec,
+          border:`1px solid ${showPrompt?C.indigo:C.border}`, fontFamily:"inherit" }}>
+          {showPrompt?"▲ Full Prompt":"▼ Full Prompt"}
+        </button>
+        <button onClick={() => toggle(`${ws}_raw`)} style={{
+          fontSize:9, fontWeight:700, padding:"2px 8px", borderRadius:4, cursor:"pointer",
+          background:showRaw?C.indigo:C.bg, color:showRaw?"#fff":C.textSec,
+          border:`1px solid ${showRaw?C.indigo:C.border}`, fontFamily:"inherit" }}>
+          {showRaw?"▲ Raw Response":"▼ Raw Response"}
+        </button>
+      </div>
+
+      {showPrompt && (
+        <div style={{ marginTop:8 }}>
+          <div style={{ fontSize:8, color:C.muted, marginBottom:3, fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>
+            Full prompt sent to DeepSeek{row.full_prompt ? ` · ${row.full_prompt.length.toLocaleString()} chars` : ""}
+          </div>
+          {row.full_prompt
+            ? <pre style={{ fontSize:9, color:C.textSec, background:C.bg, border:`1px solid ${C.borderSoft}`,
+                borderRadius:5, padding:8, overflowX:"auto", whiteSpace:"pre-wrap", wordBreak:"break-word",
+                maxHeight:400, overflowY:"auto", lineHeight:1.55 }}>{row.full_prompt}</pre>
+            : <div style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>Not stored</div>}
+        </div>
+      )}
+      {showRaw && (
+        <div style={{ marginTop:8 }}>
+          <div style={{ fontSize:8, color:C.muted, marginBottom:3, fontWeight:700, textTransform:"uppercase", letterSpacing:1 }}>
+            Raw response from DeepSeek{row.raw_response ? ` · ${row.raw_response.length.toLocaleString()} chars` : ""}
+          </div>
+          {row.raw_response
+            ? <pre style={{ fontSize:9, color:C.textSec, background:C.bg, border:`1px solid ${C.borderSoft}`,
+                borderRadius:5, padding:8, overflowX:"auto", whiteSpace:"pre-wrap", wordBreak:"break-word",
+                maxHeight:300, overflowY:"auto", lineHeight:1.55 }}>{row.raw_response}</pre>
+            : <div style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>Not stored</div>}
+        </div>
+      )}
     </div>
   );
 }
@@ -1641,6 +1712,8 @@ function App() {
   const [pendingDeepseekPred,   setPendingDeepseekPred]   = useState(null);
   const [historicalAnalysis,    setHistoricalAnalysis]    = useState("");
   const [historicalContext,     setHistoricalContext]     = useState("");
+  const [serviceUnavailable,    setServiceUnavailable]    = useState(false);
+  const [serviceUnavailReason,  setServiceUnavailReason]  = useState("");
   const [tab,                   setTab]                   = useState("live");
   const [backendSnap,    setBackendSnap]    = useState(null);
   const [sourceHistory,  setSourceHistory]  = useState([]);
@@ -1700,6 +1773,8 @@ function App() {
         if (d.pending_deepseek_ready !== undefined)   setPendingDeepseekReady(d.pending_deepseek_ready);
         if (d.bar_historical_analysis !== undefined)  setHistoricalAnalysis(d.bar_historical_analysis || "");
         if (d.bar_historical_context !== undefined)   setHistoricalContext(d.bar_historical_context || "");
+        if (d.service_unavailable !== undefined)      setServiceUnavailable(!!d.service_unavailable);
+        if (d.service_unavailable_reason !== undefined) setServiceUnavailReason(d.service_unavailable_reason || "");
       };
     }
     connect();
@@ -1728,6 +1803,8 @@ function App() {
         if (d.specialist_completed_at)     setSpecialistAt(d.specialist_completed_at);
         if (d.bar_historical_analysis !== undefined) setHistoricalAnalysis(d.bar_historical_analysis || "");
         if (d.bar_historical_context !== undefined)  setHistoricalContext(d.bar_historical_context || "");
+        if (d.service_unavailable !== undefined)     setServiceUnavailable(!!d.service_unavailable);
+        if (d.service_unavailable_reason !== undefined) setServiceUnavailReason(d.service_unavailable_reason || "");
       } catch(_) {}
     }
     pollDS();
@@ -1740,8 +1817,8 @@ function App() {
     async function poll() {
       try {
         const [a,b,c,d,e,f,g] = await Promise.all([
-          fetch("/backtest"), fetch("/predictions/recent"), fetch("/weights"),
-          fetch("/deepseek/accuracy"), fetch("/deepseek/predictions/list?n=300"),
+          fetch("/backtest"), fetch("/predictions/recent?n=500"), fetch("/weights"),
+          fetch("/deepseek/accuracy"), fetch("/history/all"),
           fetch("/accuracy/agree"), fetch("/best-indicator"),
         ]);
         if (a.ok) setBacktest(await a.json());
@@ -1995,6 +2072,31 @@ function App() {
   // Cross-exchange divergence (for microstructure display)
   const caDivPct = (ca?.rate&&winStartPrice) ? ((winStartPrice-ca.rate)/ca.rate*100) : null;
   const caSig    = caDivPct!=null ? (Math.abs(caDivPct)>0.05 ? (caDivPct>0?"BEARISH_ARBI":"BULLISH_ARBI") : "NEUTRAL") : null;
+
+  if (serviceUnavailable) return (
+    <div style={{ fontFamily:"'JetBrains Mono','Fira Code',monospace", background:"#0F0E0D",
+      height:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16 }}>
+      <div style={{ fontSize:40 }}>🔧</div>
+      <div style={{ fontSize:20, fontWeight:900, color:"#F5F5F4", letterSpacing:2, textTransform:"uppercase" }}>
+        Service Temporarily Unavailable
+      </div>
+      <div style={{ fontSize:12, color:"#A09D99", maxWidth:480, textAlign:"center", lineHeight:1.8 }}>
+        The embedding service (Cohere) is currently unreachable. Predictions are paused until connectivity is restored.
+        The system will resume automatically — no action needed.
+      </div>
+      {serviceUnavailReason && (
+        <div style={{ fontSize:10, color:"#6B6866", background:"#1C1A18", border:"1px solid #2E2C29",
+          borderRadius:6, padding:"6px 14px", maxWidth:520, textAlign:"center", fontFamily:"monospace" }}>
+          {serviceUnavailReason}
+        </div>
+      )}
+      <div style={{ marginTop:8, display:"flex", alignItems:"center", gap:8, fontSize:11, color:"#78716C" }}>
+        <div style={{ width:6, height:6, borderRadius:"50%", background:"#EF4444",
+          animation:"pulse 1.5s ease-in-out infinite" }} />
+        Retrying on next bar open…
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ fontFamily:"'JetBrains Mono','Fira Code',monospace", background:C.bg, color:C.text,
@@ -2640,65 +2742,13 @@ function App() {
               })()}
             </div>
 
-            {/* Prediction log + DeepSeek audit side by side */}
-            <div style={{ display:"flex", gap:8, flex:1, minHeight:0 }}>
-
-              {/* Left: Prediction log */}
-              <div style={{ ...card, flex:"0 0 30%", display:"flex", flexDirection:"column", minHeight:300 }}>
-                <div style={{ ...label, flexShrink:0, marginBottom:6 }}>Prediction Log</div>
-                <div style={{ flex:1, overflow:"auto" }}>
-                  {preds.length===0
-                    ? <div style={{ color:C.muted, fontSize:11, padding:30, textAlign:"center" }}>Resolved windows appear here after each bar closes</div>
-                    : (
-                      <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
-                        <thead>
-                          <tr style={{ borderBottom:`2px solid ${C.border}` }}>
-                            {["Time","Signal","Conf","Open","Close","Δ","Result"].map(h=>(
-                              <th key={h} style={{ textAlign:"left", padding:"5px 8px", fontSize:9, letterSpacing:1,
-                                textTransform:"uppercase", color:C.muted, position:"sticky", top:0, background:C.surface }}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {preds.map((p,i)=>{
-                            const delta=(p.end_price||0)-p.start_price;
-                            const d=new Date(p.window_start*1000);
-                            const t=String(d.getUTCHours()).padStart(2,"0")+":"+String(d.getUTCMinutes()).padStart(2,"0")+" UTC";
-                            return (
-                              <tr key={i} style={{ borderBottom:`1px solid ${C.borderSoft}` }}>
-                                <td style={td}>{t}</td>
-                                <td style={{ ...td, color:p.signal==="UP"?C.green:p.signal==="NEUTRAL"?C.amber:C.red, fontWeight:700 }}>{p.signal==="UP"?"▲ UP":p.signal==="NEUTRAL"?"— N":"▼ DN"}</td>
-                                <td style={td}>{(p.confidence*100).toFixed(0)}%</td>
-                                <td style={td}>${p.start_price.toFixed(0)}</td>
-                                <td style={td}>{p.end_price!=null?`$${p.end_price.toFixed(0)}`:"—"}</td>
-                                <td style={{ ...td, color:delta>=0?C.green:C.red }}>{delta>=0?"+":""}{delta.toFixed(0)}</td>
-                                <td style={td}>
-                                  {p.signal==="NEUTRAL"
-                                    ? <span style={{ padding:"2px 7px", borderRadius:4, fontSize:9, fontWeight:700,
-                                        background:C.bg, border:`1px solid ${C.borderSoft}`, color:C.muted }}>— N/A</span>
-                                    : <span style={{ padding:"2px 7px", borderRadius:4, fontSize:9, fontWeight:700,
-                                        background:p.correct?C.greenBg:C.redBg,
-                                        border:`1px solid ${p.correct?C.greenBorder:C.redBorder}`,
-                                        color:p.correct?C.green:C.red }}>{p.correct?"✓ WIN":"✕ LOSS"}</span>
-                                  }
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    )}
-                </div>
-              </div>
-
-              {/* Right: DeepSeek audit */}
-              <div style={{ flex:1, minHeight:300, minWidth:0 }}>
-                <DeepSeekAuditTab
-                  deepseekLog={deepseekLog} deepseekAcc={deepseekAcc}
-                  deepseekPred={deepseekPred} ensembleAccuracy={allTimeAccuracy}
-                  totalPreds={allTimeTotal} correctPreds={allTimeCorrect} agreeAcc={agreeAcc}
-                />
-              </div>
+            {/* Full-width bar history list */}
+            <div style={{ flex:1, minHeight:0 }}>
+              <DeepSeekAuditTab
+                deepseekLog={deepseekLog} deepseekAcc={deepseekAcc}
+                deepseekPred={deepseekPred} ensembleAccuracy={allTimeAccuracy}
+                totalPreds={allTimeTotal} correctPreds={allTimeCorrect} agreeAcc={agreeAcc}
+              />
             </div>
 
           </div>

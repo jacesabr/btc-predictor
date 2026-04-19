@@ -137,6 +137,7 @@ def migrate_deepseek_columns():
         ("dashboard_signals_snapshot", "TEXT"),
         ("postmortem",                 "TEXT"),
         ("polymarket_url",             "TEXT"),
+        ("embedding",                  "TEXT"),
     ]
     conn = _conn()
     try:
@@ -504,6 +505,42 @@ class StoragePG:
         finally:
             _put(conn)
 
+    def store_embedding(self, window_start: float, vector: list):
+        """Store a Cohere embedding vector (JSON array) for a bar."""
+        import json as _json
+        conn = _conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE deepseek_predictions SET embedding=%s WHERE window_start=%s",
+                    (_json.dumps(vector), float(window_start)),
+                )
+            conn.commit()
+        finally:
+            _put(conn)
+
+    def get_all_embeddings(self):
+        """Return {window_start: np.ndarray} for all bars that have stored embeddings."""
+        import json as _json
+        import numpy as np
+        conn = _conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT window_start, embedding FROM deepseek_predictions WHERE embedding IS NOT NULL")
+                rows = cur.fetchall()
+        finally:
+            _put(conn)
+        result = {}
+        for ws, raw in rows:
+            try:
+                vec  = np.array(_json.loads(raw), dtype=np.float32)
+                norm = float(np.linalg.norm(vec))
+                if norm > 1e-8:
+                    result[float(ws)] = vec / norm
+            except Exception:
+                pass
+        return result
+
     def resolve_deepseek_prediction(self, window_start: float, end_price: float, actual: str = None):
         conn = _conn()
         try:
@@ -567,6 +604,59 @@ class StoragePG:
                     (n,),
                 )
                 return [dict(r) for r in cur.fetchall()]
+        finally:
+            _put(conn)
+
+    def get_all_deepseek_summaries(self) -> List[Dict]:
+        """Lean summary of every DeepSeek record, newest first."""
+        conn = _conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT window_start, window_end, window_count, signal, confidence, "
+                    "correct, actual_direction, latency_ms, start_price, end_price "
+                    "FROM deepseek_predictions ORDER BY window_start DESC",
+                )
+                return [dict(r) for r in cur.fetchall()]
+        finally:
+            _put(conn)
+
+    def get_next_bar_number(self) -> int:
+        """Return max stored window_count + 1 for persistent bar numbering."""
+        conn = _conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT MAX(window_count) FROM deepseek_predictions")
+                result = cur.fetchone()[0]
+                return (result or 0) + 1
+        finally:
+            _put(conn)
+
+    def clean_incomplete_records(self) -> Dict:
+        """Remove records without actual_direction from all prediction tables."""
+        conn = _conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT window_start FROM deepseek_predictions WHERE actual_direction IS NULL"
+                )
+                incomplete_ws = [float(r[0]) for r in cur.fetchall()]
+                cur.execute("DELETE FROM deepseek_predictions WHERE actual_direction IS NULL")
+                removed_ds = cur.rowcount
+                if incomplete_ws:
+                    cur.execute(
+                        "DELETE FROM predictions WHERE window_start = ANY(%s)",
+                        (incomplete_ws,),
+                    )
+                    removed_pred = cur.rowcount
+                else:
+                    removed_pred = 0
+            conn.commit()
+            return {
+                "removed_deepseek": removed_ds,
+                "removed_ensemble": removed_pred,
+                "removed_window_starts": sorted(incomplete_ws),
+            }
         finally:
             _put(conn)
 

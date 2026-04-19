@@ -132,6 +132,8 @@ async def deepseek_status():
         "specialist_completed_at":     current_state.get("specialist_completed_at"),
         "bar_historical_analysis":     current_state.get("bar_historical_analysis", ""),
         "bar_historical_context":      current_state.get("bar_historical_context", ""),
+        "service_unavailable":         current_state.get("service_unavailable", False),
+        "service_unavailable_reason":  current_state.get("service_unavailable_reason", ""),
     }
 
 
@@ -320,11 +322,28 @@ async def get_deepseek_predictions_list(n: int = 300):
 @app.get("/deepseek/predictions/{window_start}")
 async def get_deepseek_prediction_detail(window_start: float):
     """Single record with all fields including full_prompt and raw_response."""
-    docs = _safe_storage(storage.get_recent_deepseek_predictions, 500, default=[])
+    docs = _safe_storage(storage.get_recent_deepseek_predictions, 9999, default=[])
     for doc in docs:
         if doc.get("window_start") == window_start:
             return doc
     return {}
+
+
+@app.get("/history/all")
+async def get_all_history():
+    """All DeepSeek prediction summaries (lean — no prompt/raw) for history overview."""
+    return _safe_storage(storage.get_all_deepseek_summaries, default=[])
+
+
+@app.post("/admin/clean-incomplete")
+async def admin_clean_incomplete():
+    """Remove unresolved bars (no actual_direction) from all storage tables."""
+    result = _safe_storage(storage.clean_incomplete_records, default={})
+    if result and result.get("removed_window_starts"):
+        from semantic_store import clean_incomplete_windows
+        removed_ph = clean_incomplete_windows(set(result["removed_window_starts"]))
+        result["removed_pattern_history"] = removed_ph
+    return result or {}
 
 
 @app.get("/deepseek/source-history")
@@ -583,6 +602,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         "specialist_completed_at":     current_state.get("specialist_completed_at"),
                         "bar_historical_analysis":     current_state.get("bar_historical_analysis", ""),
                         "bar_historical_context":      current_state.get("bar_historical_context", ""),
+                        "service_unavailable":         current_state.get("service_unavailable", False),
+                        "service_unavailable_reason":  current_state.get("service_unavailable_reason", ""),
                     })
                 except Exception as ws_exc:
                     logger.warning("WS send failed: %s", ws_exc)

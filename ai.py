@@ -39,9 +39,20 @@ logger = logging.getLogger(__name__)
 DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 DEEPSEEK_MODEL   = "deepseek-chat"
 
+COHERE_EMBED_URL  = "https://api.cohere.com/v2/embed"
+COHERE_RERANK_URL = "https://api.cohere.com/v2/rerank"
+COHERE_EMBED_MODEL  = "embed-english-v3.0"
+COHERE_RERANK_MODEL = "rerank-english-v3.0"
+COHERE_PRE_FILTER_K = 50   # cosine candidates before reranking
+COHERE_FINAL_K      = 20   # final bars sent to LLM after reranking
+
 _ROOT = Path(__file__).parent   # btc-predictor/
 
 SPECIALIST_KEYS = {"alligator", "acc_dist", "dow_theory", "fib_pullback", "harmonic"}
+
+
+class CohereUnavailableError(RuntimeError):
+    """Raised when Cohere API is unreachable or returns an error. No fallback — app pauses."""
 
 _DAYS     = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 _SESSIONS = [(0, 8, "ASIA"), (8, 13, "LONDON"), (13, 16, "OVERLAP"), (16, 21, "NY"), (21, 24, "LATE")]
@@ -90,6 +101,90 @@ async def _api_call(
                 raise RuntimeError(f"HTTP {resp.status}: {body[:300]}")
             data = await resp.json(content_type=None)
             return data["choices"][0]["message"]["content"]
+
+
+# ═══════════════════════════════════════════════════════════════
+# Cohere embed + rerank
+# ═══════════════════════════════════════════════════════════════
+
+async def embed_text(cohere_key: str, text: str, input_type: str = "search_document") -> np.ndarray:
+    """
+    Embed text via Cohere embed-english-v3.0 (1024 dims).
+    Raises CohereUnavailableError on any failure — no fallback.
+    input_type: "search_document" when indexing a bar, "search_query" when querying.
+    """
+    if not cohere_key:
+        raise CohereUnavailableError("COHERE_API_KEY not configured")
+    headers = {
+        "Authorization": f"Bearer {cohere_key}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    payload = {
+        "model": COHERE_EMBED_MODEL,
+        "texts": [text[:4096]],
+        "input_type": input_type,
+        "embedding_types": ["float"],
+    }
+    timeout   = aiohttp.ClientTimeout(total=30.0)
+    connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+    try:
+        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+            async with session.post(COHERE_EMBED_URL, headers=headers, json=payload) as resp:
+                body = await resp.text()
+                if resp.status != 200:
+                    raise CohereUnavailableError(f"Cohere embed HTTP {resp.status}: {body[:300]}")
+                data = await resp.json(content_type=None)
+                vec  = np.array(data["embeddings"]["float"][0], dtype=np.float32)
+                norm = np.linalg.norm(vec)
+                if norm < 1e-8:
+                    raise CohereUnavailableError("Cohere returned zero-norm embedding")
+                return vec / norm
+    except CohereUnavailableError:
+        raise
+    except Exception as exc:
+        raise CohereUnavailableError(f"Cohere embed request failed: {exc}") from exc
+
+
+async def rerank_bars(
+    cohere_key: str,
+    query_text: str,
+    candidate_texts: List[str],
+    top_n: int = COHERE_FINAL_K,
+) -> List[int]:
+    """
+    Re-rank candidate bar texts against the current bar query via Cohere Rerank v3.
+    Returns list of original indices in ranked order (best first).
+    Raises CohereUnavailableError on any failure.
+    """
+    if not cohere_key:
+        raise CohereUnavailableError("COHERE_API_KEY not configured")
+    if not candidate_texts:
+        return []
+    headers = {
+        "Authorization": f"Bearer {cohere_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model":     COHERE_RERANK_MODEL,
+        "query":     query_text[:2048],
+        "documents": [t[:1024] for t in candidate_texts],
+        "top_n":     min(top_n, len(candidate_texts)),
+    }
+    timeout   = aiohttp.ClientTimeout(total=30.0)
+    connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+    try:
+        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+            async with session.post(COHERE_RERANK_URL, headers=headers, json=payload) as resp:
+                body = await resp.text()
+                if resp.status != 200:
+                    raise CohereUnavailableError(f"Cohere rerank HTTP {resp.status}: {body[:300]}")
+                data = await resp.json(content_type=None)
+                return [r["index"] for r in data["results"]]
+    except CohereUnavailableError:
+        raise
+    except Exception as exc:
+        raise CohereUnavailableError(f"Cohere rerank request failed: {exc}") from exc
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1247,62 +1342,81 @@ def _bar_feature_vector(record: Dict) -> Optional[np.ndarray]:
     return features / norm_val   # unit vector → dot product == cosine similarity
 
 
-# ── STEP 3: Cosine similarity search ──────────────────────────────────────────
-# Given the current bar's feature vector, rank ALL stored history bars by
-# cosine similarity and return only the top_k most similar ones.
-#
-# Why cosine similarity?
-#   It measures the ANGLE between two vectors, ignoring magnitude.
-#   RSI=72 on a high-volume bar vs a low-volume bar looks "similar" to the LLM
-#   even though the scales differ — the directional pattern is the same.
-#
-# Speed: dot product on 500 unit vectors via numpy = ~0.1ms. Not a bottleneck.
+def _bar_embed_text(record: Dict) -> str:
+    """Generate rich text description of a historical bar for Cohere embedding / reranking."""
+    ts     = record.get("window_start", 0)
+    dt     = datetime.fromtimestamp(ts, tz=timezone.utc) if ts else None
+    day    = _DAYS[dt.weekday()] if dt else "?"
+    time_s = dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "?"
+    ses    = record.get("session") or (_session(ts) if ts else "?")
+    actual = record.get("actual_direction", "?")
+    sp     = record.get("start_price", 0) or 0
+    ep     = record.get("end_price", 0) or 0
+    chg    = ((ep - sp) / sp * 100) if sp and ep else 0.0
+    e_sig  = record.get("ensemble_signal", "?") or "?"
+    e_conf = int((record.get("ensemble_conf") or 0) * 100)
+    d_sig  = record.get("deepseek_signal", "?") or "?"
+    d_conf = record.get("deepseek_conf", 0) or 0
+    ind    = record.get("indicators", {}) or {}
+    votes  = record.get("strategy_votes", {}) or {}
+    spec   = record.get("specialist_signals", {}) or {}
+    dash   = record.get("dashboard_signals_raw", {}) or {}
+    ce     = (record.get("creative_edge") or "").strip()[:200]
+    return (
+        f"BTC 5-min bar: {day} {time_s} session={ses} actual={actual} "
+        f"price=${sp:,.0f}→${ep:,.0f} ({chg:+.3f}%)\n"
+        f"Indicators: {_fmt_indicators(ind)}\n"
+        f"Strategies: {_fmt_strategy_votes(votes)}\n"
+        f"Specialists: {_fmt_specialists(spec)}\n"
+        f"Dashboard: {_fmt_dashboard_directions(dash)}\n"
+        f"Ensemble={e_sig} {e_conf}% DeepSeek={d_sig} {d_conf}%\n"
+        f"Edge: {ce}"
+    )
 
-def _find_similar_bars(
-    current_indicators: Dict,
-    current_dashboard: Dict,
+
+def _cohere_prefilter(
+    current_vec: np.ndarray,
     history: List[Dict],
-    top_k: int = 20,
-) -> Tuple[List[Dict], int]:
+    bar_embeddings: Dict[int, np.ndarray],
+    pre_filter_k: int = COHERE_PRE_FILTER_K,
+) -> Tuple[List[Dict], List[str], int]:
     """
-    Return (top_k_bars, total_searched).
-    Falls back to returning the full history if the current bar has no feature vector.
+    Cosine similarity search using 1024-dim Cohere embeddings.
+    Returns (top_pre_filter_k bars, their embed texts, total history size).
+    Bars without stored embeddings are excluded from the search.
     """
-    # Build a pseudo-record for the current (unresolved) bar
-    current_rec = {"indicators": current_indicators, "dashboard_signals_raw": current_dashboard}
-    curr_vec = _bar_feature_vector(current_rec)
-
-    if curr_vec is None:
-        # No numeric data yet — skip similarity, return most recent bars
-        logger.warning("Similarity search: no feature vector for current bar, using last %d", top_k)
-        return history[-top_k:], len(history)
-
-    # Compute cosine similarity for every stored bar in one vectorised pass
-    vecs, valid_bars, fallback_bars = [], [], []
+    vecs, valid_bars = [], []
     for bar in history:
-        v = _bar_feature_vector(bar)
+        ws = bar.get("window_start", 0)
+        v  = bar_embeddings.get(ws)
         if v is not None:
             vecs.append(v)
             valid_bars.append(bar)
-        else:
-            fallback_bars.append(bar)   # bars with no data get lowest priority
+
+    total = len(history)
 
     if not vecs:
-        return history[-top_k:], len(history)
+        # No embeddings stored yet (fresh deployment) — use most recent bars as candidates
+        recent = history[-pre_filter_k:]
+        logger.info("Cohere prefilter: no embeddings stored yet, using %d most recent bars", len(recent))
+        return recent, [_bar_embed_text(b) for b in recent], total
 
-    # Stack into matrix → single dot product gives all cosine similarities at once
-    matrix   = np.stack(vecs)                     # shape (N, 16)
-    scores   = matrix @ curr_vec                  # shape (N,) — cosine similarities
-    top_idx  = np.argsort(scores)[::-1][:top_k]  # indices of top_k highest scores
-    top_bars = [valid_bars[i] for i in top_idx]
+    matrix  = np.stack(vecs)                              # (N, 1024)
+    scores  = matrix @ current_vec                        # (N,) cosine similarities
+    k       = min(pre_filter_k, len(valid_bars))
+    top_idx = np.argsort(scores)[::-1][:k]
+    top_bars  = [valid_bars[i] for i in top_idx]
+    top_texts = [_bar_embed_text(b) for b in top_bars]
 
     logger.info(
-        "Similarity search: %d bars → top %d selected (best sim=%.3f, worst=%.3f)",
-        len(history), len(top_bars),
-        float(scores[top_idx[0]]) if len(top_idx) else 0,
-        float(scores[top_idx[-1]]) if len(top_idx) else 0,
+        "Cohere prefilter: %d embedded bars → top %d candidates "
+        "(best sim=%.3f, worst=%.3f, %d bars had no embedding)",
+        len(valid_bars), len(top_bars),
+        float(scores[top_idx[0]]) if k else 0,
+        float(scores[top_idx[-1]]) if k else 0,
+        total - len(valid_bars),
     )
-    return top_bars, len(history)
+    return top_bars, top_texts, total
 
 
 _KEY_DASH_COMPACT = [
@@ -1429,8 +1543,20 @@ async def run_historical_analyst(
     ensemble_signal: str = "",
     ensemble_conf: float = 0.0,
     dashboard_directions: Optional[Dict] = None,
+    cohere_api_key: str = "",
+    bar_embeddings: Optional[Dict[int, np.ndarray]] = None,
 ) -> Tuple[Optional[Dict], Optional[str]]:
-    """Fire historical similarity analyst. Returns (signal_dict, analysis_text) or (None, None)."""
+    """
+    Fire historical similarity analyst using Cohere embed + rerank.
+
+    Pipeline:
+      1. Embed current bar text via Cohere embed-english-v3.0 (1024 dims)
+      2. Cosine search over stored bar embeddings → top-50 candidates
+      3. Cohere rerank → final top-20 most contextually relevant bars
+      4. Fire DeepSeek historical analyst on those 20 bars
+
+    Raises CohereUnavailableError if Cohere is down — no fallback, caller handles pause.
+    """
     try:
         template = _HIST_PROMPT.read_text(encoding="utf-8")
     except Exception as exc:
@@ -1442,35 +1568,44 @@ async def run_historical_analyst(
 
     t0 = time.time()
 
-    # ── STEP 4: Similarity search — narrow 500 bars → top 20 before the LLM sees anything ──
-    # We pass current_indicators and dashboard_directions so the vector can be built
-    # from the same fields used in stored bar records.
-    # The full 500-bar history is kept for the saved file (audit trail); only the
-    # top-20 most similar bars are sent to the LLM prompt.
-    dash_for_vec = dashboard_directions or {}
-    similar_bars, total_searched = _find_similar_bars(
-        current_indicators=current_indicators,
-        current_dashboard=dash_for_vec,
-        history=history_records,
-        top_k=20,
-    )
-
-    history_table_full    = _build_history_table(history_records, compact=False)   # full — saved to disk
-    history_table_compact = _build_history_table(similar_bars,    compact=True)    # top-20 symbolic — sent to LLM
-
     current_bar = _build_current_bar(
         current_indicators, current_strategy_votes, window_start_time,
         specialist_signals, creative_edge, ensemble_signal, ensemble_conf, dashboard_directions,
     )
-    n      = len(similar_bars)   # prompt sees top-20, not 500
+
+    # ── Step 1: Embed current bar (raises CohereUnavailableError if Cohere is down) ──
+    current_vec = await embed_text(cohere_api_key, current_bar, input_type="search_query")
+    logger.info("Cohere embed: current bar encoded (%d dims)", len(current_vec))
+
+    # ── Step 2: Cosine prefilter → top-50 most similar bars ──
+    embeddings = bar_embeddings or {}
+    pre_bars, pre_texts, total_searched = _cohere_prefilter(
+        current_vec, history_records, embeddings,
+        pre_filter_k=COHERE_PRE_FILTER_K,
+    )
+
+    # ── Step 3: Cohere rerank → final top-20 (raises CohereUnavailableError if down) ──
+    if len(pre_bars) > COHERE_FINAL_K:
+        ranked_indices = await rerank_bars(
+            cohere_api_key, current_bar, pre_texts, top_n=COHERE_FINAL_K,
+        )
+        similar_bars = [pre_bars[i] for i in ranked_indices]
+        logger.info("Cohere rerank: %d → %d bars selected", len(pre_bars), len(similar_bars))
+    else:
+        similar_bars = pre_bars
+        logger.info("Cohere rerank skipped: only %d candidates (≤%d)", len(pre_bars), COHERE_FINAL_K)
+
+    history_table_full    = _build_history_table(history_records, compact=False)
+    history_table_compact = _build_history_table(similar_bars,    compact=True)
+
+    n      = len(similar_bars)
     prompt = template.format(n=n, history_table=history_table_compact, current_bar=current_bar)
 
     ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
-    # Saved file always shows full history + which bars were selected, for auditability
     _save(_HIST_SENT, (
-        f"# {ts_str}  |  Total history: {total_searched} bars  |  Selected (top-20 similar): {n}\n\n"
+        f"# {ts_str}  |  Total: {total_searched} bars  |  Cohere pre-filter: {len(pre_bars)}  |  After rerank: {n}\n\n"
         f"=== FULL HISTORY (saved, not sent to LLM) ===\n{history_table_full}\n\n"
-        f"=== TOP-20 SENT TO LLM ===\n{history_table_compact}\n\n"
+        f"=== TOP-{n} AFTER COHERE EMBED+RERANK (sent to LLM) ===\n{history_table_compact}\n\n"
         f"=== CURRENT BAR ===\n{current_bar}"
     ))
     _save(_HIST_PROMPT_OUT, f"# {ts_str}\n\n{prompt}")
@@ -1486,12 +1621,12 @@ async def run_historical_analyst(
                     _append(_HIST_SUGGEST, f"[{ts_str}] {suggestion}")
                 break
         signal_dict = _parse_historical_signal(raw)
-        logger.info("Historical analyst %.1fs | %s %.0f%% | %d history bars",
-                    elapsed, signal_dict["signal"], signal_dict["confidence"] * 100, n)
+        logger.info("Historical analyst %.1fs | %s %.0f%% | top-%d from %d bars via Cohere",
+                    elapsed, signal_dict["signal"], signal_dict["confidence"] * 100, n, total_searched)
         return signal_dict, raw.strip()
     except Exception as exc:
         _save(_HIST_RESPONSE, f"# ERROR {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n\n{exc}")
-        logger.warning("Historical analyst failed: %s", exc)
+        logger.warning("Historical analyst DeepSeek call failed: %s", exc)
         return None, None
 
 
@@ -1508,10 +1643,10 @@ _PRED_SUGGEST  = _PRED_DIR / "suggestions.txt"
 class DeepSeekPredictor:
     """Generates the main DeepSeek prediction at bar open."""
 
-    def __init__(self, api_key: str, model: str = DEEPSEEK_MODEL):
+    def __init__(self, api_key: str, model: str = DEEPSEEK_MODEL, initial_bar_count: int = 0):
         self.api_key      = api_key
         self.model        = model
-        self.window_count = 0
+        self.window_count = initial_bar_count
 
     async def predict(
         self,

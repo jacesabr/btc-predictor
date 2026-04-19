@@ -352,6 +352,34 @@ class Storage:
                     break
             _rewrite_ndjson(self._ds_path, records)
 
+    def store_embedding(self, window_start: float, vector: list):
+        """Store a Cohere embedding vector (list of floats) for a bar."""
+        with self._lock:
+            records = _read_ndjson(self._ds_path)
+            for r in records:
+                if r["window_start"] == window_start:
+                    r["embedding"] = vector
+                    break
+            _rewrite_ndjson(self._ds_path, records)
+
+    def get_all_embeddings(self):
+        """Return {window_start: np.ndarray} for all bars that have embeddings."""
+        import numpy as np
+        with self._lock:
+            records = _read_ndjson(self._ds_path)
+        result = {}
+        for r in records:
+            raw = r.get("embedding")
+            if raw:
+                try:
+                    vec = np.array(raw, dtype=np.float32)
+                    norm = float(np.linalg.norm(vec))
+                    if norm > 1e-8:
+                        result[r["window_start"]] = vec / norm
+                except Exception:
+                    pass
+        return result
+
     def get_agree_accuracy(self) -> Dict:
         cutoff = _score_reset_at()
         with self._lock:
@@ -398,6 +426,54 @@ class Storage:
             records = _read_ndjson(self._ds_path)
         records.sort(key=lambda r: r["window_start"], reverse=True)
         return records[:n]
+
+    _SUMMARY_FIELDS = frozenset({
+        "window_start", "window_end", "window_count",
+        "signal", "confidence", "correct", "actual_direction",
+        "latency_ms", "start_price", "end_price",
+    })
+
+    def get_all_deepseek_summaries(self) -> List[Dict]:
+        """Lean summary of every DeepSeek record (no heavy text), newest first."""
+        with self._lock:
+            records = _read_ndjson(self._ds_path)
+        records.sort(key=lambda r: r.get("window_start", 0), reverse=True)
+        return [{k: v for k, v in r.items() if k in self._SUMMARY_FIELDS} for r in records]
+
+    def get_next_bar_number(self) -> int:
+        """Return max stored window_count + 1 for persistent bar numbering."""
+        with self._lock:
+            records = _read_ndjson(self._ds_path)
+        if not records:
+            return 1
+        return max((r.get("window_count") or 0 for r in records), default=0) + 1
+
+    def clean_incomplete_records(self) -> Dict:
+        """
+        Remove records without actual_direction (bar never resolved) from
+        predictions.ndjson and deepseek_predictions.ndjson.
+        Returns counts of removed records and their window_starts.
+        """
+        with self._lock:
+            ds_records = _read_ndjson(self._ds_path)
+            incomplete_ws = {r["window_start"] for r in ds_records if not r.get("actual_direction")}
+            ds_keep = [r for r in ds_records if r.get("actual_direction")]
+            removed_ds = len(ds_records) - len(ds_keep)
+            if removed_ds:
+                _rewrite_ndjson(self._ds_path, ds_keep)
+
+        with self._lock:
+            pred_records = _read_ndjson(self._preds_path)
+            pred_keep = [r for r in pred_records if r["window_start"] not in incomplete_ws]
+            removed_pred = len(pred_records) - len(pred_keep)
+            if removed_pred:
+                _rewrite_ndjson(self._preds_path, pred_keep)
+
+        return {
+            "removed_deepseek": removed_ds,
+            "removed_ensemble": removed_pred,
+            "removed_window_starts": sorted(incomplete_ws),
+        }
 
     def get_audit_records(self, n: int = 500) -> List[Dict]:
         with self._lock:

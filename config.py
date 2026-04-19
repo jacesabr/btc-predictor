@@ -50,6 +50,9 @@ class Config:
     api_host: str = "0.0.0.0"
     api_port: int = int(os.environ.get("PORT", 8000))
 
+    # Cohere — embeddings (embed-english-v3.0) + reranking (rerank-english-v3.0)
+    cohere_api_key: str = os.environ.get("COHERE_API_KEY", "")
+
     # DeepSeek AI integration
     deepseek_api_key: str = os.environ.get("DEEPSEEK_API_KEY", "")
     deepseek_model: str = "deepseek-chat"

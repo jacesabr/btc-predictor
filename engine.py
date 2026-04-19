@@ -48,7 +48,11 @@ from strategies import (
     get_all_predictions, EnsemblePredictor, LinearRegressionChannel,
     calculate_ev,
 )
-from ai import DeepSeekPredictor, run_specialists, run_historical_analyst, SPECIALIST_KEYS, _build_current_bar, run_postmortem
+from ai import (
+    DeepSeekPredictor, run_specialists, run_historical_analyst,
+    SPECIALIST_KEYS, _build_current_bar, run_postmortem,
+    embed_text, _bar_embed_text, CohereUnavailableError,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -67,17 +71,45 @@ ensemble        = EnsemblePredictor(config.initial_weights)
 lr_strategy     = LinearRegressionChannel()
 feature_engine  = FeatureEngine()
 polymarket_feed = PolymarketFeed(poll_interval=1.0)
+
+# Read max stored bar count so window_count persists across restarts
+_ds_bar_init: int = 0
+try:
+    _ds_init_recs = storage.get_recent_deepseek_predictions(9999)
+    if _ds_init_recs:
+        _ds_bar_init = max((r.get("window_count") or 0 for r in _ds_init_recs), default=0)
+    logger.info("Bar counter initialised at %d", _ds_bar_init)
+except Exception as _e:
+    logger.warning("Could not read initial bar count from storage: %s", _e)
+
 deepseek        = (
     DeepSeekPredictor(
         api_key=config.deepseek_api_key,
         model=(config.deepseek_vision_model if config.deepseek_use_vision
                else config.deepseek_model),
+        initial_bar_count=_ds_bar_init,
     )
     if config.deepseek_enabled else None
 )
 
 ws_clients:    set  = set()
 binance_klines: List = []
+
+# ── In-memory Cohere embedding cache ─────────────────────────
+# Populated at startup and updated after each bar embeds.
+# Maps window_start (float) → unit-normalised 1024-dim np.ndarray.
+_embedding_cache: Dict = {}
+
+def _load_embedding_cache():
+    global _embedding_cache
+    try:
+        _embedding_cache = storage.get_all_embeddings()
+        logger.info("Embedding cache loaded: %d bars", len(_embedding_cache))
+    except Exception as exc:
+        logger.warning("Could not load embedding cache: %s", exc)
+        _embedding_cache = {}
+
+_load_embedding_cache()
 
 current_state: Dict = {
     "price":                      None,
@@ -96,6 +128,8 @@ current_state: Dict = {
     "bar_creative_edge":          "",
     "bar_historical_analysis":    "",
     "bar_historical_context":     "",
+    "service_unavailable":        False,
+    "service_unavailable_reason": "",
 }
 
 
@@ -225,6 +259,28 @@ async def _run_postmortem_background(
             logger.info("Postmortem stored for bar %.0f", ws)
     except Exception as exc:
         logger.warning("Postmortem background task failed: %s", exc)
+
+
+# ── Cohere embedding background task ─────────────────────────
+
+async def _embed_bar_background(window_start: float, bar_record: dict):
+    """
+    Fire after bar resolves: embed the bar's rich text via Cohere and store.
+    Updates the in-memory cache so the NEXT bar's similarity search benefits immediately.
+    """
+    if not config.cohere_api_key:
+        return
+    try:
+        text = _bar_embed_text(bar_record)
+        vec  = await embed_text(config.cohere_api_key, text, input_type="search_document")
+        vec_list = vec.tolist()
+        _safe_storage(storage.store_embedding, window_start, vec_list)
+        _embedding_cache[window_start] = vec
+        logger.info("Cohere embedding stored for bar %.0f (%d dims)", window_start, len(vec))
+    except CohereUnavailableError as exc:
+        logger.warning("Cohere embed background failed (bar %.0f): %s", window_start, exc)
+    except Exception as exc:
+        logger.warning("Embedding background task failed: %s", exc)
 
 
 # ── DeepSeek task ─────────────────────────────────────────────
@@ -382,6 +438,8 @@ async def _run_full_prediction(prices, is_force=False):
                 specialist_signals=None, creative_edge="",
                 ensemble_signal="", ensemble_conf=0.0,
                 dashboard_directions=_prev_dash_raw or None,
+                cohere_api_key=config.cohere_api_key,
+                bar_embeddings=_embedding_cache,
             )
         )
 
@@ -448,6 +506,14 @@ async def _run_full_prediction(prices, is_force=False):
                 hist_result = historical_task.result()
                 if isinstance(hist_result, tuple) and len(hist_result) == 2:
                     hist_signal, historical_analysis = hist_result
+                # Clear unavailable flag if Cohere came back
+                current_state["service_unavailable"]        = False
+                current_state["service_unavailable_reason"] = ""
+            except CohereUnavailableError as cohere_exc:
+                logger.error("Cohere unavailable — pausing predictions: %s", cohere_exc)
+                current_state["service_unavailable"]        = True
+                current_state["service_unavailable_reason"] = str(cohere_exc)
+                return None, {}, None, None, window_start_time, window_start_price
             except Exception as exc:
                 logger.warning("Historical analyst task error (ignored): %s", exc)
             if historical_analysis and hist_signal:
@@ -588,6 +654,15 @@ async def _resolve_window(
 
         await _safe_storage_async(storage.resolve_deepseek_prediction, window_start_time, end_price)
 
+        # Safeguard: warn if no DeepSeek record was stored for this bar
+        if ds_pred_snap.get("signal") in (None, "ERROR", "UNAVAILABLE"):
+            bar_num = deepseek.window_count if deepseek else "?"
+            logger.warning(
+                "SAFEGUARD: bar %s (#%s) closed with no valid DeepSeek record "
+                "(signal=%s) — ensemble result still stored, but DS history is incomplete",
+                bar_ts, bar_num, ds_pred_snap.get("signal"),
+            )
+
         # Fire postmortem in background — non-blocking, best effort
         if ds_pred_snap.get("signal") not in (None, "ERROR", "UNAVAILABLE"):
             _pm_record = {**ds_pred_snap, "window_start": window_start_time}
@@ -605,6 +680,25 @@ async def _resolve_window(
                 features=_pm_features,
                 dashboard_signals=_pm_dash,
             ))
+
+        # Fire Cohere embedding in background for this resolved bar
+        _embed_rec = {
+            "window_start":        window_start_time,
+            "actual_direction":    actual,
+            "start_price":         window_start_price,
+            "end_price":           end_price,
+            "ensemble_signal":     pred.get("signal", ""),
+            "ensemble_conf":       pred.get("confidence", 0),
+            "deepseek_signal":     ds_pred_snap.get("signal", ""),
+            "deepseek_conf":       ds_pred_snap.get("confidence", 0),
+            "indicators":          current_state.get("backend_snapshot", {}).get("features", {}),
+            "strategy_votes":      strategy_preds,
+            "specialist_signals":  current_state.get("bar_specialist_signals", {}),
+            "dashboard_signals_raw": snap_dash_raw,
+            "creative_edge":       current_state.get("bar_creative_edge", ""),
+            "session":             None,
+        }
+        asyncio.create_task(_embed_bar_background(window_start_time, _embed_rec))
 
         ens_at_total, ens_at_correct, ens_at_acc = (
             await _safe_storage_async(storage.get_total_accuracy, default=(0, 0, 0.0))
