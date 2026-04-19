@@ -409,15 +409,25 @@ function DeepSeekAuditTab({ deepseekLog, deepseekAcc, deepseekPred, ensembleAccu
   const [detailCache, setDetailCache] = useState({});
 
   async function toggleBar(ws) {
-    if (expanded[ws]) { setExpanded(e => ({ ...e, [ws]: false })); return; }
+    if (expanded[ws]) {
+      setExpanded(e => ({ ...e, [ws]: false }));
+      return;
+    }
     if (!detailCache[ws]) {
       try {
         const r = await fetch(`/deepseek/predictions/${ws}`);
-        if (r.ok) setDetailCache(c => ({ ...c, [ws]: await r.json() }));
-      } catch(_) {}
+        if (r.ok) {
+          const data = await r.json();
+          setDetailCache(c => ({ ...c, [ws]: data }));
+        }
+      } catch (_) {}
     }
     setExpanded(e => ({ ...e, [ws]: true }));
   }
+
+
+
+
 
   const pending = deepseekPred && deepseekPred.signal !== "ERROR";
   const total   = deepseekLog ? deepseekLog.length : 0;
