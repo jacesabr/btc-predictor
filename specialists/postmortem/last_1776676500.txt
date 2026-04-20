@@ -1,0 +1,93 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 09:15 UTC) ══════════════════════════════
+Signal     : UP  (70%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book shows extreme bid dominance (+99.77%, 8.0 BTC bids vs. 0.0 asks), providing a strong floor. Taker aggressor flow is bullish (BSR=1.375), showing buyers are paying the ask. No liquidations suggest stability.]
+[FUNDING + POSITIONING: Cross-exchange aggregate funding is deeply negative (-0.47780%), creating a structural incentive for shorts to cover. Fear & Greed Index at 29 (Fear) is a strong contrarian bullish signal. OI is stable, indicating no mass exit.]
+[TECHNICAL + CROSS-EXCHANGE: Price is in the upper third of the 100-bar range, with micro and macro trends aligned UP. Williams Alligator is bullish (Lips>Teeth>Jaw). Ensemble weighted vote is strongly UP at 81.2% confidence.]
+[SYNTHESIS: Dominant bias is bullish, driven by the 09:06 breakout's follow-through consolidation and the heavily bid order book. The single most decisive factor is the massive, high-volume breakout candle holding above $75,033. The biggest risk is a failed retest of the new high leading to a deeper pullback. Final conviction is for a retest and close above the entry level.]
+Narrative  : At 09:06, a massive 52.9 BTC breakout candle rocketed from $74,733 to $75,032.90, establishing a new local high. The subsequent candles (09:07-09:15) show a shallow, low-volume pullback that is holding well above the key breakout level and the critical resistance-turned-support at $75,032.90, indicating buyer consolidation after the explosive move.
+Free obs   : The strongest convergence is between the massive 09:06 breakout candle's momentum and the current order book showing a +99.77% bid imbalance with 8.0 BTC of bids stacked, providing immediate support for a retest higher.
+Data recv  : All signals available except Kraken Premium, OKX Funding, and Historical Similarity Analyst.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : UP
+End price        : $75,073.60
+Move             : +0.00 (+0.0000%)
+VERDICT          : CORRECT
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+08:50,74715.60,74735.70,74703.50,74703.50,7.8240
+08:51,74703.50,74703.50,74616.00,74623.00,7.9254
+08:52,74623.00,74688.20,74615.20,74688.10,6.0493
+08:53,74688.10,74706.80,74664.10,74695.80,11.5355
+08:54,74695.80,74695.80,74661.60,74694.10,5.2183
+08:55,74694.10,74717.30,74689.70,74717.20,4.9857
+08:56,74717.20,74725.90,74690.30,74690.30,7.0318
+08:57,74690.30,74748.10,74690.30,74737.80,11.3457
+08:58,74737.80,74737.80,74708.80,74715.30,5.6788
+08:59,74715.30,74733.50,74715.30,74731.40,3.2598
+09:00,74731.40,74756.50,74707.50,74755.40,8.4671
+09:01,74755.40,74773.00,74722.20,74722.20,5.5876
+09:02,74722.20,74742.40,74715.60,74727.50,3.1123
+09:03,74727.50,74732.40,74699.70,74720.70,5.5697
+09:04,74720.70,74729.20,74702.30,74724.70,6.8860
+09:05,74724.70,74735.60,74700.60,74733.00,3.8478
+09:06,74733.00,75032.90,74733.00,75032.90,52.9262
+09:07,75032.90,75032.90,74940.40,74998.20,12.7157
+09:08,74998.20,74998.20,74925.70,74925.70,10.0541
+09:09,74925.70,74952.70,74924.10,74952.60,5.5005
+09:10,74952.60,74952.70,74865.10,74865.20,6.8186
+09:11,74865.20,74929.80,74865.20,74929.80,8.8845
+09:12,74929.80,75032.20,74929.80,75032.10,6.2315
+09:13,75032.10,75075.20,74990.80,75071.80,9.8877
+09:14,75071.80,75088.30,75024.00,75038.00,9.1104
+09:15,75038.00,75064.10,75009.80,75047.80,11.8802
+09:16,75047.80,75052.70,75014.90,75014.90,2.9326
+09:17,75014.90,75046.20,75010.50,75046.20,4.2099
+09:18,75046.20,75114.90,75046.20,75114.80,11.2125
+09:19,75114.80,75114.90,75096.70,75096.70,1.1050
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 20.0195
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +99.8% bid-heavy. Immediate upward
+  taker_flow: BULLISH  — Aggressive buyers crossing the ask (BSR=1.375). Real directional conviction — pa
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  oi_velocity: NEUTRAL  — OI stable (-0.06% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Kraken spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dire
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.773). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.8% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.698 — balanced options positioning. Max pain $73,000 (-2.7% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: CORRECT
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was correct]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: CORRECT
+ROOT_CAUSE: The prediction correctly identified that the massive 09:06 breakout candle established a new support level and that the subsequent low-volume pullback was a consolidation, not a reversal, which was confirmed by the immediate order book support.
+MISLEADING_SIGNALS: The "Fear & Greed Index at 29" as a "strong contrarian bullish signal" was irrelevant for a 5-minute prediction; it's a macro sentiment indicator. The "Williams Alligator" technical signal added little value beyond confirming the existing short-term trend.
+RELIABLE_SIGNALS: The extreme bid-dominant order book (+99.77%) and the bullish taker flow (BSR=1.375) provided real-time, high-resolution confirmation of buying pressure and a lack of immediate sellers, which was crucial.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a classic "breakout and retest" phase. The 09:06 candle was the impulsive move, and bars 09:07-09:15 were the shallow, low-volume retest of the new support (~$75,032.90). The order book's bid wall prevented a deeper retracement, allowing momentum to rebuild for the next leg up to $75,114.80.
+LESSON: In a 5-minute frame, prioritize real-time microstructure signals (order book imbalance, taker flow) and the price action of the immediate breakout/retest pattern over slower macro sentiment or lagging technical oscillators.

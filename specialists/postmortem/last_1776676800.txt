@@ -1,0 +1,93 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 09:20 UTC) ══════════════════════════════
+Signal     : UP  (65%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Taker aggressor flow is strongly bullish (BSR=1.803), indicating high-conviction buying. This overrides the current bearish order book imbalance, as aggressive buyers are crossing the spread to execute.]
+[FUNDING + POSITIONING: Cross-exchange aggregate funding is deeply negative (-0.4778%), creating a structural incentive for shorts to cover. Fear & Greed Index at 29 (Fear) provides a contrarian bullish signal, while BTC dominance at 57.5% suggests capital rotation into BTC.]
+[TECHNICAL + CROSS-EXCHANGE: Price is in the upper third of its range, with micro and macro trends aligned up. The Williams Alligator is bullish (Lips>Teeth>Jaw), and the ensemble weighted vote shows a 79.1% UP probability with 18 bullish votes.]
+[SYNTHESIS: The dominant bias is UP, driven by the combination of aggressive spot-futures buying and negative funding pressuring shorts. The most decisive factor is the high-conviction breakout candle at 09:06 and its subsequent held retracement. The biggest risk is the immediate resistance at $75,088.30 and potential profit-taking. Final conviction is for a test above the entry level within the 5-minute window.]
+Narrative  : The story is a strong breakout from compression at 09:06, with a massive 52.9 BTC candle from $74,733 to $75,032.90, followed by a shallow, low-volume pullback that held above $74,925 (the 50% Fib of the breakout). The market has since consolidated between $75,014 and $75,114.80, testing the immediate resistance at $75,088.30, indicating absorption and a setup for a continuation move.
+Free obs   : The most significant convergence is between the strongly bullish taker aggressor flow (BSR=1.8) and the deeply negative cross-exchange funding rates, which together create a powerful structural bias for upward price pressure as aggressive buyers meet short-covering incentives.
+Data recv  : All signals available except Kraken Premium, OKX Funding, and Deribit DVOL details.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : UP
+End price        : $75,081.50
+Move             : +0.00 (+0.0000%)
+VERDICT          : CORRECT
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+08:55,74694.10,74717.30,74689.70,74717.20,4.9857
+08:56,74717.20,74725.90,74690.30,74690.30,7.0318
+08:57,74690.30,74748.10,74690.30,74737.80,11.3457
+08:58,74737.80,74737.80,74708.80,74715.30,5.6788
+08:59,74715.30,74733.50,74715.30,74731.40,3.2598
+09:00,74731.40,74756.50,74707.50,74755.40,8.4671
+09:01,74755.40,74773.00,74722.20,74722.20,5.5876
+09:02,74722.20,74742.40,74715.60,74727.50,3.1123
+09:03,74727.50,74732.40,74699.70,74720.70,5.5697
+09:04,74720.70,74729.20,74702.30,74724.70,6.8860
+09:05,74724.70,74735.60,74700.60,74733.00,3.8478
+09:06,74733.00,75032.90,74733.00,75032.90,52.9262
+09:07,75032.90,75032.90,74940.40,74998.20,12.7157
+09:08,74998.20,74998.20,74925.70,74925.70,10.0541
+09:09,74925.70,74952.70,74924.10,74952.60,5.5005
+09:10,74952.60,74952.70,74865.10,74865.20,6.8186
+09:11,74865.20,74929.80,74865.20,74929.80,8.8845
+09:12,74929.80,75032.20,74929.80,75032.10,6.2315
+09:13,75032.10,75075.20,74990.80,75071.80,9.8877
+09:14,75071.80,75088.30,75024.00,75038.00,9.1104
+09:15,75038.00,75064.10,75009.80,75047.80,11.8802
+09:16,75047.80,75052.70,75014.90,75014.90,2.9326
+09:17,75014.90,75046.20,75010.50,75046.20,4.2099
+09:18,75046.20,75114.90,75046.20,75114.80,11.2125
+09:19,75114.80,75114.90,75051.70,75051.80,2.9871
+09:20,75051.80,75084.90,75046.10,75070.00,3.8860
+09:21,75070.00,75155.70,75070.00,75103.20,11.5578
+09:22,75103.20,75103.20,75025.30,75032.00,3.8563
+09:23,75032.00,75043.90,74998.50,75043.90,8.9569
+09:24,75043.90,75044.10,75014.30,75044.10,3.8387
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 21.3758
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BEARISH  — Ask-heavy book — sellers in control. -44.5% ask dominant. Sell-side wall capping
+  taker_flow: BULLISH  — Aggressive buyers crossing the ask (BSR=1.803). Real directional conviction — pa
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  oi_velocity: NEUTRAL  — OI stable (-0.11% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Kraken spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dire
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.773). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.8% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.698 — balanced options positioning. Max pain $73,000 (-2.8% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: CORRECT
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was correct]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: CORRECT
+ROOT_CAUSE: The prediction correctly identified that high-conviction aggressive buying (BSR=1.803) and deeply negative funding rates created a structural bias for upward pressure, which overpowered the immediate bearish order book imbalance.
+MISLEADING_SIGNALS: The bearish order book signal (-44.5% ask dominant) was misleading; it indicated seller control at the snapshot, but aggressive taker flow was crossing those asks, rendering the static book picture deceptive.
+RELIABLE_SIGNALS: Taker aggressor flow (BSR) and cross-exchange negative funding were highly reliable, as they captured real-time directional conviction and structural short-covering pressure, respectively.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a consolidation and absorption phase after a sharp breakout. The price action (testing resistance, holding above the 50% Fib) showed buyers were successfully absorbing sell-side liquidity from the order book walls, setting the stage for the continuation move that occurred just after the prediction window closed.
+LESSON: In a high-conviction taker-driven move, prioritize dynamic flow signals (like BSR) over static order book imbalances, as aggressive buyers will consume visible sell walls, turning a bearish book into a bullish catalyst.

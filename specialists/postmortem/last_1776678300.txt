@@ -1,0 +1,95 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 09:45 UTC) ══════════════════════════════
+Signal     : UP  (75%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book shows extreme bid dominance (+85.8% imbalance) providing immediate support. Taker aggressor flow is strongly bullish (BSR=2.34) and accelerating, while spot whale flow shows 100% large buy trades, indicating genuine accumulation.]
+[FUNDING + POSITIONING: Cross-exchange aggregate funding is deeply negative (-0.4778%), creating structural upward pressure as shorts pay longs. Fear & Greed at 29 (Extreme Fear) is a reliable contrarian bullish signal. OI is stable, suggesting no mass exit.]
+[TECHNICAL + CROSS-EXCHANGE: Price is in a bull flag consolidation after a major breakout. The Williams Alligator is bullish (Lips>Teeth>Jaw). The ensemble weighted vote is 90.7% UP. BTC dominance at 57.5% signals capital rotation into BTC.]
+[SYNTHESIS: The dominant bias is bullish, driven by microstructure conviction (aggressive buying into resistance) and negative funding pressuring shorts. The single most decisive factor is the coiling bull flag pattern post-high-volume breakout, primed for continuation. The biggest risk is a false breakout rejection at the $75,155 resistance. Final conviction is for an upside resolution above the entry price.]
+Narrative  : The market broke out decisively at 09:06 with a 300-point, 52.9 BTC volume candle to $75,032.90. Since then, it has consolidated in a tightening bull flag between $75,195 and $75,147, making a series of lower highs (09:42: $75,194.20, 09:43: $75,185.90, 09:44: $75,171.70) on declining volume, coiling for the next leg up. The current price at $75,157.90 is testing the immediate resistance cluster at $75,155.70.
+Free obs   : The strongest convergence is between aggressive taker buy flow (BSR 2.34), a deeply negative aggregate funding rate (-0.4778%) incentivizing short covering, and a massive bid-side order book imbalance (+85.83%), all supporting a breakout attempt from the bull flag.
+Data recv  : Full microstructure suite, order book, taker flow, funding, spot whale flow, technicals, ensemble, and 50-bar price history.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $75,094.50
+Move             : +0.00 (+0.0000%)
+VERDICT          : WRONG
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+09:20,75051.80,75084.90,75046.10,75070.00,3.8860
+09:21,75070.00,75155.70,75070.00,75103.20,11.5578
+09:22,75103.20,75103.20,75025.30,75032.00,3.8563
+09:23,75032.00,75043.90,74998.50,75043.90,8.9569
+09:24,75043.90,75081.50,75014.30,75081.50,10.9738
+09:25,75081.50,75085.40,75056.60,75079.30,3.8057
+09:26,75079.30,75079.40,75048.80,75074.30,5.3925
+09:27,75074.30,75074.40,75033.60,75035.10,3.9139
+09:28,75035.10,75035.10,75001.80,75001.80,3.3571
+09:29,75001.80,75029.80,74996.80,75029.70,12.4693
+09:30,75029.70,75029.70,74983.60,75019.20,7.0089
+09:31,75019.20,75030.30,74995.00,74995.00,2.8467
+09:32,74995.00,75017.20,74983.20,75014.50,4.3596
+09:33,75014.50,75031.60,75013.80,75013.80,3.2423
+09:34,75013.80,75013.80,74975.10,74988.60,5.9999
+09:35,74988.60,75026.00,74988.60,75008.90,3.9759
+09:36,75008.90,75054.70,74999.60,75054.70,3.0973
+09:37,75054.70,75119.20,75050.50,75119.10,10.3376
+09:38,75119.10,75161.10,75088.90,75146.60,8.1475
+09:39,75146.60,75155.30,75108.10,75134.70,7.1111
+09:40,75134.70,75143.80,75112.40,75143.70,6.5357
+09:41,75143.70,75180.00,75143.70,75179.90,4.3522
+09:42,75179.90,75194.20,75172.90,75181.40,3.6039
+09:43,75181.40,75185.90,75171.60,75171.70,3.6109
+09:44,75171.70,75171.70,75145.80,75157.90,6.9471
+09:45,75157.90,75193.20,75157.90,75160.00,6.3887
+09:46,75160.00,75176.60,75152.50,75176.60,4.4658
+09:47,75176.60,75224.50,75176.50,75224.50,8.3152
+09:48,75224.50,75236.60,75159.50,75159.60,14.6564
+09:49,75159.60,75159.60,75084.10,75087.10,11.8500
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 8.6303
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +85.8% bid-heavy. Immediate upward
+  taker_flow: BULLISH  — Aggressive buyers crossing the ask (BSR=2.342). Real directional conviction — pa
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (+0.010%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (+0.05% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: BULLISH  — Kraken spot whale buyers dominate: 100.0% (4.1 BTC) of large spot trades are buy
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  okx_funding: NEUTRAL  — OKX funding near-zero (0.0023%). No leverage imbalance on OKX.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.775). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.9% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-2.9% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: WRONG
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was wrong]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: WRONG
+ROOT_CAUSE: The prediction was a classic "bull trap" — the market staged a convincing breakout and bull flag, but it was a final exhaustion move into a local top, followed by immediate rejection and a downtrend.
+MISLEADING_SIGNALS: The "bull flag" technical pattern and the extreme bid-side order book imbalance (+85.8%) were false strength; the flag was a distribution pattern, and the bid wall was either pulled or absorbed. The "Extreme Fear" contrarian signal was premature for a 5-minute horizon.
+RELIABLE_SIGNALS: The stable OI and neutral liquidation signals were correct in indicating no new bullish leverage or squeeze fuel. The ensemble weighted vote (90.7% UP) was a misleading aggregate of flawed inputs.
+DATA_GAPS: Real-time data on hidden order book liquidity (iceberg orders) and spot market sell volume from institutional desks (not just whale buy trades). The presence of large sell limit orders above the flag was critical missing context.
+UPDATED_READING: At prediction time, aggressive taker buys were being absorbed by larger, passive sellers above $75,155. The "coiling" was not accumulation but distribution, with the subsequent spike to $75,236.60 at 09:47 being the final liquidation of remaining longs before the swift 150-point drop.
+LESSON: In a tight consolidation after a breakout, prioritize taker sell flow on up-moves over bid imbalance. If price makes a series of lower highs (as noted at 09:42-09:44) within the flag on declining volume, it's a failure signal, not a coil—abort the long thesis immediately.

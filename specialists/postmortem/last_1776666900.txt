@@ -1,0 +1,96 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 06:35 UTC) ══════════════════════════════
+Signal     : DOWN  (65%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Taker aggressor flow is decisively bearish (BSR 0.278, accelerating) and overrides the bullish order book depth. Spot whale flow is bullish but is being overwhelmed by aggressive futures selling.]
+[FUNDING + POSITIONING: Funding is negative (bullish bias) and smart money/retail are neutral, offering no contrarian fade against the selling pressure. OI is stable, indicating this is a price move, not a mass position unwind.]
+[TECHNICAL + CROSS-EXCHANGE: Price is in the upper third of the range and oscillators (RSI 84.7, Stoch 83.6) are overbought, suggesting limited upside. The Binance Microstructure Expert synthesizes this into a DOWN signal with 65% confidence.]
+[SYNTHESIS: Dominant bias is bearish for the next 5 minutes. The single most decisive factor is the accelerating aggressive taker selling. The biggest risk is the strong passive bid wall providing sudden support. Final conviction is for a rejection from overbought levels, pushing price BELOW $74,507.70.]
+Narrative  : From 06:30 to 06:33, price surged from $74,339.70 to a high of $74,515.30, creating an impulsive leg. The 06:34 bar was a low-volume doji at $74,486.50, signaling a pause. The current 06:35 bar opened at $74,516.90, tested $74,533.10, but is struggling to hold gains, closing the first minute at $74,518.10. This shows momentum stalling just above the entry price of $74,507.70.
+Free obs   : The most significant conflict is between the strong bullish order book depth (+30.6% bid-heavy) and the decisively bearish, accelerating taker aggressor flow (BSR 0.278), with the latter being the dominant real-time execution force.
+Data recv  : Order Book Depth, Taker Aggressor Flow, Funding Rates, Spot Whale Flow, Alligator, Fib, RSI/Stoch/MACD, Ensemble Vote, Specialist Creative Edge, Binance Microstructure Expert.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : UP
+End price        : $74,545.20
+Move             : +0.00 (+0.0000%)
+VERDICT          : WRONG
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+06:10,74365.90,74365.90,74344.20,74346.60,3.5368
+06:11,74346.60,74348.20,74278.90,74288.60,8.9743
+06:12,74288.60,74307.90,74288.60,74305.70,3.8179
+06:13,74305.70,74316.60,74300.50,74313.80,4.1709
+06:14,74313.80,74313.80,74285.70,74298.20,3.3971
+06:15,74298.20,74298.20,74251.10,74278.40,7.3803
+06:16,74278.40,74298.70,74268.50,74296.00,4.3989
+06:17,74296.00,74338.60,74289.80,74336.70,9.4145
+06:18,74336.70,74378.30,74334.10,74378.30,6.2779
+06:19,74378.30,74403.80,74352.50,74403.70,7.8463
+06:20,74403.70,74409.00,74395.00,74395.00,2.7407
+06:21,74395.00,74397.90,74347.80,74357.80,6.2247
+06:22,74357.80,74357.80,74336.40,74344.70,4.9778
+06:23,74344.70,74363.60,74335.50,74335.60,5.3870
+06:24,74335.60,74358.70,74335.50,74358.60,1.7244
+06:25,74358.60,74363.50,74315.30,74363.50,6.7277
+06:26,74363.50,74363.60,74354.80,74363.60,1.7259
+06:27,74363.60,74386.20,74357.90,74380.00,5.8262
+06:28,74380.00,74388.60,74380.00,74384.80,1.5180
+06:29,74384.80,74384.90,74339.70,74339.70,9.1036
+06:30,74339.70,74438.00,74339.70,74416.20,13.5311
+06:31,74416.20,74459.60,74416.20,74439.60,8.7183
+06:32,74439.60,74462.20,74439.60,74462.10,4.4439
+06:33,74462.10,74515.30,74458.80,74486.50,14.1856
+06:34,74486.50,74517.00,74486.50,74516.90,5.5119
+06:35,74516.90,74548.10,74506.90,74548.00,6.9519
+06:36,74548.00,74550.60,74540.70,74545.90,2.6517
+06:37,74545.90,74545.90,74531.20,74531.30,1.4247
+06:38,74531.30,74531.30,74505.00,74527.00,10.9086
+06:39,74527.00,74527.10,74523.90,74523.90,0.5610
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 7.4921
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +30.6% bid-heavy. Immediate upward
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.278). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  mempool: BULLISH  — Very low fees (3 sat/vB) — calm network, no on-chain panic. Slightly positive ba
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (-0.012%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (+0.05% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: BULLISH  — Kraken spot whale buyers dominate: 100.0% (6.0 BTC) of large spot trades are buy
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  okx_funding: NEUTRAL  — OKX funding near-zero (0.0044%). No leverage imbalance on OKX.
+  btc_dominance: BULLISH  — BTC dominance 57.4% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.771). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0046%, trend +0.0025%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.2% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.703 — balanced options positioning. Max pain $73,000 (-2.1% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4615%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: WRONG
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was wrong]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: WRONG
+ROOT_CAUSE: I over-weighted the bearish taker aggressor flow as the dominant execution force and underestimated the structural support from the strong bid-heavy order book depth and negative funding, which created a resilient floor that absorbed selling pressure.
+MISLEADING_SIGNALS: Taker aggressor flow (BSR 0.278) and overbought oscillators (RSI 84.7) were misleading; they signaled immediate selling momentum and exhaustion, but the selling was insufficient to break the underlying bid support.
+RELIABLE_SIGNALS: Order book depth (+30.6% bid-heavy), spot whale flow (bullish), and negative funding were reliable; they correctly indicated underlying buying interest and a structural bias against shorting.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a strong, liquidity-driven uptrend. The "aggressive" selling was likely profit-taking or short-term hedging being fully absorbed by institutional and algorithmic bids at key levels, allowing price to grind higher on stable order book support.
+LESSON: In a strong trend with deep bid walls and negative funding, treat bearish taker flow as a counter-trend *fade* signal, not the primary directional cue. The order book imbalance is a higher-order signal of intent when it conflicts with short-term execution flow.

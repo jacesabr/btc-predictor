@@ -1,0 +1,95 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 06:50 UTC) ══════════════════════════════
+Signal     : DOWN  (65%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book is heavily ask-dominated (-64.75% imbalance), indicating sellers are capping rallies. Despite bullish taker flow and spot whale buys, the immediate liquidity structure favors downside.]
+[FUNDING + POSITIONING: Negative aggregate funding (-0.46150%) is structurally bullish, but smart money and retail are neutrally aligned (50%/50% long), offering no strong contrarian fade signal against the current selling pressure.]
+[TECHNICAL + CROSS-EXCHANGE: Price is in the upper third of the 100-bar range, near resistance at $74,895.60. The Alligator is bullish but price is currently below the Lips ($74,742.56). The ensemble vote is UP 70%, but several component indicators (MACD, Stochastic) show bearish divergences on the 1m.]
+[SYNTHESIS: Dominant bias is short-term bearish due to exhaustion at resistance and seller-controlled order book. The most decisive factor is the failed momentum after the 06:41 high, confirmed by the ask-heavy book. Biggest risk is the strong spot whale accumulation which could reverse the move. Final conviction is for a retest of the nearest support at $74,715.00 within the 5-minute window.]
+Narrative  : The rally from 06:30 to 06:41, peaking at $74,895.60, showed clear exhaustion with a high-volume absorption candle at 06:41 (42.3 BTC, long upper wick). Since then, price action from 06:42 to 06:50 has failed to reclaim that high, with the last 5 bars consistently closing in the bottom half of their range, indicating persistent selling pressure into the 06:50 candle's low of $74,742.80.
+Free obs   : The most significant convergence is between the high-trust bearish order book signal (-64.75% imbalance) and the subtle but clear price-action narrative of exhaustion and failed follow-through after the 06:41 high.
+Data recv  : Order Book, Taker Flow, Spot Whale Flow, Funding Rates, Fear & Greed, BTC Dominance, Alligator, Fib, Ensemble, Specialist Creative Edge, Binance Microstructure Expert, Last 50 Bars.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $74,707.00
+Move             : +0.00 (+0.0000%)
+VERDICT          : CORRECT
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+06:25,74358.60,74363.50,74315.30,74363.50,6.7277
+06:26,74363.50,74363.60,74354.80,74363.60,1.7259
+06:27,74363.60,74386.20,74357.90,74380.00,5.8262
+06:28,74380.00,74388.60,74380.00,74384.80,1.5180
+06:29,74384.80,74384.90,74339.70,74339.70,9.1036
+06:30,74339.70,74438.00,74339.70,74416.20,13.5311
+06:31,74416.20,74459.60,74416.20,74439.60,8.7183
+06:32,74439.60,74462.20,74439.60,74462.10,4.4439
+06:33,74462.10,74515.30,74458.80,74486.50,14.1856
+06:34,74486.50,74517.00,74486.50,74516.90,5.5119
+06:35,74516.90,74548.10,74506.90,74548.00,6.9519
+06:36,74548.00,74550.60,74540.70,74545.90,2.6517
+06:37,74545.90,74545.90,74531.20,74531.30,1.4247
+06:38,74531.30,74531.30,74505.00,74527.00,10.9086
+06:39,74527.00,74580.00,74512.40,74579.90,11.9948
+06:40,74579.90,74717.80,74579.90,74703.70,24.6134
+06:41,74703.70,74895.60,74703.70,74770.10,42.2999
+06:42,74770.10,74840.00,74770.10,74792.00,13.5302
+06:43,74792.00,74794.40,74723.80,74735.90,13.3840
+06:44,74735.90,74788.00,74732.80,74780.60,9.5439
+06:45,74780.60,74784.60,74747.90,74747.90,8.0418
+06:46,74747.90,74753.60,74725.90,74738.50,5.0242
+06:47,74738.50,74803.60,74715.00,74801.70,11.7569
+06:48,74801.70,74826.30,74784.70,74800.10,10.5357
+06:49,74800.10,74800.10,74760.50,74761.20,5.7882
+06:50,74761.20,74761.20,74706.00,74706.00,4.9996
+06:51,74706.00,74718.90,74695.10,74695.10,1.9235
+06:52,74695.10,74719.40,74693.80,74701.60,7.1560
+06:53,74701.60,74731.30,74701.60,74722.50,3.7636
+06:54,74722.50,74747.00,74722.50,74744.70,2.6472
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 21.9614
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BEARISH  — Ask-heavy book — sellers in control. -64.7% ask dominant. Sell-side wall capping
+  taker_flow: BULLISH  — Aggressive buyers crossing the ask (BSR=1.710). Real directional conviction — pa
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  mempool: BULLISH  — Very low fees (2 sat/vB) — calm network, no on-chain panic. Slightly positive ba
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (+0.035%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (+0.06% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: BULLISH  — Kraken spot whale buyers dominate: 68.6% (5.0 BTC) of large spot trades are buys
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.772). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0046%, trend +0.0025%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.7% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-2.4% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4615%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: CORRECT
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was correct]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: CORRECT
+ROOT_CAUSE: The prediction correctly identified that the immediate liquidity structure (ask-heavy order book) and price action showing exhaustion after a sharp rally would dominate over the bullish macro signals, leading to a short-term retracement.
+MISLEADING_SIGNALS: The ensemble vote (70% UP) and the bullish Alligator indicator were misleading for the 5-minute horizon; the strong bullish taker flow and spot whale buys created a false impression of immediate upside momentum.
+RELIABLE_SIGNALS: The bearish order book imbalance (-64.75%) and the price-action narrative of a failed follow-through after the 06:41 high-volume wick were the most reliable, high-timeframe-convergence signals.
+DATA_GAPS: NONE
+UPDATED_READING: The market experienced a classic "bull trap" or exhaustion move: a sharp, high-volume pump to $74,895.60 was met with aggressive selling pressure (visible in the order book), which absorbed the bullish taker flow and whale buys, leading to a controlled grind down to support.
+LESSON: In a short-term (5-min) prediction, prioritize immediate liquidity (order book) and price-action rejection at key levels over slower or structurally bullish indicators (like funding, whale flow) when they conflict.

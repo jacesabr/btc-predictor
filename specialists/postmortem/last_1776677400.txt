@@ -1,0 +1,93 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 09:30 UTC) ══════════════════════════════
+Signal     : UP  (65%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book is ask-heavy (-50.95%), capping immediate rallies, but taker aggressor flow is strongly bullish (BSR=1.3879) with buyers paying the ask, outweighing the static book pressure. No liquidations indicate stability.]
+[FUNDING + POSITIONING: Deeply negative aggregate funding (-0.47780%) creates a structural upward bias as shorts pay longs. Fear & Greed at 29 (Extreme Fear) is a reliable contrarian bullish signal. Smart money and retail are neutrally aligned, preventing a crowded fade.]
+[TECHNICAL + CROSS-EXCHANGE: Price is in a bull flag after a strong impulse, holding above key Fib (38.2%) and VWAP. Stoch is severely oversold (1.6) within an uptrend, suggesting exhaustion of selling. Ensemble weighted vote is strongly UP (87.6% confidence, 17↑/5↓).]
+[SYNTHESIS: Dominant bias is bullish continuation of the 09:06 impulse wave. The single most decisive factor is the combination of negative funding (forcing short covering) and the coiled price action at a higher low in the bull flag. Biggest risk is the immediate ask-heavy order book wall. Final conviction is for a breakout above entry within the 5-min window.]
+Narrative  : The chart surged from $74,733 to $75,155.70 at 09:06 on a massive 52.9 BTC volume spike, then entered a controlled, low-volatility bull flag consolidation between 09:20-09:29, compressing near the Alligator Lips and the 38.2% Fib ($74,981.51). The last two bars (09:28, 09:29) show extreme compression and a slight bounce off the $74,996.80 low, coiling for a continuation move.
+Free obs   : The strongest convergence is between the negative funding rate bias across exchanges (-0.4778%) incentivizing short covering, the oversold Stoch (1.6) and RSI (24.2) on a pullback within a strong uptrend, and the aggressive taker buy flow (BSR=1.3879) showing real conviction.
+Data recv  : Full microstructure suite, technicals, ensemble, and 50-bar price history.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $74,975.10
+Move             : +0.00 (+0.0000%)
+VERDICT          : WRONG
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+09:05,74724.70,74735.60,74700.60,74733.00,3.8478
+09:06,74733.00,75032.90,74733.00,75032.90,52.9262
+09:07,75032.90,75032.90,74940.40,74998.20,12.7157
+09:08,74998.20,74998.20,74925.70,74925.70,10.0541
+09:09,74925.70,74952.70,74924.10,74952.60,5.5005
+09:10,74952.60,74952.70,74865.10,74865.20,6.8186
+09:11,74865.20,74929.80,74865.20,74929.80,8.8845
+09:12,74929.80,75032.20,74929.80,75032.10,6.2315
+09:13,75032.10,75075.20,74990.80,75071.80,9.8877
+09:14,75071.80,75088.30,75024.00,75038.00,9.1104
+09:15,75038.00,75064.10,75009.80,75047.80,11.8802
+09:16,75047.80,75052.70,75014.90,75014.90,2.9326
+09:17,75014.90,75046.20,75010.50,75046.20,4.2099
+09:18,75046.20,75114.90,75046.20,75114.80,11.2125
+09:19,75114.80,75114.90,75051.70,75051.80,2.9871
+09:20,75051.80,75084.90,75046.10,75070.00,3.8860
+09:21,75070.00,75155.70,75070.00,75103.20,11.5578
+09:22,75103.20,75103.20,75025.30,75032.00,3.8563
+09:23,75032.00,75043.90,74998.50,75043.90,8.9569
+09:24,75043.90,75081.50,75014.30,75081.50,10.9738
+09:25,75081.50,75085.40,75056.60,75079.30,3.8057
+09:26,75079.30,75079.40,75048.80,75074.30,5.3925
+09:27,75074.30,75074.40,75033.60,75035.10,3.9139
+09:28,75035.10,75035.10,75001.80,75001.80,3.3571
+09:29,75001.80,75029.80,74996.80,75029.70,12.4693
+09:30,75029.70,75029.70,74983.60,75019.20,7.0089
+09:31,75019.20,75030.30,74995.00,74995.00,2.8467
+09:32,74995.00,75017.20,74983.20,75014.50,4.3596
+09:33,75014.50,75031.60,75013.80,75013.80,3.2423
+09:34,75013.80,75013.80,74975.10,74975.10,5.4694
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 3.5350
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BEARISH  — Ask-heavy book — sellers in control. -50.9% ask dominant. Sell-side wall capping
+  taker_flow: BULLISH  — Aggressive buyers crossing the ask (BSR=1.388). Real directional conviction — pa
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  oi_velocity: NEUTRAL  — OI stable (+0.06% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Binance spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dir
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.775). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.8% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-2.7% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: WRONG
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was wrong]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: WRONG
+ROOT_CAUSE: The prediction over-relied on structural and contrarian signals (negative funding, extreme fear) while underestimating the immediate, dominant price action of a failed breakout and subsequent distribution.
+MISLEADING_SIGNALS: The "bull flag" narrative and oversold Stoch/RSI were misleading; the consolidation from 09:20 was not a bullish continuation pattern but a distribution phase after a failed re-test of the 09:21 high ($75,155.70). The strong ensemble "UP" vote was a lagging consensus.
+RELIABLE_SIGNALS: The immediate order book signal (BEARISH, ask-heavy) was correct and should have been the primary guide. The taker buy flow (BSR=1.388) showed conviction but was insufficient to overcome the static sell-side pressure.
+DATA_GAPS: NONE
+UPDATED_READING: The market had already rejected the 09:21 high, forming a lower high at 09:24. The subsequent "coiling" was not accumulation but weakening momentum and distribution into the ask wall, leading to a breakdown below the 09:28 low and the key Fib level.
+LESSON: In a 5-minute window, immediate microstructure (order book walls) and recent price rejection (failure to make a higher high) must override slower structural biases (funding, sentiment). A "bull flag" is only valid if it holds above the impulse wave's pullback low; a break below it invalidates the pattern.

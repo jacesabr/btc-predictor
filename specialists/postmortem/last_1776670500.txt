@@ -1,0 +1,95 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 07:35 UTC) ══════════════════════════════
+Signal     : DOWN  (65%)
+Start price: $0.00
+Reasoning  : MICROSTRUCTURE: Order book shows a massive bid wall (10.1 BTC vs 0.5 BTC asks), but taker flow is accelerating bullish—often a sign of final aggressive buying before a pullback. No liquidations or spot whale flow to sustain momentum.
+FUNDING + POSITIONING: Aggregate funding is negative (-0.46150%), which is structurally bullish, but OI is stable and top traders are only 44% long—no strong accumulation to drive a breakout in the next 5 minutes.
+TECHNICAL + CROSS-EXCHANGE: Stoch is oversold (3.9) and Alligator is bullish, but price is failing at the 44.1% Fib after a clear buying climax. Ensemble vote is 84% UP but includes many low-trust indicators; higher-trust stochastic suggests a bounce is due, but likely after a brief dip below entry.
+SYNTHESIS: Dominant bias is short-term bearish retracement. The most decisive factor is the two large volume spikes (07:21, 07:23) with the second printing a long wick—classic distribution. Biggest risk is the strong bid wall causing a sudden bounce. Final conviction: price will dip below $75,185 before 07:35 as the buying climax exhausts.
+Narrative  : At 07:21, a massive 98.4 BTC volume spike pushed price to $75,355.60, followed by a second large spike at 07:23 to $75,553.00 that printed a long upper wick—a classic buying climax. Since then, price has been distributing lower, failing to hold above $75,200, and is now testing the 44.1% Fib pullback level at $75,237.16. The current bar (07:30) shows weak follow-through after the earlier rejection.
+Free obs   : The strongest convergence is between the order book’s extreme bid-heavy imbalance (+90.5%) and the taker buy/sell ratio of 1.665—both suggest aggressive buying is being absorbed, creating a potential exhaustion trap near the $75,575 resistance.
+Data recv  : Order book imbalance, taker flow, funding rates, Fear & Greed, mempool, BTC dominance, top position ratio, ensemble vote, technical indicators (Alligator, Fib, Stoch, MACD), and full 1-minute OHLCV history.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $74,935.80
+Move             : +0.00 (+0.0000%)
+VERDICT          : CORRECT
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+07:10,74757.41,74783.24,74735.49,74783.24,13.8063
+07:11,74783.24,74783.24,74759.78,74770.10,4.0961
+07:12,74770.09,74811.48,74770.09,74811.48,3.4198
+07:13,74811.48,74837.84,74811.48,74812.83,3.8139
+07:14,74812.82,74812.83,74786.51,74802.00,6.3972
+07:15,74801.99,74801.99,74750.00,74750.01,3.6503
+07:16,74750.00,74753.24,74722.85,74753.24,5.1946
+07:17,74753.24,74816.72,74753.23,74816.71,7.8086
+07:18,74816.71,74818.57,74806.31,74813.34,4.7611
+07:19,74813.34,74913.04,74800.13,74911.91,16.7693
+07:20,74911.90,75058.33,74905.93,75029.89,52.2509
+07:21,75030.07,75363.31,75030.07,75235.61,131.0749
+07:22,75235.62,75319.80,75205.22,75257.78,25.9849
+07:23,75257.77,75555.03,75248.21,75459.63,105.2761
+07:24,75459.64,75572.00,75373.76,75380.21,81.6238
+07:25,75380.21,75410.50,75258.35,75265.82,42.5071
+07:26,75265.81,75265.82,75162.72,75167.80,35.9685
+07:27,75167.80,75260.92,75167.80,75216.75,30.4049
+07:28,75216.00,75217.06,75158.70,75158.71,5.7294
+07:29,75158.71,75211.03,75140.05,75211.03,11.6046
+07:30,75211.02,75246.77,75126.83,75139.33,26.8446
+07:31,75139.33,75139.34,74992.09,75037.51,28.2513
+07:32,75037.51,75150.00,75037.50,75150.00,25.5923
+07:33,75150.00,75150.00,75056.61,75083.20,13.0920
+07:34,75083.20,75120.22,75066.39,75069.74,26.5359
+07:35,75069.74,75069.74,75007.02,75022.01,16.4786
+07:36,75022.01,75022.01,74932.40,74937.53,23.5133
+07:37,74937.53,74942.00,74848.11,74912.46,23.4635
+07:38,74912.47,74950.00,74903.12,74938.81,25.2890
+07:39,74938.81,74950.01,74932.00,74932.00,21.6218
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: -19.5028
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +48.2% bid-heavy. Immediate upward
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.719). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  mempool: BULLISH  — Very low fees (3 sat/vB) — calm network, no on-chain panic. Slightly positive ba
+  oi_velocity: BEARISH  — OI falling -0.45% over 30min (last bar: -0.06%). Position liquidation / de-lever
+  spot_whale_flow: BULLISH  — Kraken spot whale buyers dominate: 100.0% (2.3 BTC) of large spot trades are buy
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  okx_funding: NEUTRAL  — OKX funding near-zero (0.0044%). No leverage imbalance on OKX.
+  btc_dominance: BULLISH  — BTC dominance 57.4% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.770). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0046%, trend +0.0025%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.7% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.701 — balanced options positioning. Max pain $73,000 (-2.6% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4615%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: CORRECT
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was correct]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: CORRECT
+ROOT_CAUSE: The prediction correctly identified a buying climax and distribution pattern, with the key volume spike at 07:23 printing a long upper wick to $75,555.03, which marked the exhaustion point and initiated the downtrend.
+MISLEADING_SIGNALS: The "strong bid wall" and "extreme bid-heavy imbalance" were misleading; they were absorbed or pulled, failing to cause a bounce. The ensemble vote (84% UP) and bullish Alligator were also wrong for the 5-minute horizon.
+RELIABLE_SIGNALS: Taker flow (bearish BSR=0.719), volume profile (climax with wick), and the failure at the Fib level were reliable. The negative funding rate was a correct structural backdrop but its effect was on a longer timeframe.
+DATA_GAPS: Real-time data on whether the large bid walls were actual resting orders or "spoofs" that could be pulled. Also, granular data on which side (taker buy vs sell) was driving the price down from the high.
+UPDATED_READING: A classic exhaustion move occurred: aggressive taker buying (07:21-07:23) pushed price to a local high, was met with immediate selling pressure (creating the wick), and then sustained taker selling (bearish BSR) drove price down in a distribution phase as momentum collapsed.
+LESSON: In a clear buying climax with a long upper wick, prioritize the bearish taker flow signal over the static order book imbalance, as the latter can be deceptive and is often the liquidity that gets filled during distribution.

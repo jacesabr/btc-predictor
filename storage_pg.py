@@ -369,10 +369,13 @@ class StoragePG:
             except Exception:
                 votes = {}
             for name, vote in votes.items():
+                sig = vote.get("signal") if isinstance(vote, dict) else vote
+                if sig not in ("UP", "DOWN"):
+                    continue
                 if name not in accuracy:
                     accuracy[name] = {"correct": 0, "total": 0}
                 accuracy[name]["total"] += 1
-                if vote.get("signal") == actual:
+                if sig == actual:
                     accuracy[name]["correct"] += 1
         return {
             name: s["correct"] / s["total"] if s["total"] > 0 else 0.5

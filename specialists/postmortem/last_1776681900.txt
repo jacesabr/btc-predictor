@@ -1,0 +1,94 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 10:45 UTC) ══════════════════════════════
+Signal     : NEUTRAL  (58%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Taker aggressor flow is bearish (BSR=0.73) with sellers hitting bids, outweighing the marginally bullish order book imbalance. Spot whale flow is neutral, showing no large buy absorption.]
+[FUNDING + POSITIONING: Funding is negative and falling (bullish for price), but Open Interest is stable and the L/S ratio shows no strong bias, indicating the funding signal may be a slow, structural tailwind rather than an immediate catalyst.]
+[TECHNICAL + CROSS-EXCHANGE: Micro trend is down moderate, EMA5 below EMA13, Stoch bearish cross, and price is below key Fib levels (50% at $75,274). The ensemble vote is neutral but weighted slightly bearish (6.404 UP vs 4.253 DN).]
+[SYNTHESIS: Dominant bias is short-term bearish due to active selling pressure and failed recovery attempts. The single most decisive factor is the bearish taker flow confirming downside momentum. Biggest risk is the bid wall providing sudden support. Final conviction leans BELOW as price struggles beneath resistance and key EMAs.]
+Narrative  : Price rallied from $75,060 at 09:56 to a high of $75,403.20 (outside this 50-bar window) but has been in a clear downtrend since 10:12-10:18, failing at $75,354-$75,374. From 10:30, it broke down from $75,302 to $75,144.70, and the last few minutes (10:41-10:45) show consolidation between $75,163 and $75,177, just below the entry price, on decreasing volume.
+Free obs   : The most significant convergence is bearish taker flow (BSR 0.73) and a bearish Alligator (Lips<Teeth<Jaw) against a bid-heavy order book and negative funding, creating a conflict between immediate passive support and active selling pressure.
+Data recv  : All microstructure signals, technical indicators, order book, taker flow, funding, ensemble vote, and full 50-bar price history.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $75,113.90
+Move             : +0.00 (+0.0000%)
+VERDICT          : ABSTENTION (NEUTRAL)
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+10:20,75377.50,75377.50,75302.20,75302.30,7.2497
+10:21,75302.30,75354.40,75301.00,75319.10,5.3492
+10:22,75319.10,75319.10,75268.50,75269.70,5.6748
+10:23,75269.70,75285.20,75267.40,75270.30,7.3341
+10:24,75270.30,75302.90,75270.30,75299.70,7.5783
+10:25,75299.70,75335.10,75285.20,75322.30,8.1001
+10:26,75322.30,75322.30,75296.30,75296.40,2.0932
+10:27,75296.40,75309.20,75264.70,75268.30,6.3851
+10:28,75268.30,75299.60,75268.20,75281.80,9.0427
+10:29,75281.80,75307.70,75281.50,75302.40,2.8419
+10:30,75302.40,75302.40,75196.00,75199.60,11.4581
+10:31,75199.60,75224.20,75199.60,75217.00,3.2594
+10:32,75217.00,75217.00,75171.60,75180.40,7.1674
+10:33,75180.40,75211.80,75180.40,75183.10,3.8070
+10:34,75183.10,75195.20,75172.30,75172.30,3.1826
+10:35,75172.30,75180.30,75144.70,75144.70,4.8797
+10:36,75144.70,75189.80,75144.70,75179.30,11.6057
+10:37,75179.30,75179.50,75151.40,75173.10,3.7722
+10:38,75173.10,75179.60,75156.50,75169.10,1.8604
+10:39,75169.10,75195.40,75169.10,75190.80,3.1362
+10:40,75190.80,75195.40,75162.90,75177.30,2.3942
+10:41,75177.30,75192.30,75163.80,75163.90,2.7139
+10:42,75163.90,75176.00,75163.80,75165.90,2.4587
+10:43,75165.90,75177.60,75165.90,75177.60,3.6074
+10:44,75177.60,75177.70,75172.70,75172.80,0.9915
+10:45,75172.80,75185.30,75167.40,75167.40,3.2520
+10:46,75167.40,75183.90,75167.40,75183.90,1.2744
+10:47,75183.90,75189.80,75178.80,75189.30,5.3972
+10:48,75189.30,75189.30,75154.70,75154.70,1.8164
+10:49,75154.70,75169.80,75150.00,75150.00,3.6881
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: -7.3632
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +13.0% bid-heavy. Immediate upward
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.730). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (+0.035%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (-0.02% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Kraken spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dire
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.783). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.9% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-2.9% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was abstention]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: The prediction correctly identified bearish momentum but assigned a NEUTRAL label due to conflicting signals, causing it to abstain from a correct directional call (DOWN).
+MISLEADING_SIGNALS: Over-weighted the "bullish" order book imbalance and negative funding as potential support; the bid wall was passive and failed to stop the active taker selling pressure.
+RELIABLE_SIGNALS: Bearish taker flow (BSR=0.73) and the bearish technical structure (EMA cross, downtrend) accurately forecasted the continued selling pressure and price decline.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a controlled downtrend driven by consistent aggressive selling (taker flow), where passive bid support was incrementally consumed rather than providing a bounce.
+LESSON: When bearish taker flow and bearish technicals align, trust the active selling over passive order book support unless spot whale flow confirms absorption.

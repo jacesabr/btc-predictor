@@ -1,0 +1,94 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 10:15 UTC) ══════════════════════════════
+Signal     : UP  (72%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book shows +10.6% bid-heavy imbalance with buyers defending. Taker aggressor flow is bullish (BSR=1.148) with participants paying to get long. No liquidations suggest stable conditions.]
+[FUNDING + POSITIONING: Deeply negative aggregate funding (-0.4778%) creates a structural incentive for shorts to cover. BTC dominance at 57.5% indicates capital rotation into BTC. Smart money and retail are neutrally aligned, reducing contrarian fade pressure.]
+[TECHNICAL + CROSS-EXCHANGE: Alligator is bullish (Lips>Teeth>Jaw). Macro and micro trends are strongly up and aligned. Ensemble weighted vote is 88.1% UP. Primary risk is overbought oscillators (RSI 79.9, Stoch 94.0) suggesting a pullback is due, but momentum remains strong.]
+[SYNTHESIS: Dominant bias is bullish, driven by the combination of negative funding (short squeeze fuel) and immediate bid-side order book pressure. The single most decisive factor is the "compression before expansion" pattern from 10:11-10:14, poised to break upward. Biggest risk is a false breakout from overbought conditions leading to a quick rejection at $75,348.70. Final conviction is for a test ABOVE entry, likely within the next 5-minute expansion.]
+Narrative  : From 10:11 to 10:14, price surged from $75,280.90 to a high of $75,345.40, then consolidated tightly between $75,335.10 and $75,345.70. This 3-bar compression, following a strong impulse, is coiling for another expansion. The market is testing the upper boundary of the 100-bar range ($75,348.70) with strong underlying bid support and aggressive taker buying.
+Free obs   : The most significant convergence is between structural bullish signals (negative funding, high BTC dominance, Fear & Greed contrarian signal) and immediate microstructure pressure (bid-heavy order book, aggressive taker buys), all occurring within a strong macro and micro uptrend.
+Data recv  : All signals available except OKX funding rate. Key bullish signals: Order Book Imbalance (+10.6%), Taker Flow (BSR=1.148), Negative Aggregate Funding (-0.4778%), Fear & Greed (29), BTC Dominance (57.5%), Ensemble Vote (88.1% UP). Key caution: Overbought oscillators (RSI 79.9, Stoch 94.0).
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : UP
+End price        : $75,403.20
+Move             : +0.00 (+0.0000%)
+VERDICT          : CORRECT
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+09:50,75095.20,75108.70,75052.80,75082.60,7.9213
+09:51,75082.60,75106.00,75081.20,75082.30,4.3225
+09:52,75082.30,75082.30,75028.20,75028.20,7.0837
+09:53,75028.20,75083.30,75023.00,75023.00,6.4707
+09:54,75023.00,75064.60,75023.00,75064.60,4.8376
+09:55,75064.60,75072.20,75052.60,75060.40,3.5376
+09:56,75060.40,75108.00,75060.40,75090.20,5.3587
+09:57,75090.20,75092.20,75052.60,75064.20,3.3734
+09:58,75064.20,75076.80,75033.00,75034.20,6.4991
+09:59,75034.20,75059.80,75025.10,75059.80,3.5232
+10:00,75059.80,75095.40,75059.80,75077.80,9.6335
+10:01,75077.80,75105.40,75077.80,75105.40,5.3577
+10:02,75105.40,75195.70,75105.40,75195.70,16.0653
+10:03,75195.70,75195.70,75167.80,75194.40,6.2145
+10:04,75194.40,75210.90,75194.40,75194.80,3.4179
+10:05,75194.80,75276.50,75193.00,75275.10,11.6116
+10:06,75275.10,75292.50,75224.40,75224.50,6.7350
+10:07,75224.50,75279.80,75224.40,75261.10,4.3035
+10:08,75261.10,75302.10,75237.40,75240.60,14.0363
+10:09,75240.60,75274.70,75240.60,75253.20,3.3286
+10:10,75253.20,75292.00,75253.20,75280.90,6.9862
+10:11,75280.90,75345.40,75270.60,75338.10,12.3956
+10:12,75338.10,75346.50,75276.50,75338.30,16.6973
+10:13,75338.30,75345.80,75285.30,75345.70,12.4925
+10:14,75345.70,75345.70,75335.10,75337.30,3.3785
+10:15,75337.30,75348.70,75310.30,75329.10,9.8275
+10:16,75329.10,75354.10,75328.30,75328.30,7.8640
+10:17,75328.30,75354.80,75328.30,75354.80,6.6662
+10:18,75354.80,75374.00,75328.10,75373.90,6.3643
+10:19,75373.90,75389.70,75373.90,75389.70,0.5965
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 17.4360
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +10.6% bid-heavy. Immediate upward
+  taker_flow: BULLISH  — Aggressive buyers crossing the ask (BSR=1.148). Real directional conviction — pa
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (+0.049%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (+0.08% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Kraken spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dire
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.779). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 43.0% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-3.1% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: CORRECT
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was correct]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: CORRECT
+ROOT_CAUSE: The prediction correctly identified a coiled compression pattern (10:11-10:14) within a strong, multi-timeframe uptrend, which was fueled by structural short-squeeze pressure from deeply negative funding rates.
+MISLEADING_SIGNALS: Overbought oscillators (RSI 79.9, Stoch 94.0) were a false caution; in a strong trend with negative funding, overbought conditions can persist much longer as shorts are forced to cover.
+RELIABLE_SIGNALS: The convergence of negative aggregate funding (structural bullish), bid-heavy order book imbalance (immediate pressure), and bullish taker flow (BSR=1.148) provided a high-probability directional edge.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a sustained bullish impulse (evident from the 30-bar data). The brief consolidation was not a top but a pause for order flow to reload, with aggressive takers and negative funding preventing any meaningful pullback.
+LESSON: In a strong macro uptrend confirmed by negative funding, treat extreme overbought oscillator readings as a secondary concern; the primary driver is momentum fueled by positioning (short cover), not mean reversion.

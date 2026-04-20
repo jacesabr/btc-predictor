@@ -1,0 +1,93 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 08:50 UTC) ══════════════════════════════
+Signal     : DOWN  (65%)
+Start price: $0.00
+Reasoning  : MICROSTRUCTURE: The order book is heavily ask-skewed (-59.78% imbalance), and taker aggressor flow is bearish (BSR 0.8495), confirming sellers are hitting bids. Spot whale flow is neutral, offering no counter-buying pressure.
+FUNDING + POSITIONING: Aggregate funding is negative (-0.47780%), which is a structural bullish bias, but current positioning shows smart money (49.2% long) and retail (50.1% long) are aligned with no extreme skew, suggesting the funding tailwind is not yet strong enough to override immediate momentum.
+TECHNICAL + CROSS-EXCHANGE: Price is at the session low, below all key EMAs and the Williams Alligator (bearish alignment). The stochastic is deeply oversold but still in a bearish cross. The ensemble weighted vote is bearish (8↑ vs 14↓), and the high-trust stochastic signal, while oversold, has not yet triggered a bullish reversal signal.
+SYNTHESIS: The dominant bias is bearish momentum confirmed by microstructure selling. The single most decisive factor is the high-volume breakdown at 08:49 followed by low-volume consolidation at the lows, a typical bear flag/continuation pattern on the 1-minute chart. The biggest risk is a violent snap-back rally from extreme oversold levels, but without a bullish microstructure reversal signal, the path of least resistance is down. Final conviction is for a test below the $74,616 entry.
+Narrative  : The chart shows a clear bearish breakdown from 08:49 UTC when a high-volume (31.6 BTC) sell candle broke below $74,706.90, accelerating to a new low of $74,615.20 by 08:52. The subsequent two minutes (08:51-08:52) printed extremely low-range candles with minimal volume, suggesting a lack of immediate buying interest to reverse the breakdown, trapping any premature longs.
+Free obs   : The most significant convergence is between the oversold oscillators (RSI 10.1, Stoch 0.4) and the persistent aggressive selling pressure in the taker flow (BSR 0.8495), indicating that oversold conditions are being driven by genuine selling, not exhaustion.
+Data recv  : All signals available except Kraken Premium and OKX Funding.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : UP
+End price        : $74,687.20
+Move             : +0.00 (+0.0000%)
+VERDICT          : WRONG
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+08:25,74844.50,74844.50,74796.60,74796.60,11.7247
+08:26,74796.60,74800.00,74709.10,74742.90,12.2240
+08:27,74742.90,74808.00,74737.40,74795.20,3.8203
+08:28,74795.20,74813.30,74769.40,74803.30,11.5719
+08:29,74803.30,74832.50,74792.70,74823.00,14.3990
+08:30,74823.00,74846.50,74807.70,74814.90,6.2365
+08:31,74814.90,74814.90,74777.10,74813.00,6.4123
+08:32,74813.00,74940.40,74796.60,74936.20,35.7546
+08:33,74936.20,74936.20,74887.20,74887.20,9.6512
+08:34,74887.20,74915.00,74879.20,74883.30,5.3525
+08:35,74883.30,74898.80,74850.10,74898.80,8.7638
+08:36,74898.80,74898.80,74871.10,74884.80,6.6136
+08:37,74884.80,74884.80,74842.30,74845.60,2.7166
+08:38,74845.60,74848.20,74811.40,74811.50,5.3780
+08:39,74811.50,74811.50,74762.70,74791.10,10.0745
+08:40,74791.10,74791.20,74750.90,74769.50,7.2326
+08:41,74769.50,74794.30,74767.20,74787.60,7.9659
+08:42,74787.60,74836.10,74787.60,74830.60,3.2318
+08:43,74830.60,74830.60,74818.90,74823.00,2.2718
+08:44,74823.00,74839.00,74805.70,74824.30,6.3846
+08:45,74824.30,74858.00,74824.30,74827.80,6.0542
+08:46,74827.80,74827.80,74757.70,74757.80,5.4895
+08:47,74757.80,74784.40,74756.50,74776.60,7.5507
+08:48,74776.60,74798.20,74773.50,74791.80,3.6410
+08:49,74791.80,74803.60,74706.90,74715.60,31.5621
+08:50,74715.60,74735.70,74703.50,74703.50,7.8240
+08:51,74703.50,74703.50,74616.00,74623.00,7.9254
+08:52,74623.00,74688.20,74615.20,74688.10,6.0493
+08:53,74688.10,74706.80,74664.10,74695.80,11.5355
+08:54,74695.80,74695.80,74661.60,74661.60,0.9613
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: -11.6180
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BEARISH  — Ask-heavy book — sellers in control. -59.8% ask dominant. Sell-side wall capping
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.850). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  oi_velocity: NEUTRAL  — OI stable (-0.01% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Kraken spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dire
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.771). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 43.0% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.698 — balanced options positioning. Max pain $73,000 (-2.2% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: WRONG
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was wrong]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: WRONG
+ROOT_CAUSE: The prediction mistook a bear trap / exhaustion move for a continuation pattern, failing to recognize that the high-volume breakdown and extreme oversold conditions had already flushed out the majority of sellers.
+MISLEADING_SIGNALS: The bearish order book imbalance (-59.8%) and taker flow (BSR 0.85) were lagging, reflecting the selling that had just occurred, not predictive of the next move. The "bear flag" technical narrative was over-weighted.
+RELIABLE_SIGNALS: The extreme oversold oscillators (RSI 10.1, Stoch 0.4), negative funding (structural bullish bias), and Fear & Greed index (Extreme Fear at 29) were correct in signaling a high probability of a mean-reversion bounce.
+DATA_GAPS: NONE
+UPDATED_READING: The market had just completed a capitulation event (08:49-08:52). The subsequent low-volume consolidation was not a bear flag but a period of equilibrium and short covering, with the deeply negative funding and extreme fear creating a coiled spring for a relief rally.
+LESSON: When price makes a high-volume move to a new local extreme accompanied by deeply oversold readings and negative funding, treat subsequent low-volume consolidation as potential exhaustion, not continuation. In such a setup, microstructure signals (order book, taker flow) immediately after the spike are reactive noise; prioritize contrarian structural signals (funding, sentiment) for the next 5-minute window.

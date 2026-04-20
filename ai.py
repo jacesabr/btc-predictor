@@ -1885,11 +1885,6 @@ async def run_historical_analyst(
     if not template:
         return None, None
 
-    # Disabled: historical analyst DeepSeek calls timeout due to API congestion with
-    # specialist + Binance expert. Re-enable once DeepSeek rate limits are understood.
-    logger.info("Historical analyst disabled — skipping DeepSeek call to protect main prediction")
-    return None, None
-
     _MIN_BARS = 5
     if len(history_records) < _MIN_BARS:
         logger.info("Historical analyst skipped — only %d resolved bars (need %d)", len(history_records), _MIN_BARS)

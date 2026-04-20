@@ -1,0 +1,94 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 07:00 UTC) ══════════════════════════════
+Signal     : DOWN  (65%)
+Start price: $0.00
+Reasoning  : MICROSTRUCTURE: Order book is ask-heavy (-42.4% imbalance) with a sell-side wall, and taker aggressor flow is bearish (BSR 0.855), showing active sellers hitting bids. Spot whale flow is bullish but slower.
+FUNDING + POSITIONING: Funding is negative (bullish for price pressure) and smart money is neutral (49.5% long). No significant OI change or liquidations to force a move.
+TECHNICAL + CROSS-EXCHANGE: Price is in the upper third of its range, meeting resistance at $74,860.95. Micro trend is flat, MACD histogram is bearish, and Stochastic is turning down (K below D). The ensemble vote is neutral but weighted slightly bearish.
+SYNTHESIS: Dominant bias is short-term bearish due to microstructure selling pressure. The most decisive factor is the combination of aggressive taker selling into an ask-heavy order book. The biggest risk is a sudden short squeeze from deeply negative aggregate funding. Final conviction is for a rejection below the $74,783.70 entry within the 5-minute window.
+Narrative  : From 06:40 to 06:41, price spiked from $74,579.90 to a high of $74,895.60 but was immediately rejected, closing the 06:41 bar at $74,770.10. A high-volume (35.5 BTC) rejection wick at 06:54 to $74,747.00 failed to hold, closing near its low at $74,703.90, indicating sellers absorbing the bounce. The subsequent recovery into the 06:56-06:57 bars up to $74,820.20 is now meeting immediate resistance at the $74,783.70 entry level.
+Free obs   : The most significant convergence is the bearish order book imbalance (-42.4%) and bearish taker flow (BSR 0.855) creating immediate selling pressure, overwhelming the bullish counter-signals from spot whale flow and negative funding rates.
+Data recv  : Order Book, Taker Flow, OI/Funding, Fear & Greed, Mempool, Coinalyze, CoinGecko, Spot Whale Flow, BTC Dominance, Top Position Ratio, Funding Rate Trend, Alligator, Fib, RSI, MACD, Stochastic, EMA Cross, Supertrend, ADX, VWAP, ML Logistic, Ensemble Vote, Binance Microstructure Expert, Specialist Creative Edge, Last 50 Bars.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $74,764.00
+Move             : +0.00 (+0.0000%)
+VERDICT          : CORRECT
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+06:35,74516.90,74548.10,74506.90,74548.00,6.9519
+06:36,74548.00,74550.60,74540.70,74545.90,2.6517
+06:37,74545.90,74545.90,74531.20,74531.30,1.4247
+06:38,74531.30,74531.30,74505.00,74527.00,10.9086
+06:39,74527.00,74580.00,74512.40,74579.90,11.9948
+06:40,74579.90,74717.80,74579.90,74703.70,24.6134
+06:41,74703.70,74895.60,74703.70,74770.10,42.2999
+06:42,74770.10,74840.00,74770.10,74792.00,13.5302
+06:43,74792.00,74794.40,74723.80,74735.90,13.3840
+06:44,74735.90,74788.00,74732.80,74780.60,9.5439
+06:45,74780.60,74784.60,74747.90,74747.90,8.0418
+06:46,74747.90,74753.60,74725.90,74738.50,5.0242
+06:47,74738.50,74803.60,74715.00,74801.70,11.7569
+06:48,74801.70,74826.30,74784.70,74800.10,10.5357
+06:49,74800.10,74800.10,74760.50,74761.20,5.7882
+06:50,74761.20,74761.20,74706.00,74706.00,4.9996
+06:51,74706.00,74718.90,74695.10,74695.10,1.9235
+06:52,74695.10,74719.40,74693.80,74701.60,7.1560
+06:53,74701.60,74731.30,74701.60,74722.50,3.7636
+06:54,74722.50,74747.00,74702.50,74703.90,35.5500
+06:55,74703.90,74712.80,74695.00,74701.00,5.2702
+06:56,74701.00,74787.50,74650.80,74751.80,27.7965
+06:57,74751.80,74820.20,74726.60,74796.70,13.2770
+06:58,74796.70,74796.70,74757.20,74766.20,6.0540
+06:59,74766.20,74812.50,74766.20,74787.40,9.4287
+07:00,74787.40,74870.00,74787.40,74852.30,17.1689
+07:01,74852.30,74857.90,74788.50,74818.90,12.1088
+07:02,74818.90,74850.80,74804.00,74832.40,9.7508
+07:03,74832.40,74863.30,74760.60,74766.50,12.0379
+07:04,74766.50,74768.30,74746.40,74768.30,2.9183
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: -0.5892
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BEARISH  — Ask-heavy book — sellers in control. -42.4% ask dominant. Sell-side wall capping
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.855). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  mempool: BULLISH  — Very low fees (1 sat/vB) — calm network, no on-chain panic. Slightly positive ba
+  oi_velocity: NEUTRAL  — OI stable (+0.13% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: BULLISH  — Kraken spot whale buyers dominate: 68.6% (5.0 BTC) of large spot trades are buys
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.772). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0046%, trend +0.0025%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.8% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-2.4% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4615%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: CORRECT
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was correct]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: CORRECT
+ROOT_CAUSE: The bearish microstructure signals (ask-heavy order book and bearish taker flow) correctly identified immediate selling pressure that prevented a sustained breakout above the $74,783.70 resistance level.
+MISLEADING_SIGNALS: Bullish signals from spot whale flow, negative funding rates, and contrarian Fear & Greed index; these created a risk of a short squeeze that did not materialize within the 5-minute window.
+RELIABLE_SIGNALS: Order book imbalance (-42.4%) and Taker Buy/Sell Ratio (BSR 0.855) were the most reliable, as they directly reflected the aggressive selling into bids that capped the price.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a consolidation phase after a failed breakout; the bearish microstructure acted as a local cap, leading to a rejection and a slight downtick, while the larger bullish structural forces (funding, whale flow) were too slow-acting to impact the ultra-short timeframe.
+LESSON: In 5-minute predictions, prioritize real-time microstructure (order book, taker flow) over slower structural or sentiment indicators (funding, Fear & Greed), as they dictate immediate price action.

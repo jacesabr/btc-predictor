@@ -1,0 +1,94 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 07:05 UTC) ══════════════════════════════
+Signal     : DOWN  (65%)
+Start price: $0.00
+Reasoning  : MICROSTRUCTURE: Order book is bid-heavy (+18.5%), providing support, but this is a passive defense. The decisive 06:54 distribution candle and subsequent rejection at 07:00 indicate active selling pressure overcoming bids. Spot whale flow is bullish but appears to be accumulating on dips, not chasing breakouts.
+FUNDING + POSITIONING: Negative aggregate funding (-0.46150%) is structurally bullish, but the immediate 5-minute context shows taker flow neutral and accelerating bullish trend failing to materialize into higher prices, suggesting short-term exhaustion.
+TECHNICAL + CROSS-EXCHANGE: Price is at the 33.7% Fib pullback level and below the Alligator's Teeth ($74,765.59). Stoch is oversold, but MACD histogram is bearish and contracting. The ensemble votes UP (68%), but this is a lagging composite; the immediate price action shows rejection at resistance.
+SYNTHESIS: The dominant bias is short-term bearish due to the failed breakout and distribution at $74,747. The single most decisive factor is the price action narrative: the 06:54 sell candle and the 07:00 rejection. The biggest risk is the strong passive bid wall causing a bounce. Final conviction: price will close the 5-minute window BELOW entry, testing the immediate support at $74,672.30.
+Narrative  : The market rallied from 06:30 ($74,339.70) to a high of $74,895.60 by 06:41, but a massive 35.5 BTC sell-volume candle at 06:54 closed near its low at $74,703.90, establishing stiff resistance at ~$74,747. The subsequent 07:00 spike to $74,870.00 failed to hold, and price has since been rejected, trading down to $74,746.40 by 07:04. The last 5 minutes show distribution and failure to reclaim the key level.
+Free obs   : The strongest convergence is between the Specialist Creative Edge (identifying the 06:54 distribution signature) and the reliable Order Book signal showing a +18.5% bid imbalance, suggesting buyers are passively defending *below* the current price rather than aggressively pushing it higher.
+Data recv  : Full microstructure suite, order book, spot whale flow, funding, technicals, ensemble, full 50-bar price history.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $74,760.50
+Move             : +0.00 (+0.0000%)
+VERDICT          : CORRECT
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+06:40,74579.90,74717.80,74579.90,74703.70,24.6134
+06:41,74703.70,74895.60,74703.70,74770.10,42.2999
+06:42,74770.10,74840.00,74770.10,74792.00,13.5302
+06:43,74792.00,74794.40,74723.80,74735.90,13.3840
+06:44,74735.90,74788.00,74732.80,74780.60,9.5439
+06:45,74780.60,74784.60,74747.90,74747.90,8.0418
+06:46,74747.90,74753.60,74725.90,74738.50,5.0242
+06:47,74738.50,74803.60,74715.00,74801.70,11.7569
+06:48,74801.70,74826.30,74784.70,74800.10,10.5357
+06:49,74800.10,74800.10,74760.50,74761.20,5.7882
+06:50,74761.20,74761.20,74706.00,74706.00,4.9996
+06:51,74706.00,74718.90,74695.10,74695.10,1.9235
+06:52,74695.10,74719.40,74693.80,74701.60,7.1560
+06:53,74701.60,74731.30,74701.60,74722.50,3.7636
+06:54,74722.50,74747.00,74702.50,74703.90,35.5500
+06:55,74703.90,74712.80,74695.00,74701.00,5.2702
+06:56,74701.00,74787.50,74650.80,74751.80,27.7965
+06:57,74751.80,74820.20,74726.60,74796.70,13.2770
+06:58,74796.70,74796.70,74757.20,74766.20,6.0540
+06:59,74766.20,74812.50,74766.20,74787.40,9.4287
+07:00,74787.40,74870.00,74787.40,74852.30,17.1689
+07:01,74852.30,74857.90,74788.50,74818.90,12.1088
+07:02,74818.90,74850.80,74804.00,74832.40,9.7508
+07:03,74832.40,74863.30,74760.60,74766.50,12.0379
+07:04,74766.50,74777.60,74746.40,74767.00,7.5014
+07:05,74767.00,74773.00,74731.70,74745.40,6.4410
+07:06,74745.40,74747.50,74729.90,74736.60,5.4840
+07:07,74736.60,74736.60,74702.30,74703.30,4.3476
+07:08,74703.30,74780.10,74689.80,74764.70,10.6482
+07:09,74764.70,74776.50,74759.00,74759.00,3.2775
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 3.2792
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +18.5% bid-heavy. Immediate upward
+  taker_flow: NEUTRAL  — Balanced aggressor flow (BSR=0.978). Neither side willing to pay spread. Chop or
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  mempool: BULLISH  — Very low fees (1 sat/vB) — calm network, no on-chain panic. Slightly positive ba
+  oi_velocity: NEUTRAL  — OI stable (+0.22% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: BULLISH  — Kraken spot whale buyers dominate: 68.6% (5.0 BTC) of large spot trades are buys
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.772). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0046%, trend +0.0025%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.8% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-2.4% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4615%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: CORRECT
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was correct]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: CORRECT
+ROOT_CAUSE: The prediction correctly identified that the 06:54 distribution candle and the 07:00 rejection created a local top and immediate selling pressure, which overrode the supportive but passive order book bids.
+MISLEADING_SIGNALS: The ensemble vote (68% UP) and the oversold Stoch were lagging and misleading for a 5-minute horizon; the bullish spot whale flow and negative funding were structural tailwinds but not immediate catalysts.
+RELIABLE_SIGNALS: The microstructure narrative (specific high-volume distribution candle and rejection) and the order book signal (showing bids were passive support, not aggressive buying) were the most reliable.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a short-term consolidation after a failed breakout; the strong passive bids prevented a sharp drop (support held near $74,672.30), but active selling at the highs capped the price, leading to a tight, slightly lower close.
+LESSON: In a conflict between immediate price action (distribution/rejection) and lagging ensemble/oscillator signals, prioritize the microstructure narrative for 5-minute predictions, as it captures the initiating market event.

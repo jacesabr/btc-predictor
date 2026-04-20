@@ -1,0 +1,94 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 10:20 UTC) ══════════════════════════════
+Signal     : UP  (65%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book shows a +13.6% bid-heavy imbalance (4.9 BTC bids vs. 3.8 BTC asks), providing immediate upward support. Taker flow is neutral but balanced, indicating no aggressive selling pressure.]
+[FUNDING + POSITIONING: Deeply negative aggregate funding rate (-0.4778%) is a strong structural bullish signal, as shorts pay longs, encouraging short squeezes. Fear & Greed Index at 29 (Fear) provides a contrarian long signal.]
+[TECHNICAL + CROSS-EXCHANGE: Macro and micro trends are strongly aligned UP. Williams Alligator is in bullish alignment (Lips>Teeth>Jaw). Ensemble weighted vote shows 89.9% UP probability with 19 bullish vs. 2 bearish signals, though overbought oscillators (RSI 89.1) cap upside momentum.]
+[SYNTHESIS: Dominant bias is bullish due to funding pressure, order book support, and strong momentum. The most decisive factor is the negative funding rate combined with the recent high-volume breakout. The biggest risk is overbought conditions on a 1-minute frame suggesting a potential brief pullback. Final conviction is for a test above the $75,403.20 level in the next 5 minutes, supported by bid walls and short-covering incentives.]
+Narrative  : The market rallied strongly from 10:02 ($75,105.40) to 10:11 ($75,338.10) on high volume, hitting a local high of $75,403.20 at 10:19. The 10:20 candle shows a minor pullback to $75,327.70, but this is a shallow retracement within a powerful uptrend, with the order book showing strong bid support.
+Free obs   : The most significant convergence is between the bullish order book imbalance (+13.6%), the strongly negative aggregate funding rate (-0.4778%) incentivizing short covering, and the "Absorption & Breakout" sequence noted at 10:08-10:11, which suggests institutional buying absorbed selling pressure.
+Data recv  : Full microstructure (order book, taker flow, L/S, funding, fear & greed, dominance), technicals (RSI, MACD, Alligator, Fib), ensemble vote, and last 50 bars of price/volume.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $75,296.90
+Move             : +0.00 (+0.0000%)
+VERDICT          : WRONG
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+09:55,75064.60,75072.20,75052.60,75060.40,3.5376
+09:56,75060.40,75108.00,75060.40,75090.20,5.3587
+09:57,75090.20,75092.20,75052.60,75064.20,3.3734
+09:58,75064.20,75076.80,75033.00,75034.20,6.4991
+09:59,75034.20,75059.80,75025.10,75059.80,3.5232
+10:00,75059.80,75095.40,75059.80,75077.80,9.6335
+10:01,75077.80,75105.40,75077.80,75105.40,5.3577
+10:02,75105.40,75195.70,75105.40,75195.70,16.0653
+10:03,75195.70,75195.70,75167.80,75194.40,6.2145
+10:04,75194.40,75210.90,75194.40,75194.80,3.4179
+10:05,75194.80,75276.50,75193.00,75275.10,11.6116
+10:06,75275.10,75292.50,75224.40,75224.50,6.7350
+10:07,75224.50,75279.80,75224.40,75261.10,4.3035
+10:08,75261.10,75302.10,75237.40,75240.60,14.0363
+10:09,75240.60,75274.70,75240.60,75253.20,3.3286
+10:10,75253.20,75292.00,75253.20,75280.90,6.9862
+10:11,75280.90,75345.40,75270.60,75338.10,12.3956
+10:12,75338.10,75346.50,75276.50,75338.30,16.6973
+10:13,75338.30,75345.80,75285.30,75345.70,12.4925
+10:14,75345.70,75345.70,75335.10,75337.30,3.3785
+10:15,75337.30,75348.70,75310.30,75329.10,9.8275
+10:16,75329.10,75354.10,75328.30,75328.30,7.8640
+10:17,75328.30,75354.80,75328.30,75354.80,6.6662
+10:18,75354.80,75374.00,75328.10,75373.90,6.3643
+10:19,75373.90,75403.20,75373.90,75377.50,13.2425
+10:20,75377.50,75377.50,75302.20,75302.30,7.2497
+10:21,75302.30,75354.40,75301.00,75319.10,5.3492
+10:22,75319.10,75319.10,75268.50,75269.70,5.6748
+10:23,75269.70,75285.20,75267.40,75270.30,7.3341
+10:24,75270.30,75302.90,75270.30,75296.00,1.5083
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 13.6914
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +13.6% bid-heavy. Immediate upward
+  taker_flow: NEUTRAL  — Balanced aggressor flow (BSR=1.005). Neither side willing to pay spread. Chop or
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (+0.037%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (-0.15% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Kraken spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dire
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.785). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 43.0% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-3.2% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: WRONG
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was wrong]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: WRONG
+ROOT_CAUSE: The prediction over-relied on structural bullish signals (funding, order book) while underestimating the immediate, overwhelming impact of an overbought exhaustion and profit-taking pullback on a 1-minute timeframe.
+MISLEADING_SIGNALS: The "strong bid-heavy" order book imbalance (+13.6%) and the "bullish alignment" of the Williams Alligator were misleading; the bids were either pulled or easily absorbed by selling pressure, and the lagging Alligator failed to signal the imminent momentum reversal.
+RELIABLE_SIGNALS: The negative aggregate funding rate (-0.4778%) and the overbought RSI (89.1) were reliable; the funding correctly indicated a longer-term bullish bias, while the RSI accurately warned of extreme short-term downside risk that materialized immediately.
+DATA_GAPS: NONE
+UPDATED_READING: The market had just completed a strong, high-volume rally to a new local high ($75,403.20), triggering a wave of profit-taking. The "shallow retracement" at 10:20 was the start of a momentum stall, where sellers overwhelmed the visible bid support, pushing price down to test the $75,300 level.
+LESSON: When RSI > 85 on a 1-minute chart following a sharp rally, prioritize the high probability of a mean-reversion pullback over structural bullish indicators, even if other signals align; wait for the pullback to find support before entering a long bias.
