@@ -1916,21 +1916,16 @@ function App() {
 
   // ── REST polling (30s) ────────────────────────────────────────
   useEffect(() => {
-    async function poll() {
-      try {
-        const [a,b,c,d,e,f,g] = await Promise.all([
-          fetch("/backtest"), fetch("/predictions/recent?n=500"), fetch("/weights"),
-          fetch("/deepseek/accuracy"), fetch("/history/all"),
-          fetch("/accuracy/agree"), fetch("/best-indicator"),
-        ]);
-        if (a.ok) setBacktest(await a.json());
-        if (b.ok) setPreds(await b.json());
-        if (c.ok) setWeights(await c.json());
-        if (d.ok) setDeepseekAcc(await d.json());
-        if (e.ok) setDeepseekLog(await e.json());
-        if (f.ok) setAgreeAcc(await f.json());
-        if (g.ok) setBestIndicator(await g.json());
-      } catch(_) {}
+    const safe = (url, setter) =>
+      fetch(url).then(r => r.ok ? r.json() : null).then(d => { if (d != null) setter(d); }).catch(()=>{});
+    function poll() {
+      safe("/backtest",                setBacktest);
+      safe("/predictions/recent?n=500", setPreds);
+      safe("/weights",                 setWeights);
+      safe("/deepseek/accuracy",       setDeepseekAcc);
+      safe("/history/all",             setDeepseekLog);
+      safe("/accuracy/agree",          setAgreeAcc);
+      safe("/best-indicator",          setBestIndicator);
     }
     poll();
     const id = setInterval(poll, 30000);
