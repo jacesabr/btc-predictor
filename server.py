@@ -77,6 +77,120 @@ async def startup():
     asyncio.create_task(polymarket_feed.run())
     asyncio.create_task(run_binance_feed())
     asyncio.create_task(run_indicator_refresh())
+    asyncio.create_task(_startup_backfill_and_embed())
+
+
+async def _startup_backfill_and_embed():
+    """On startup: backfill pattern_history from deepseek_predictions, then Cohere-embed all bars."""
+    await asyncio.sleep(5)  # let DB pool warm up
+    try:
+        await _do_backfill()
+    except Exception as exc:
+        logger.error("startup backfill failed: %s", exc)
+    try:
+        await _do_embed_all()
+    except Exception as exc:
+        logger.error("startup embed failed: %s", exc)
+
+
+async def _do_backfill():
+    import json as _json
+    from semantic_store import append_resolved_window as _append_ph
+    from storage_pg import _conn as _pg_conn, _put as _pg_put
+    import psycopg2.extras
+
+    conn = _pg_conn()
+    try:
+        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            cur.execute("""
+                SELECT window_start, window_end, start_price, end_price,
+                       signal, confidence, reasoning, narrative, free_observation,
+                       window_count, actual_direction, correct,
+                       strategy_snapshot, indicators_snapshot, dashboard_signals_snapshot,
+                       full_prompt
+                FROM deepseek_predictions
+                WHERE actual_direction IS NOT NULL
+                ORDER BY window_start ASC
+            """)
+            rows = cur.fetchall()
+    finally:
+        _pg_put(conn)
+
+    if not rows:
+        logger.info("startup backfill: no resolved bars in deepseek_predictions")
+        return
+
+    inserted = 0
+    for row in rows:
+        try:
+            sv = _json.loads(row["strategy_snapshot"] or "{}")
+            iv = _json.loads(row["indicators_snapshot"] or "{}")
+            dv = _json.loads(row["dashboard_signals_snapshot"] or "{}")
+            _append_ph(
+                window_start          = float(row["window_start"]),
+                actual_direction      = row["actual_direction"] or "",
+                start_price           = float(row["start_price"] or 0),
+                strategy_votes        = sv,
+                indicators            = iv,
+                window_end            = float(row["window_end"] or 0),
+                end_price             = float(row["end_price"] or 0),
+                deepseek_signal       = row["signal"] or "",
+                deepseek_conf         = int(float(row["confidence"] or 0) * 100) if (row["confidence"] or 0) <= 1 else int(row["confidence"] or 0),
+                deepseek_correct      = bool(row["correct"]) if row["correct"] is not None else None,
+                deepseek_reasoning    = row["reasoning"] or "",
+                deepseek_narrative    = row["narrative"] or "",
+                deepseek_free_obs     = row["free_observation"] or "",
+                dashboard_signals_raw = dv,
+                full_prompt           = row["full_prompt"] or "",
+                window_count          = int(row["window_count"] or 0),
+            )
+            inserted += 1
+        except Exception as exc:
+            logger.warning("startup backfill row error ws=%.0f: %s", row.get("window_start", 0), exc)
+
+    logger.info("startup backfill complete: %d bars written to pattern_history", inserted)
+
+
+async def _do_embed_all():
+    if not config.cohere_api_key:
+        logger.info("startup embed skipped — no COHERE_API_KEY")
+        return
+
+    from storage_pg import _conn as _pg_conn, _put as _pg_put
+    from semantic_store import load_all as _load_ph
+    from semantic_store_pg import store_embedding as _store_emb
+    from ai import embed_text as _embed, _bar_embed_text
+
+    conn = _pg_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT window_start FROM pattern_history WHERE embedding IS NULL ORDER BY window_start ASC")
+            to_embed = [r[0] for r in cur.fetchall()]
+    finally:
+        _pg_put(conn)
+
+    if not to_embed:
+        logger.info("startup embed: all bars already embedded")
+        return
+
+    records = {r["window_start"]: r for r in _load_ph(10000)}
+    done = 0
+    for ws in to_embed:
+        rec = records.get(ws)
+        if not rec:
+            continue
+        try:
+            text = _bar_embed_text(rec)
+            vec  = await _embed(config.cohere_api_key, text, input_type="search_document")
+            await asyncio.to_thread(_store_emb, ws, vec)
+            done += 1
+            if done % 10 == 0:
+                logger.info("startup embed: %d/%d done", done, len(to_embed))
+            await asyncio.sleep(0.1)  # avoid Cohere rate limit
+        except Exception as exc:
+            logger.warning("startup embed bar %.0f failed: %s", ws, exc)
+
+    logger.info("startup embed complete: %d/%d bars embedded", done, len(to_embed))
 
 
 # ── Pydantic models ───────────────────────────────────────────
