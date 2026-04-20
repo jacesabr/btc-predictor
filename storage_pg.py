@@ -36,7 +36,7 @@ def _get_pool() -> pool.ThreadedConnectionPool:
         with _pool_lock:
             if _pool is None:
                 url = os.environ["DATABASE_URL"]
-                _pool = pool.ThreadedConnectionPool(1, 5, dsn=url)
+                _pool = pool.ThreadedConnectionPool(2, 20, dsn=url)
                 logger.info("PostgreSQL pool created")
     return _pool
 
