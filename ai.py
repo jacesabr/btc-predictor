@@ -1942,7 +1942,7 @@ async def run_historical_analyst(
         return signal_dict, raw.strip()
     except Exception as exc:
         _save(_HIST_RESPONSE, f"# ERROR {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n\n{exc}")
-        logger.warning("Historical analyst DeepSeek call failed: %s", exc)
+        logger.warning("Historical analyst DeepSeek call failed: %s — %s", type(exc).__name__, exc)
         return None, None
 
 

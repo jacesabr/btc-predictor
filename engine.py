@@ -495,8 +495,18 @@ async def _run_full_prediction(prices, is_force=False):
     current_state["strategies"]       = strategy_preds
     current_state["agree_accuracy"]   = _safe_storage(storage.get_agree_accuracy, default={})
 
-    # Step 5 — Historical analyst (fires AFTER specialist to avoid DeepSeek API congestion).
-    # Awaited with a 55s timeout so it always completes before DeepSeek fires.
+    # Step 5 — Historical analyst (fires AFTER specialist AND binance expert to avoid
+    # DeepSeek API congestion — binance expert is awaited here so its DS call finishes
+    # before historical analyst fires its own DS call).
+    if binance_expert_task is not None and not binance_expert_task.done():
+        try:
+            _bx_early = await asyncio.wait_for(asyncio.shield(binance_expert_task), timeout=20.0)
+            if _bx_early:
+                current_state["bar_binance_expert"] = _json_safe(_bx_early)
+            logger.info("Binance expert pre-awaited before historical analyst")
+        except (asyncio.TimeoutError, Exception) as _bx_e:
+            logger.info("Binance expert pre-await skipped: %s", _bx_e)
+
     historical_analysis = None
     hist_signal         = None
     dash_directions: Dict = {}
