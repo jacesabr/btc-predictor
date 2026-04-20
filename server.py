@@ -198,16 +198,13 @@ async def get_recent_predictions(n: int = 50):
 
 @app.get("/candles")
 async def get_candles(resolution: int = 60, limit: int = 200):
-    from storage import _read_ndjson, _DATA_DIR
     try:
-        all_ticks = _read_ndjson(_DATA_DIR / "ticks.ndjson")
+        all_ticks = storage.get_ticks_raw(limit=limit * resolution * 2)
     except Exception as exc:
         logger.warning("Candles: could not read ticks: %s", exc)
         return []
     if not all_ticks:
         return []
-    all_ticks.sort(key=lambda t: t["timestamp"])
-    all_ticks = all_ticks[-(limit * resolution * 2):]
     candles = {}
     for doc in all_ticks:
         bucket = int(doc["timestamp"] // resolution) * resolution
@@ -579,16 +576,8 @@ async def fix_neutral_correct():
 
 @app.post("/admin/reset")
 async def reset_database():
-    from storage import _DATA_DIR, _rewrite_ndjson, _read_ndjson
-    counts = {}
     try:
-        for name in ("ticks", "predictions", "deepseek_predictions"):
-            path = _DATA_DIR / f"{name}.ndjson"
-            if path.exists():
-                counts[name] = len(_read_ndjson(path))
-                _rewrite_ndjson(path, [])
-            else:
-                counts[name] = 0
+        counts = storage.reset_all_tables()
         return {"status": "ok", "deleted": counts}
     except Exception as exc:
         return {"status": "error", "detail": str(exc)}

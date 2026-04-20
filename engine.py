@@ -37,7 +37,7 @@ except ImportError:
 from config import Config
 from data_feed import BinanceCollector, FeatureEngine, PolymarketFeed
 from signals import fetch_dashboard_signals, extract_signal_directions
-from storage import Storage, get_storage
+from storage_pg import StoragePG as Storage, get_storage
 from semantic_store import (
     append_resolved_window,
     load_all as load_pattern_history,

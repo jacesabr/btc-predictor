@@ -736,3 +736,37 @@ class StoragePG:
 
     def store_accuracy_snapshot(self, window_start: float, snapshot: Dict) -> None:
         pass
+
+    def get_ticks_raw(self, limit: int = 50000) -> List[Dict]:
+        """Return recent ticks as list of {timestamp, mid_price} dicts."""
+        conn = _conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT timestamp, mid_price FROM ticks "
+                    "ORDER BY timestamp DESC LIMIT %s",
+                    (limit,),
+                )
+                rows = cur.fetchall()
+            return [{"timestamp": r[0], "mid_price": r[1]} for r in reversed(rows)]
+        finally:
+            _put(conn)
+
+    def reset_all_tables(self) -> Dict[str, int]:
+        """Delete all rows from ticks, predictions, deepseek_predictions. Returns row counts deleted."""
+        conn = _conn()
+        counts = {}
+        try:
+            with conn.cursor() as cur:
+                for table in ("ticks", "predictions", "deepseek_predictions"):
+                    cur.execute(f"SELECT COUNT(*) FROM {table}")
+                    counts[table] = cur.fetchone()[0]
+                    cur.execute(f"DELETE FROM {table}")
+            conn.commit()
+        finally:
+            _put(conn)
+        return counts
+
+
+def get_storage(**kwargs):
+    return StoragePG(**kwargs)
