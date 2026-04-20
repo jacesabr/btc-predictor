@@ -202,7 +202,7 @@ def generate_bar_chart(klines: List, window_start: float, signal: str, confidenc
         ax.axvline(x=len(bars)-1, color=sig_color, linewidth=1.2, linestyle="--", alpha=0.7, zorder=3)
         ts = time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(window_start))
         ax.set_title(f"BTC/USDT 1m  ·  {ts}  ·  Prediction: {sig_arrow} {signal} {confidence}%",
-                     fontsize=9, color="#1A1A1A", fontfamily="monospace", pad=5)
+                     fontsize=9, color="#1A1A1A", pad=5)
         ax.set_xlim(-1, len(bars))
         ax.tick_params(axis="x", labelbottom=False, length=0)
         ax.tick_params(axis="y", labelsize=7, colors="#6B6866")
@@ -216,8 +216,10 @@ def generate_bar_chart(klines: List, window_start: float, signal: str, confidenc
         fig.tight_layout(pad=0.6)
         fig.savefig(str(fpath), dpi=110, bbox_inches="tight", facecolor=fig.get_facecolor())
         plt.close(fig)
+        plt.close("all")
         return str(fpath)
     except Exception as exc:
+        plt.close("all")
         logger.warning("Chart generation failed: %s", exc)
         return None
 
