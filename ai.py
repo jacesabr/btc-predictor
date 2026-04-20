@@ -1927,7 +1927,7 @@ async def run_historical_analyst(
     _save(_HIST_PROMPT_OUT, f"# {ts_str}\n\n{prompt}")
 
     try:
-        raw     = await _api_call(api_key, prompt, max_tokens=1500, timeout_s=20.0, model=DEEPSEEK_FAST_MODEL)
+        raw     = await _api_call(api_key, prompt, max_tokens=1500, timeout_s=45.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = time.time() - t0
         _save(_HIST_RESPONSE, f"# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}  elapsed={elapsed:.1f}s\n\n{raw}")
         for line in raw.splitlines():

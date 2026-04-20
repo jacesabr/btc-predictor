@@ -443,24 +443,7 @@ async def _run_full_prediction(prices, is_force=False):
     except Exception:
         pass
 
-    # Historical analyst task — fires immediately with pre-specialist data (indicators +
-    # strategy votes are already available; specialist signals added to context after)
-    historical_task = None
-    if deepseek and _features_ok:
-        historical_task = asyncio.create_task(
-            run_historical_analyst(
-                config.deepseek_api_key, _all_history, features_dict,
-                {k: v for k, v in strategy_preds.items()},
-                window_start_time=window_start_time,
-                specialist_signals=None, creative_edge="",
-                ensemble_signal="", ensemble_conf=0.0,
-                dashboard_directions=_prev_dash_raw or None,
-                cohere_api_key=config.cohere_api_key,
-                pgvector_search_fn=pgvector_search,
-            )
-        )
-
-    # Step 1 — Unified specialist (runs concurrently with historical + dashboard)
+    # Step 1 — Unified specialist
     creative_edge      = None
     specialist_results = {}
     if deepseek and klines and _features_ok:
@@ -512,10 +495,8 @@ async def _run_full_prediction(prices, is_force=False):
     current_state["strategies"]       = strategy_preds
     current_state["agree_accuracy"]   = _safe_storage(storage.get_agree_accuracy, default={})
 
-    # Step 5 — Check if historical analyst already finished (it ran concurrently).
-    # DeepSeek fires NOW regardless — historical analysis is an enrichment, not a prerequisite.
-    # If the historical task is still running when DeepSeek fires, it gets None (prompt shows
-    # the "did not fire" placeholder). The task is then cancelled to avoid wasting API quota.
+    # Step 5 — Historical analyst (fires AFTER specialist to avoid DeepSeek API congestion).
+    # Awaited with a 55s timeout so it always completes before DeepSeek fires.
     historical_analysis = None
     hist_signal         = None
     dash_directions: Dict = {}
@@ -523,36 +504,52 @@ async def _run_full_prediction(prices, is_force=False):
         try: dash_directions = extract_signal_directions(dashboard_signals)
         except: pass
 
-    if deepseek and _features_ok and historical_task:
-        if historical_task.done():
-            try:
-                hist_result = historical_task.result()
-                if isinstance(hist_result, tuple) and len(hist_result) == 2:
-                    hist_signal, historical_analysis = hist_result
-                # Clear unavailable flag if Cohere came back
-                current_state["service_unavailable"]        = False
-                current_state["service_unavailable_reason"] = ""
-            except CohereUnavailableError as cohere_exc:
-                logger.error("Cohere unavailable — pausing predictions: %s", cohere_exc)
-                current_state["service_unavailable"]        = True
-                current_state["service_unavailable_reason"] = str(cohere_exc)
-                return None, {}, None, None, window_start_time, window_start_price
-            except Exception as exc:
-                logger.warning("Historical analyst task error (ignored): %s", exc)
-            if historical_analysis and hist_signal:
-                current_state["bar_historical_analysis"] = historical_analysis
-                current_state["bar_historical_context"] = _build_current_bar(
-                    features_dict, {k: v for k, v in strategy_preds.items()},
-                    window_start_time, specialist_results, creative_edge or "",
-                    pred["signal"], pred["confidence"], dash_directions,
-                )
-                strategy_preds["historical_analyst"] = hist_signal
-                logger.info("Historical analyst finished before DeepSeek — injected into prompt")
-            else:
-                logger.info("Historical analyst done but returned no output — DeepSeek fires without it")
+    if deepseek and _features_ok:
+        _hist_t0 = time.time()
+        try:
+            hist_result = await asyncio.wait_for(
+                run_historical_analyst(
+                    config.deepseek_api_key, _all_history, features_dict,
+                    {k: v for k, v in strategy_preds.items()},
+                    window_start_time=window_start_time,
+                    specialist_signals=specialist_results or None,
+                    creative_edge=creative_edge or "",
+                    ensemble_signal=pred["signal"],
+                    ensemble_conf=float(pred.get("confidence", 0.0)),
+                    dashboard_directions=dash_directions or None,
+                    cohere_api_key=config.cohere_api_key,
+                    pgvector_search_fn=pgvector_search,
+                ),
+                timeout=55.0,
+            )
+            _hist_elapsed = time.time() - _hist_t0
+            if isinstance(hist_result, tuple) and len(hist_result) == 2:
+                hist_signal, historical_analysis = hist_result
+            current_state["service_unavailable"]        = False
+            current_state["service_unavailable_reason"] = ""
+        except asyncio.TimeoutError:
+            _hist_elapsed = time.time() - _hist_t0
+            logger.warning("Historical analyst timed out after %.1fs", _hist_elapsed)
+        except CohereUnavailableError as cohere_exc:
+            logger.error("Cohere unavailable — pausing predictions: %s", cohere_exc)
+            current_state["service_unavailable"]        = True
+            current_state["service_unavailable_reason"] = str(cohere_exc)
+            return None, {}, None, None, window_start_time, window_start_price
+        except Exception as exc:
+            _hist_elapsed = time.time() - _hist_t0
+            logger.warning("Historical analyst error after %.1fs: %s", _hist_elapsed, exc)
+
+        if historical_analysis and hist_signal:
+            current_state["bar_historical_analysis"] = historical_analysis
+            current_state["bar_historical_context"] = _build_current_bar(
+                features_dict, {k: v for k, v in strategy_preds.items()},
+                window_start_time, specialist_results, creative_edge or "",
+                pred["signal"], pred["confidence"], dash_directions,
+            )
+            strategy_preds["historical_analyst"] = hist_signal
+            logger.info("Historical analyst completed in %.1fs — injected into DeepSeek prompt", _hist_elapsed)
         else:
-            logger.info("Historical analyst still running — DeepSeek fires without waiting (task cancelled)")
-            historical_task.cancel()
+            logger.warning("Historical analyst returned no output after %.1fs — DeepSeek fires without it", _hist_elapsed)
 
     pm_odds_open = polymarket_feed.market_odds if polymarket_feed.is_live else None
     pm_ev_open   = (calculate_ev(pred["confidence"], pm_odds_open).expected_value
