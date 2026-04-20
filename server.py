@@ -39,7 +39,7 @@ import pathlib
 import time
 from typing import Dict, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -676,7 +676,7 @@ async def backfill_pattern_history():
 
 
 @app.post("/admin/embed-pattern-history")
-async def embed_pattern_history(background_tasks: __import__("fastapi", fromlist=["BackgroundTasks"]).BackgroundTasks):
+async def embed_pattern_history(background_tasks: BackgroundTasks):
     """
     Background task: Cohere-embed all pattern_history bars that have no embedding yet.
     Stores REAL[] vectors so cosine similarity search works without pgvector.
