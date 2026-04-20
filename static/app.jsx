@@ -901,7 +901,9 @@ function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, ca, cz,
             <div style={{ color: allAccuracyErr ? C.red : C.muted, fontSize:10, padding:"12px 0", display:"flex", alignItems:"center", gap:8 }}>
               {allAccuracyErr
                 ? <>Failed to load accuracy data — <span style={{cursor:"pointer",textDecoration:"underline"}} onClick={onRefreshAccuracy}>retry</span></>
-                : "Loading accuracy data…"}
+                : allAccuracy
+                  ? "No accuracy data yet — predictions are still accumulating…"
+                  : "Loading accuracy data…"}
             </div>
           ) : (() => {
             // Flatten all categories into one list with a Category column, sorted by accuracy desc
@@ -1962,7 +1964,7 @@ function App() {
   const fetchAllAccuracy = React.useCallback(() => {
     fetch("/accuracy/all?n=200")
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then(d => { if (d && (d.ai?.length || d.strategies?.length || d.specialists?.length || d.microstructure?.length)) { setAllAccuracy(d); setAllAccuracyErr(false); } else { setAllAccuracyErr(true); if (d?.error) console.error("[accuracy/all server error]", d.error); } })
+      .then(d => { if (d?.error) { console.error("[accuracy/all server error]", d.error); setAllAccuracyErr(true); } else if (d) { setAllAccuracy(d); setAllAccuracyErr(false); } else { setAllAccuracyErr(true); } })
       .catch(e => { console.error("[accuracy/all]", e); setAllAccuracyErr(true); });
   }, []);
   useEffect(() => {

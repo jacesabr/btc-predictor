@@ -109,6 +109,7 @@ def append_resolved_window(
     full_prompt:            str                  = "",
     trade_action:           str                  = "",
     window_count:           int                  = 0,
+    binance_expert_analysis = None,
 ):
     _init()
     dt = datetime.fromtimestamp(window_start, tz=timezone.utc)
@@ -134,6 +135,7 @@ def append_resolved_window(
         "specialist_signals": specialist_signals or {},
         "creative_edge":      creative_edge,
         "historical_analysis": historical_analysis,
+        "binance_expert_analysis": binance_expert_analysis or {},
         "strategy_votes":     strategy_votes,
         "indicators":         indicators,
         "dashboard_signals_raw": dashboard_signals_raw or {},

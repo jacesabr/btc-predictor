@@ -91,6 +91,7 @@ def append_resolved_window(
     full_prompt:            str                  = "",
     trade_action:           str                  = "",
     window_count:           int                  = 0,
+    binance_expert_analysis = None,
 ):
     """Append one fully resolved bar to the history file. Thread-safe."""
     _DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -117,6 +118,7 @@ def append_resolved_window(
         "specialist_signals":  specialist_signals or {},
         "creative_edge":       creative_edge,
         "historical_analysis": historical_analysis,
+        "binance_expert_analysis": binance_expert_analysis or {},
         "strategy_votes":     strategy_votes,
         "indicators":         indicators,
         "dashboard_signals_raw": dashboard_signals_raw or {},

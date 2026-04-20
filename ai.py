@@ -24,6 +24,7 @@ Public exports:
   parse_response(text)              -> (signal, confidence, reasoning, ...)
 """
 
+import asyncio
 import logging
 import re
 import time
@@ -628,6 +629,7 @@ def build_prompt(
     polymarket_slug=None, ensemble_result=None, dashboard_signals=None,
     indicator_accuracy=None, ensemble_weights=None, historical_analysis=None,
     creative_edge=None, dashboard_accuracy=None, neutral_analysis=None,
+    binance_expert_analysis=None,
 ) -> str:
     f  = features
     fv = lambda k, d=0.0: f.get(k, d)
@@ -767,6 +769,20 @@ def build_prompt(
     historical_block = (historical_analysis.strip() if historical_analysis and historical_analysis.strip()
                         else "  (historical analyst did not fire this window — no resolved bars yet)")
 
+    _bx = binance_expert_analysis or {}
+    if _bx and _bx.get("analysis"):
+        _bx_sig  = _bx.get("signal", "?")
+        _bx_conf = _bx.get("confidence", 0)
+        _bx_ana  = _bx.get("analysis", "")
+        _bx_rsn  = _bx.get("reasoning", "")
+        binance_expert_block = (
+            f"  Signal     : {_bx_sig}  ({_bx_conf}% confidence)\n"
+            f"  Analysis   : {_bx_ana}"
+            + (f"\n  Key driver : {_bx_rsn}" if _bx_rsn else "")
+        )
+    else:
+        binance_expert_block = "  (Binance expert did not complete this window)"
+
     # NEUTRAL abstention performance block
     na = neutral_analysis or {}
     na_total = na.get("total", 0)
@@ -890,6 +906,12 @@ All data below is REAL, computed from live Binance OHLCV + live market microstru
   INDICATOR TRACK RECORD  (last ~100 resolved predictions)
 ──────────────────────────────────────────────
 {indicator_track_record}
+
+──────────────────────────────────────────────
+  BINANCE MICROSTRUCTURE EXPERT
+  (dedicated specialist — synthesized Binance signals only)
+──────────────────────────────────────────────
+{binance_expert_block}
 
 ──────────────────────────────────────────────
   HISTORICAL SIMILARITY ANALYST
@@ -1216,7 +1238,7 @@ async def run_specialists(
     _save(_SPEC_PROMPT_OUT, f"# Sent at {ts_str}\n\n{prompt}")
 
     try:
-        raw = await _api_call(api_key, prompt, max_tokens=1000, timeout_s=25.0)
+        raw = await _api_call(api_key, prompt, max_tokens=1000, timeout_s=90.0)
         _append(_SPEC_RESPONSE, f"\n{'='*60}\n# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n{'='*60}\n\n{raw}")
         strategies, creative_edge, suggestion = _parse_specialist_response(raw)
         if suggestion:
@@ -1227,8 +1249,8 @@ async def run_specialists(
                     "YES" if creative_edge else "none")
         return strategies, creative_edge
     except Exception as exc:
-        _append(_SPEC_RESPONSE, f"\n{'='*60}\n# ERROR {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n{'='*60}\n\n{exc}")
-        logger.warning("Unified specialist failed: %s", exc)
+        _append(_SPEC_RESPONSE, f"\n{'='*60}\n# ERROR {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n{'='*60}\n\n{repr(exc)}")
+        logger.warning("Unified specialist failed: %r", exc)
         return {}, None
 
 
@@ -1651,6 +1673,16 @@ def _bar_embed_text(record: Dict) -> str:
         L.append("")
         L.append("CREATIVE EDGE (cross-pattern synthesis)")
         L.append(f"  {ce}")
+
+    bnx = record.get("binance_expert_analysis") or {}
+    if isinstance(bnx, dict) and bnx.get("analysis"):
+        L.append("")
+        L.append("BINANCE MICROSTRUCTURE EXPERT")
+        L.append(f"  Signal: {bnx.get('signal','?')} at {bnx.get('confidence',0)}%")
+        L.append(f"  {bnx.get('analysis','')}")
+        if bnx.get("reasoning"):
+            L.append(f"  Key driver: {bnx['reasoning']}")
+
     if reasoning:
         L.append("")
         L.append("DEEPSEEK FULL REASONING")
@@ -1893,7 +1925,7 @@ async def run_historical_analyst(
     _save(_HIST_PROMPT_OUT, f"# {ts_str}\n\n{prompt}")
 
     try:
-        raw     = await _api_call(api_key, prompt, max_tokens=800, timeout_s=60.0)
+        raw     = await _api_call(api_key, prompt, max_tokens=1500, timeout_s=100.0)
         elapsed = time.time() - t0
         _save(_HIST_RESPONSE, f"# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}  elapsed={elapsed:.1f}s\n\n{raw}")
         for line in raw.splitlines():
@@ -1910,6 +1942,152 @@ async def run_historical_analyst(
         _save(_HIST_RESPONSE, f"# ERROR {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n\n{exc}")
         logger.warning("Historical analyst DeepSeek call failed: %s", exc)
         return None, None
+
+
+# ═══════════════════════════════════════════════════════════════
+# SECTION 3b — Binance Microstructure Expert
+# Fires after dashboard signals arrive. Synthesizes all Binance
+# exchange data (order book, L/S ratio, taker flow, OI, funding,
+# top-trader positioning) into a single directional call via a
+# dedicated DeepSeek call, then injects the analysis into the
+# main DeepSeek prompt and into the bar embedding.
+# ═══════════════════════════════════════════════════════════════
+
+_BNX_DIR      = _ROOT / "specialists" / "binance_expert"
+_BNX_PROMPT   = _BNX_DIR / "PROMPT.md"
+_BNX_RESPONSE = _BNX_DIR / "last_response.txt"
+
+
+def _build_binance_expert_block(ds: Optional[Dict]) -> str:
+    """Format Binance-specific signals for the expert prompt (rich numbers, not just UP/DOWN)."""
+    if not ds:
+        return "  (no Binance data available this bar)"
+
+    lines = []
+
+    ob = ds.get("order_book")
+    if ob:
+        lines += [
+            "[ORDER BOOK — Binance spot, top-20 levels]",
+            f"  Bid vol: {ob.get('bid_vol_btc', 0):.1f} BTC  Ask vol: {ob.get('ask_vol_btc', 0):.1f} BTC  Imbalance: {ob.get('imbalance_pct', 0):+.2f}%",
+            f"  Signal: {ob.get('signal', 'NEUTRAL')} — {ob.get('interpretation', '')}",
+            "",
+        ]
+
+    ls = ds.get("long_short")
+    if ls:
+        lines += [
+            "[LONG/SHORT RATIO — Binance Futures 5m]",
+            f"  Retail L/S: {ls.get('retail_lsr', 1):.3f}  Long {ls.get('retail_long_pct', 50):.1f}% / Short {ls.get('retail_short_pct', 50):.1f}%  Contrarian: {ls.get('retail_signal_contrarian', 'NEUTRAL')}",
+            f"  Smart money: Long {ls.get('smart_money_long_pct', 50):.1f}% / Short {ls.get('smart_money_short_pct', 50):.1f}%  Signal: {ls.get('smart_money_signal', 'NEUTRAL')}",
+            f"  Smart vs retail divergence: {ls.get('smart_vs_retail_div_pct', 0):+.1f}%",
+            f"  → {ls.get('interpretation', '')}",
+            "",
+        ]
+
+    tk = ds.get("taker_flow")
+    if tk:
+        lines += [
+            "[TAKER AGGRESSOR FLOW — Binance Futures 5m, last 3 bars]",
+            f"  Buy/sell ratio: {tk.get('buy_sell_ratio', 1):.4f}  Taker buys: {tk.get('taker_buy_vol_btc', 0):.1f} BTC  Taker sells: {tk.get('taker_sell_vol_btc', 0):.1f} BTC",
+            f"  Signal: {tk.get('signal', 'NEUTRAL')}  3-bar trend: {tk.get('trend_3bars', 'MIXED')}",
+            f"  → {tk.get('interpretation', '')}",
+            "",
+        ]
+
+    oif = ds.get("oi_funding") or {}
+    if oif:
+        lines += [
+            "[OPEN INTEREST + FUNDING — Binance perpetual]",
+            f"  OI: {oif.get('open_interest_btc', 0):,.0f} BTC  Funding (8h): {oif.get('funding_rate_8h_pct', 0):+.5f}%  [{oif.get('funding_signal', 'NEUTRAL')}]",
+            f"  Mark: ${oif.get('mark_price', 0):,.2f}  Index: ${oif.get('index_price', 0):,.2f}  Premium: {oif.get('mark_premium_vs_index_pct', 0):+.4f}%  [{oif.get('premium_signal', 'NEUTRAL')}]",
+            "",
+        ]
+
+    for key, label in [
+        ("top_position_ratio", "[TOP TRADER POSITION RATIO — notional-weighted]"),
+        ("funding_trend",      "[FUNDING RATE TREND — 6-period history]"),
+        ("oi_velocity",        "[OI VELOCITY — 30-min change rate]"),
+        ("spot_whale_flow",    "[SPOT WHALE FLOW — Binance spot aggTrades ≥5 BTC]"),
+    ]:
+        v = ds.get(key)
+        if v:
+            lines += [label, f"  Signal: {v.get('signal', 'NEUTRAL')} — {v.get('interpretation', '')}", ""]
+        else:
+            lines += [f"{label} unavailable", ""]
+
+    return "\n".join(lines).rstrip()
+
+
+def _parse_binance_expert_response(text: str) -> Dict:
+    signal, confidence = "NEUTRAL", 50
+    analysis = ""
+    reasoning = ""
+    in_analysis = False
+    in_reasoning = False
+
+    for line in text.strip().splitlines():
+        s = line.strip()
+        u = s.upper()
+        if u.startswith("POSITION:"):
+            val = u.replace("POSITION:", "").strip()
+            if "ABOVE" in val:    signal = "UP"
+            elif "BELOW" in val:  signal = "DOWN"
+            else:                 signal = "NEUTRAL"
+            in_analysis = in_reasoning = False
+        elif u.startswith("CONFIDENCE:"):
+            try: confidence = int(float(u.replace("CONFIDENCE:", "").replace("%", "").strip()))
+            except: pass
+            in_analysis = in_reasoning = False
+        elif s.upper().startswith("ANALYSIS:"):
+            analysis = s[len("ANALYSIS:"):].strip()
+            in_analysis = True; in_reasoning = False
+        elif s.upper().startswith("REASONING:"):
+            reasoning = s[len("REASONING:"):].strip()
+            in_reasoning = True; in_analysis = False
+        elif in_analysis and s:
+            analysis += " " + s
+        elif in_reasoning and s:
+            reasoning += " " + s
+
+    return {"signal": signal, "confidence": confidence, "analysis": analysis, "reasoning": reasoning}
+
+
+async def run_binance_expert(
+    api_key: str,
+    dashboard_signals: Optional[Dict],
+) -> Optional[Dict]:
+    """
+    Dedicated DeepSeek call that synthesizes all Binance microstructure signals.
+    Fires concurrently with the main DeepSeek call; its output is awaited inside
+    _run_deepseek before the main prompt is built.
+    Returns {signal, confidence, analysis, reasoning} or None on failure.
+    """
+    if not api_key or not dashboard_signals:
+        return None
+    try:
+        template = _BNX_PROMPT.read_text(encoding="utf-8")
+    except Exception as exc:
+        logger.error("Binance expert: could not load PROMPT.md: %s", exc)
+        return None
+
+    expert_block = _build_binance_expert_block(dashboard_signals)
+    prompt = template.format(dashboard_block=expert_block)
+
+    t0 = time.time()
+    try:
+        raw = await _api_call(api_key, prompt, max_tokens=600, timeout_s=30.0)
+        elapsed = time.time() - t0
+        ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+        _save(_BNX_RESPONSE,
+              f"# {ts_str}  elapsed={elapsed:.1f}s\n\n=== PROMPT ===\n{prompt}\n\n=== RESPONSE ===\n{raw}")
+        result = _parse_binance_expert_response(raw)
+        logger.info("Binance expert %.1fs → %s %d%%  analysis_len=%d",
+                    elapsed, result["signal"], result["confidence"], len(result["analysis"]))
+        return result
+    except Exception as exc:
+        logger.warning("Binance expert failed: %s", exc)
+        return None
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1937,7 +2115,7 @@ class DeepSeekPredictor:
         polymarket_slug=None, ensemble_result=None, dashboard_signals=None,
         indicator_accuracy=None, ensemble_weights=None,
         historical_analysis=None, creative_edge=None, dashboard_accuracy=None,
-        neutral_analysis=None,
+        neutral_analysis=None, binance_expert_analysis=None,
     ) -> Dict:
         self.window_count += 1
         t0 = time.time()
@@ -1955,7 +2133,7 @@ class DeepSeekPredictor:
             dashboard_signals=dashboard_signals, indicator_accuracy=indicator_accuracy,
             ensemble_weights=ensemble_weights, historical_analysis=historical_analysis,
             creative_edge=creative_edge, dashboard_accuracy=dashboard_accuracy,
-            neutral_analysis=neutral_analysis,
+            neutral_analysis=neutral_analysis, binance_expert_analysis=binance_expert_analysis,
         )
 
         ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
@@ -1964,11 +2142,11 @@ class DeepSeekPredictor:
         raw_response: Optional[str] = None
         error_msg    = ""
         try:
-            raw_response = await _api_call(self.api_key, prompt, max_tokens=2500, timeout_s=50.0)
+            raw_response = await _api_call(self.api_key, prompt, max_tokens=8000, timeout_s=120.0)
         except Exception as exc:
-            error_msg = str(exc)
-            logger.error("DeepSeek call failed: %s", exc)
-            _append(_PRED_RESPONSE, f"\n{'='*60}\n# ERROR {ts_str}\n{'='*60}\n\n{exc}")
+            error_msg = repr(exc)
+            logger.error("DeepSeek call failed: %r", exc)
+            _append(_PRED_RESPONSE, f"\n{'='*60}\n# ERROR {ts_str}\n{'='*60}\n\n{repr(exc)}")
 
         if raw_response is None:
             return {

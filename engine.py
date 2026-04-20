@@ -52,7 +52,7 @@ from strategies import (
 )
 from ai import (
     DeepSeekPredictor, run_specialists, run_historical_analyst,
-    SPECIALIST_KEYS, _build_current_bar, run_postmortem,
+    run_binance_expert, SPECIALIST_KEYS, _build_current_bar, run_postmortem,
     embed_text, _bar_embed_text, CohereUnavailableError,
 )
 
@@ -118,6 +118,7 @@ current_state: Dict = {
     "bar_creative_edge":          "",
     "bar_historical_analysis":    "",
     "bar_historical_context":     "",
+    "bar_binance_expert":         {},
     "service_unavailable":        False,
     "service_unavailable_reason": "",
 }
@@ -287,12 +288,28 @@ async def _run_deepseek(
     ensemble_result=None, polymarket_slug=None, dashboard_signals=None,
     indicator_accuracy=None, ensemble_weights=None,
     historical_analysis=None, creative_edge=None, dashboard_accuracy=None,
-    dry_run=False,
+    dry_run=False, binance_expert_task=None,
 ):
     """Fire DeepSeek at bar open; stage result until bar closes."""
     bar_ts = time.strftime("%H:%M:%S UTC", time.gmtime(window_start_time))
     logger.info(">>> DeepSeek FIRED for bar %s", bar_ts)
     try:
+        # Await Binance expert (was created ~15-25s ago after dashboard signals arrived).
+        # DeepSeek itself takes 30-50s, so waiting here costs nothing — expert finishes first.
+        binance_expert_result = None
+        if binance_expert_task is not None:
+            try:
+                binance_expert_result = await asyncio.wait_for(
+                    asyncio.shield(binance_expert_task), timeout=25.0
+                )
+                if binance_expert_result:
+                    current_state["bar_binance_expert"] = _json_safe(binance_expert_result)
+                    logger.info("Binance expert result received before DeepSeek API call — injected into prompt")
+            except asyncio.TimeoutError:
+                logger.warning("Binance expert timed out (25s) — DeepSeek fires without it")
+            except Exception as bx_exc:
+                logger.warning("Binance expert task error: %s — DeepSeek fires without it", bx_exc)
+
         neutral_analysis = _safe_storage(storage.get_neutral_analysis, default={})
         result = await deepseek.predict(
             prices=prices, klines=klines, features=features,
@@ -303,6 +320,7 @@ async def _run_deepseek(
             indicator_accuracy=indicator_accuracy, ensemble_weights=ensemble_weights,
             historical_analysis=historical_analysis, creative_edge=creative_edge,
             dashboard_accuracy=dashboard_accuracy, neutral_analysis=neutral_analysis,
+            binance_expert_analysis=binance_expert_result,
         )
 
         # Stale-window guard
@@ -380,6 +398,7 @@ async def _run_full_prediction(prices, is_force=False):
     current_state["pending_deepseek_ready"]      = False
     current_state["bar_historical_analysis"]     = ""
     current_state["bar_historical_context"]      = ""
+    current_state["bar_binance_expert"]          = {}
 
     tag = "FORCE" if is_force else "BAR OPEN"
     logger.info("=== %s #%d === %s | price=%.2f ===",
@@ -447,7 +466,7 @@ async def _run_full_prediction(prices, is_force=False):
     if deepseek and klines and _features_ok:
         try:
             spec_raw = await asyncio.wait_for(
-                run_specialists(config.deepseek_api_key, klines), timeout=30.0,
+                run_specialists(config.deepseek_api_key, klines), timeout=100.0,
             )
             if isinstance(spec_raw, tuple):
                 specialist_results, creative_edge = spec_raw
@@ -473,10 +492,16 @@ async def _run_full_prediction(prices, is_force=False):
     except Exception as exc:
         logger.warning("Dashboard signals error: %s", exc)
 
-    # Step 3 — Inject dashboard into ensemble
+    # Step 3 — Inject dashboard into ensemble + fire Binance expert immediately
+    binance_expert_task = None
     if dashboard_signals:
         dash_preds = _dashboard_signals_to_preds(dashboard_signals)
         strategy_preds.update(dash_preds)
+        if deepseek:
+            binance_expert_task = asyncio.create_task(
+                run_binance_expert(config.deepseek_api_key, dashboard_signals)
+            )
+            logger.info("Binance expert task fired")
 
     # Step 4 — Ensemble
     pred                              = ensemble.predict(strategy_preds)
@@ -593,6 +618,7 @@ async def _run_full_prediction(prices, is_force=False):
                 ensemble_weights=ensemble.get_weights(),
                 historical_analysis=historical_analysis,
                 creative_edge=creative_edge, dashboard_accuracy=dashboard_acc,
+                binance_expert_task=binance_expert_task,
             )
         )
 
@@ -702,11 +728,12 @@ async def _resolve_window(
             "strategy_votes":       strategy_preds,
             "specialist_signals":   current_state.get("bar_specialist_signals", {}),
             "dashboard_signals_raw": snap_dash_raw,
-            "creative_edge":        current_state.get("bar_creative_edge", ""),
-            "historical_analysis":  current_state.get("bar_historical_analysis", ""),
-            "full_prompt":          ds_pred_snap.get("full_prompt", ""),
-            "session":              None,
-            "postmortem":           "",   # filled in by postmortem handler before embedding
+            "creative_edge":            current_state.get("bar_creative_edge", ""),
+            "historical_analysis":      current_state.get("bar_historical_analysis", ""),
+            "binance_expert_analysis":  current_state.get("bar_binance_expert", {}),
+            "full_prompt":              ds_pred_snap.get("full_prompt", ""),
+            "session":                  None,
+            "postmortem":               "",   # filled in by postmortem handler before embedding
         }
 
         # Fire postmortem in background — non-blocking, best effort
@@ -733,9 +760,9 @@ async def _resolve_window(
             # ERROR/UNAVAILABLE/None — logged to error tab, never embedded
             pass
 
-        ens_at_total, ens_at_correct, ens_at_acc = (
-            await _safe_storage_async(storage.get_total_accuracy, default=(0, 0, 0.0))
-        ) or (0, 0, 0.0)
+        ens_at_total, ens_at_correct, ens_at_acc, *_ = (
+            await _safe_storage_async(storage.get_total_accuracy, default=(0, 0, 0.0, 0))
+        ) or (0, 0, 0.0, 0)
         ds_acc_snap = (
             await _safe_storage_async(storage.get_deepseek_accuracy, default={"total": 0, "correct": 0, "accuracy": 0.0})
         ) or {}
@@ -777,16 +804,17 @@ async def _resolve_window(
                 deepseek_reasoning = ds_pred_snap.get("reasoning", ""),
                 deepseek_narrative = ds_pred_snap.get("narrative", ""),
                 deepseek_free_obs  = ds_pred_snap.get("free_observation", ""),
-                specialist_signals = current_state.get("bar_specialist_signals", {}),
-                creative_edge      = current_state.get("bar_creative_edge", ""),
-                historical_analysis = current_state.get("bar_historical_analysis", ""),
-                strategy_votes     = strategy_preds,
-                indicators         = snap_indicators,
-                dashboard_signals_raw = snap_dash_raw,
-                accuracy_snapshot  = accuracy_snapshot,
-                full_prompt        = ds_pred_snap.get("full_prompt", ""),
-                trade_action       = _trade_action,
-                window_count       = ds_pred_snap.get("window_count") or (deepseek.window_count if deepseek else 0),
+                specialist_signals         = current_state.get("bar_specialist_signals", {}),
+                creative_edge              = current_state.get("bar_creative_edge", ""),
+                historical_analysis        = current_state.get("bar_historical_analysis", ""),
+                binance_expert_analysis    = current_state.get("bar_binance_expert", {}),
+                strategy_votes             = strategy_preds,
+                indicators                 = snap_indicators,
+                dashboard_signals_raw      = snap_dash_raw,
+                accuracy_snapshot          = accuracy_snapshot,
+                full_prompt                = ds_pred_snap.get("full_prompt", ""),
+                trade_action               = _trade_action,
+                window_count               = ds_pred_snap.get("window_count") or (deepseek.window_count if deepseek else 0),
             )
         except Exception as ph_exc:
             logger.warning("Pattern history append failed: %s", ph_exc)
@@ -808,6 +836,7 @@ async def _resolve_window(
         # Reset bar-level state (historical analysis cleared at next bar open, not here)
         current_state["bar_specialist_signals"]  = {}
         current_state["bar_creative_edge"]       = ""
+        current_state["bar_binance_expert"]      = {}
 
         logger.info("Window closed | actual:%s | predicted:%s | %s | Δ%.2f",
                     actual, pred["signal"], "WIN" if correct else "LOSS",
