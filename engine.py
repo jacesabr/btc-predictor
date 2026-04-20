@@ -653,7 +653,7 @@ async def _resolve_window(
     if end_prices:
         end_price = end_prices[-1]
         actual    = "UP" if end_price >= window_start_price else "DOWN"
-        correct   = actual == pred["signal"]
+        correct   = None if pred["signal"] == "NEUTRAL" else (actual == pred["signal"])
 
         await _safe_storage_async(
             storage.store_prediction,
@@ -679,9 +679,8 @@ async def _resolve_window(
                 pass
 
         ds_pred_snap = current_state.get("deepseek_prediction") or {}
-        ds_correct   = (actual == ds_pred_snap["signal"]
-                        if ds_pred_snap.get("signal") not in (None, "ERROR", "UNAVAILABLE")
-                        else None)
+        ds_correct   = (None if ds_pred_snap.get("signal") in (None, "ERROR", "UNAVAILABLE", "NEUTRAL")
+                        else (actual == ds_pred_snap["signal"]))
 
         await _safe_storage_async(storage.resolve_deepseek_prediction, window_start_time, end_price)
 
@@ -804,7 +803,7 @@ async def _resolve_window(
                 end_price          = end_price,
                 ensemble_signal    = pred["signal"],
                 ensemble_conf      = pred["confidence"],
-                ensemble_correct   = (actual == pred["signal"]),
+                ensemble_correct   = (None if pred["signal"] == "NEUTRAL" else (actual == pred["signal"])),
                 deepseek_signal    = _ds_signal,
                 deepseek_conf      = ds_pred_snap.get("confidence", 0),
                 deepseek_correct   = ds_correct,
@@ -846,7 +845,7 @@ async def _resolve_window(
         current_state["bar_binance_expert"]      = {}
 
         logger.info("Window closed | actual:%s | predicted:%s | %s | Δ%.2f",
-                    actual, pred["signal"], "WIN" if correct else "LOSS",
+                    actual, pred["signal"], ("WIN" if correct else ("NEUTRAL" if correct is None else "LOSS")),
                     end_price - window_start_price)
 
     current_state["agree_accuracy"] = await _safe_storage_async(storage.get_agree_accuracy, default={})
