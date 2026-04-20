@@ -2223,3 +2223,286 @@ class DeepSeekPredictor:
             "window_end": window_end_str, "latency_ms": latency_ms,
             "completed_at": time.time(), "window_count": self.window_count,
         }
+
+
+# ═══════════════════════════════════════════════════════════════
+# SECTION 5 — Embedding Audit
+# Fires every 4 hours. Sends the full embedding pipeline state
+# to deepseek-reasoner: embedding stats, last historical analyst
+# run (what 50 bars pgvector found, what 20 Cohere reranked to),
+# each selected bar's actual indicator values + outcome, and the
+# historical analyst accuracy history. DeepSeek walks through the
+# results and identifies issues, mismatches, and improvements.
+# ═══════════════════════════════════════════════════════════════
+
+_AUDIT_DIR      = _ROOT / "specialists" / "embedding_audit"
+_AUDIT_DIR.mkdir(parents=True, exist_ok=True)
+_AUDIT_LOG      = _AUDIT_DIR / "audit_log.ndjson"
+_AUDIT_LAST_RAW = _AUDIT_DIR / "last_raw.txt"
+
+
+async def run_embedding_audit(
+    deepseek_api_key: str,
+    history_records: List[Dict],
+) -> Optional[Dict]:
+    """
+    Comprehensive embedding pipeline audit using deepseek-reasoner.
+
+    Reads the last historical analyst run files, computes embedding stats,
+    and asks DeepSeek to evaluate whether the pipeline is working correctly.
+    Returns an audit dict saved to audit_log.ndjson.
+    """
+    if not deepseek_api_key:
+        return None
+
+    t0 = time.time()
+    ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+
+    # ── Embedding coverage stats ──────────────────────────────────
+    total_bars = len(history_records)
+    embedded_bars = sum(1 for r in history_records if r.get("_has_embedding") or r.get("embedding"))
+    resolved_bars = [r for r in history_records if r.get("actual_direction")]
+
+    # Historical analyst accuracy from resolved bars
+    ha_records = [r for r in resolved_bars if isinstance(r.get("historical_analyst"), dict)
+                  and r["historical_analyst"].get("signal") in ("UP", "DOWN")]
+    ha_correct = sum(1 for r in ha_records
+                     if r["historical_analyst"]["signal"] == r["actual_direction"])
+    ha_acc = round(ha_correct / len(ha_records), 4) if ha_records else None
+
+    # Similarity score stats from recent pgvector searches (bars that have _similarity)
+    sim_scores = [r["_similarity"] for r in history_records if "_similarity" in r]
+    sim_stats = {}
+    if sim_scores:
+        arr = sorted(sim_scores)
+        sim_stats = {
+            "count": len(arr),
+            "min":   round(min(arr), 4),
+            "max":   round(max(arr), 4),
+            "mean":  round(sum(arr) / len(arr), 4),
+            "p50":   round(arr[len(arr) // 2], 4),
+            "p90":   round(arr[int(len(arr) * 0.9)], 4),
+        }
+
+    # ── Read last historical analyst run files ────────────────────
+    def _read_file(path: Path) -> str:
+        try:
+            return path.read_text(encoding="utf-8", errors="replace")[:8000]
+        except Exception:
+            return "(not available)"
+
+    last_sent     = _read_file(_HIST_SENT)
+    last_response = _read_file(_HIST_RESPONSE)
+    last_prompt   = _read_file(_HIST_PROMPT_OUT)
+
+    # ── Sample recent resolved bars with historical analyst votes ──
+    recent = [r for r in resolved_bars[-60:] if isinstance(r.get("historical_analyst"), dict)]
+    bar_sample_lines = []
+    for r in recent[-20:]:
+        ha    = r.get("historical_analyst", {})
+        ha_sig = ha.get("signal", "—")
+        ha_conf = ha.get("confidence", 0)
+        actual = r.get("actual_direction", "—")
+        ds_sig = r.get("deepseek_signal", "—")
+        correct_mark = "✓" if ha_sig == actual else ("✗" if ha_sig in ("UP","DOWN") else "—")
+        indicators = r.get("indicators", {})
+        rsi = indicators.get("rsi_7", indicators.get("rsi_14", "—"))
+        macd = indicators.get("macd_hist", "—")
+        vol_ratio = indicators.get("volume_ratio", "—")
+        ws = r.get("window_start", 0)
+        session = _session(ws) if ws else "—"
+        bar_sample_lines.append(
+            f"  {time.strftime('%m-%d %H:%M', time.gmtime(ws))} [{session}]"
+            f"  HA={ha_sig}({int(ha_conf*100)}%)  DS={ds_sig}  ACTUAL={actual} {correct_mark}"
+            f"  RSI={rsi}  MACD={macd}  VOL_RATIO={vol_ratio}"
+        )
+    bar_sample = "\n".join(bar_sample_lines) or "  (no recent bars with HA votes)"
+
+    # ── Build audit prompt ────────────────────────────────────────
+    prompt = f"""You are performing a deep technical audit of an embedding-based pattern retrieval system for BTC/USDT 5-minute bar prediction.
+
+This system:
+1. After each 5-min bar closes, converts the full bar record (OHLCV + indicators + strategy votes + specialist signals + DeepSeek reasoning + postmortem) into a rich text essay
+2. Sends that essay to Cohere embed-english-v3.0 → 1024-dim L2-normalized vector
+3. Stores it in PostgreSQL pgvector with HNSW index
+4. When next bar opens, embeds current opening conditions as a search_query vector
+5. Runs cosine similarity search → top-50 candidates
+6. Cohere rerank-english-v3.0 re-scores 50 → selects top-20
+7. Sends top-20 historical bars to DeepSeek as "historical analyst" context
+
+══ EMBEDDING STATS ══════════════════════════════════════════════
+Total bars in history   : {total_bars}
+Bars with embeddings    : {embedded_bars}
+Coverage                : {round(embedded_bars/total_bars*100,1) if total_bars else 0}%
+Resolved bars           : {len(resolved_bars)}
+Bars with HA votes      : {len(ha_records)}
+Historical analyst acc  : {f"{ha_acc*100:.1f}%" if ha_acc is not None else "N/A (need more data)"}
+  HA correct            : {ha_correct}
+  HA wrong              : {len(ha_records) - ha_correct}
+
+Similarity score distribution (cosine sim, higher=more similar):
+{sim_stats if sim_stats else "  (no similarity data available yet)"}
+
+══ LAST HISTORICAL ANALYST RUN — WHAT WAS SENT (truncated) ════
+{last_sent[:4000]}
+
+══ LAST HISTORICAL ANALYST RESPONSE ════════════════════════════
+{last_response[:2000]}
+
+══ RECENT BARS: HISTORICAL ANALYST vs ACTUAL (last 20 with HA) ═
+{bar_sample}
+
+══ YOUR AUDIT TASK ══════════════════════════════════════════════
+
+Walk through the embedding pipeline step by step and evaluate:
+
+1. EMBEDDING QUALITY: Is the bar text being converted to vectors that capture meaningful market fingerprints? Are the most important features (outcome, RSI, session, trend) likely to dominate the 1024-dim space?
+
+2. RETRIEVAL ACCURACY: From the "last sent" context above, evaluate the 50 bars pgvector found — do they appear genuinely similar to the current bar in market conditions? Or is there noise?
+
+3. RERANKING EFFECTIVENESS: Did Cohere rerank appear to select better bars than raw cosine similarity would have? What patterns do you notice in what got promoted vs demoted?
+
+4. HISTORICAL ANALYST PERFORMANCE: With {f"{ha_acc*100:.1f}%" if ha_acc is not None else "N/A"} accuracy on {len(ha_records)} bars, is the historical analyst adding signal above noise (50%)? Where does it appear to succeed vs fail?
+
+5. ISSUES IDENTIFIED: List any specific problems you detect — e.g., embedding cold start, coverage gaps, session bias, recency bias in retrieval, prompt quality issues.
+
+6. CONCRETE SUGGESTIONS: Provide 3-5 specific actionable suggestions to improve embedding quality, retrieval accuracy, reranking, or how the historical context is presented to DeepSeek.
+
+Format your response as:
+AUDIT_SIGNAL: [GOOD|NEEDS_IMPROVEMENT|CRITICAL]
+SUMMARY: <2-3 sentence overall verdict>
+
+ISSUE_1: <issue title>
+<detailed description>
+
+ISSUE_2: <issue title>
+<detailed description>
+
+(continue for all issues found)
+
+SUGGESTION_1: <suggestion title>
+<detailed description>
+
+SUGGESTION_2: <suggestion title>
+<detailed description>
+
+(continue for all suggestions)
+
+FULL_ANALYSIS:
+<deep reasoning walk-through of everything you evaluated>
+"""
+
+    try:
+        raw = await _api_call(
+            deepseek_api_key, prompt,
+            max_tokens=4000, timeout_s=120.0,
+            model=DEEPSEEK_MODEL,  # reasoner — full chain-of-thought
+        )
+    except Exception as exc:
+        logger.warning("Embedding audit DeepSeek call failed: %s", exc)
+        return None
+
+    elapsed = time.time() - t0
+
+    # ── Parse structured fields ────────────────────────────────────
+    audit_signal = "UNKNOWN"
+    summary      = ""
+    issues       = []
+    suggestions  = []
+    full_analysis = ""
+
+    current_section = None
+    current_buf: List[str] = []
+
+    def _flush():
+        nonlocal current_section, current_buf, audit_signal, summary, full_analysis
+        text = "\n".join(current_buf).strip()
+        if not text or not current_section:
+            return
+        if current_section == "FULL_ANALYSIS":
+            full_analysis = text
+        elif current_section.startswith("ISSUE_"):
+            issues.append(text)
+        elif current_section.startswith("SUGGESTION_"):
+            suggestions.append(text)
+        current_buf = []
+
+    for line in raw.splitlines():
+        stripped = line.strip()
+        upper = stripped.upper()
+        if upper.startswith("AUDIT_SIGNAL:"):
+            audit_signal = stripped.split(":", 1)[1].strip()
+        elif upper.startswith("SUMMARY:"):
+            summary = stripped.split(":", 1)[1].strip()
+        elif upper.startswith("FULL_ANALYSIS:"):
+            _flush()
+            current_section = "FULL_ANALYSIS"
+        elif upper.startswith("ISSUE_") and ":" in stripped:
+            _flush()
+            current_section = stripped.split(":")[0].upper()
+            rest = stripped.split(":", 1)[1].strip()
+            if rest:
+                current_buf = [rest]
+        elif upper.startswith("SUGGESTION_") and ":" in stripped:
+            _flush()
+            current_section = stripped.split(":")[0].upper()
+            rest = stripped.split(":", 1)[1].strip()
+            if rest:
+                current_buf = [rest]
+        else:
+            if current_section:
+                current_buf.append(line)
+    _flush()
+
+    result = {
+        "timestamp":      time.time(),
+        "timestamp_str":  ts_str,
+        "elapsed_s":      round(elapsed, 1),
+        "audit_signal":   audit_signal,
+        "summary":        summary,
+        "issues":         issues,
+        "suggestions":    suggestions,
+        "full_analysis":  full_analysis,
+        "raw":            raw,
+        "stats": {
+            "total_bars":    total_bars,
+            "embedded_bars": embedded_bars,
+            "coverage_pct":  round(embedded_bars / total_bars * 100, 1) if total_bars else 0,
+            "ha_accuracy":   ha_acc,
+            "ha_total":      len(ha_records),
+            "ha_correct":    ha_correct,
+            "sim_stats":     sim_stats,
+        },
+    }
+
+    _save(_AUDIT_LAST_RAW, f"# {ts_str}  elapsed={elapsed:.1f}s\n\n{raw}")
+    try:
+        with _AUDIT_LOG.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(result, default=str) + "\n")
+    except Exception as exc:
+        logger.warning("Embedding audit log write failed: %s", exc)
+
+    logger.info("Embedding audit %.1fs | %s | %d issues | %d suggestions",
+                elapsed, audit_signal, len(issues), len(suggestions))
+    return result
+
+
+def load_embedding_audit_log(n: int = 20) -> List[Dict]:
+    """Return last n embedding audit entries from the NDJSON log."""
+    try:
+        lines = _AUDIT_LOG.read_text(encoding="utf-8", errors="replace").splitlines()
+        results = []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                results.append(json.loads(line))
+            except Exception:
+                pass
+        return results[-n:]
+    except FileNotFoundError:
+        return []
+    except Exception as exc:
+        logger.warning("load_embedding_audit_log failed: %s", exc)
+        return []
