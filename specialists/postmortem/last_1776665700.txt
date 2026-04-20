@@ -1,0 +1,96 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 06:15 UTC) ══════════════════════════════
+Signal     : DOWN  (65%)
+Start price: $0.00
+Reasoning  : MICROSTRUCTURE: Heavily ask-dominated order book (-63% imbalance) provides immediate selling pressure. Aggressive taker sell flow (BSR 0.584) confirms sellers are hitting bids. Spot whale buys are a lone bullish counter-signal but are being overwhelmed by leveraged selling.
+FUNDING + POSITIONING: Negative aggregate funding (-0.4615%) is a structural bullish bias, but current OI is stable and smart money positioning is neutral (49.5% long). This suggests the bearish price action is not yet driven by a leveraged flush.
+TECHNICAL + CROSS-EXCHANGE: Price is at the Fib 61.8% retracement level ($74,263.02), a critical break point. Oscillators (RSI 28.8, Stoch 10.8) are oversold but can remain so in a downtrend. The Binance Microstructure Expert's DOWN signal (65% confidence) aligns with the immediate price action.
+SYNTHESIS: The dominant bias is bearish for the next 5 minutes. The single most decisive factor is the confirmed rejection from the 06:03 high with follow-through selling, supported by the bearish order book and taker flow. The biggest risk is a bounce from oversold levels or spot whale accumulation, but the path of least resistance is down to fill the gap toward $74,200. Final conviction is for a close BELOW $74,263.10.
+Narrative  : At 06:03, a massive 31.6 BTC volume spike to $74,430.70 was immediately rejected, forming a shooting star. The next three bars (06:04-06:06) closed near their lows on high volume, confirming aggressive selling. Price has since drifted lower, breaking below the Fib 61.8% support at $74,263.02 and testing the $74,200s, with the current bar (06:15) printing a low of $74,251.10.
+Free obs   : The most significant convergence is between the high-conviction bearish order book (-63% imbalance) and the aggressive taker sell flow (BSR 0.584), both confirming the selling pressure narrative from the 06:03 rejection candle.
+Data recv  : Order Book, Taker Flow, OI/Funding, Fear & Greed, Mempool, Coinalyze, CoinGecko, Kraken Premium, BTC Dominance, Top Position Ratio, Funding Rate Trend, Spot Whale Flow, OKX Funding, Deribit Options, On-Chain Metrics, Full 1m Candle History.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : UP
+End price        : $74,397.20
+Move             : +0.00 (+0.0000%)
+VERDICT          : WRONG
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+05:50,74209.80,74250.10,74209.80,74250.10,3.5003
+05:51,74250.10,74250.80,74218.30,74234.00,7.6722
+05:52,74234.00,74234.00,74221.20,74221.20,1.1269
+05:53,74221.20,74245.30,74218.30,74240.50,4.3803
+05:54,74240.50,74301.80,74240.50,74301.80,6.3380
+05:55,74301.80,74301.80,74296.00,74299.90,2.7464
+05:56,74299.90,74299.90,74288.80,74288.90,3.4831
+05:57,74288.90,74288.90,74254.30,74268.60,3.1416
+05:58,74268.60,74271.80,74262.70,74271.80,1.7734
+05:59,74271.80,74277.80,74268.90,74269.30,1.5956
+06:00,74269.30,74298.00,74263.20,74263.20,6.7545
+06:01,74263.20,74304.30,74263.20,74300.30,7.0824
+06:02,74300.30,74322.40,74275.00,74309.10,7.8413
+06:03,74309.10,74430.70,74309.10,74414.50,31.6118
+06:04,74414.50,74438.10,74380.70,74380.80,15.5518
+06:05,74380.80,74405.90,74375.20,74389.30,4.7894
+06:06,74389.30,74389.30,74354.60,74354.60,7.3760
+06:07,74354.60,74380.90,74354.30,74366.60,4.8764
+06:08,74366.60,74369.00,74358.50,74358.60,2.0489
+06:09,74358.60,74370.50,74354.40,74365.90,2.8247
+06:10,74365.90,74365.90,74344.20,74346.60,3.5368
+06:11,74346.60,74348.20,74278.90,74288.60,8.9743
+06:12,74288.60,74307.90,74288.60,74305.70,3.8179
+06:13,74305.70,74316.60,74300.50,74313.80,4.1709
+06:14,74313.80,74313.80,74285.70,74298.20,3.3971
+06:15,74298.20,74298.20,74251.10,74278.40,7.3803
+06:16,74278.40,74298.70,74268.50,74296.00,4.3989
+06:17,74296.00,74338.60,74289.80,74336.70,9.4145
+06:18,74336.70,74378.30,74334.10,74378.30,6.2779
+06:19,74378.30,74397.20,74352.50,74397.20,6.8644
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 2.4638
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BEARISH  — Ask-heavy book — sellers in control. -63.2% ask dominant. Sell-side wall capping
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.584). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  mempool: BULLISH  — Very low fees (4 sat/vB) — calm network, no on-chain panic. Slightly positive ba
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (+0.002%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (+0.06% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: BULLISH  — Kraken spot whale buyers dominate: 100.0% (6.0 BTC) of large spot trades are buy
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  okx_funding: NEUTRAL  — OKX funding near-zero (0.0041%). No leverage imbalance on OKX.
+  btc_dominance: BULLISH  — BTC dominance 57.4% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.772). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0046%, trend +0.0025%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.4% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.704 — balanced options positioning. Max pain $73,000 (-1.7% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4615%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: WRONG
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was wrong]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: WRONG
+ROOT_CAUSE: I over-weighted immediate microstructure signals (order book, taker flow) and a short-term bearish narrative, while under-weighting the powerful structural and contrarian bullish signals (negative funding, extreme fear, spot whale buys) that were building a base for a reversal.
+MISLEADING_SIGNALS: The bearish order book imbalance (-63%) and aggressive taker sell flow (BSR 0.584) were transient and misleading; they captured selling pressure *at that moment* but failed to signal exhaustion and imminent absorption.
+RELIABLE_SIGNALS: The negative aggregate funding (-0.4615%), Extreme Fear reading (29), and persistent spot whale buy flow were correct and should have been the primary narrative drivers, indicating a market ripe for a short squeeze or relief bounce.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a consolidation phase after a sharp rejection, with aggressive spot accumulation (whales) and negative funding creating a coiled spring. The bearish microstructure was the final wave of weak-handed selling being absorbed before a reversal, not the start of a new leg down.
+LESSON: When high-conviction bearish microstructure (order book, taker flow) conflicts with strong structural/contrarian bullish signals (negative funding, extreme fear, whale accumulation), default to the structural bias for a 5-minute horizon unless there is a clear liquidation cascade or momentum break.

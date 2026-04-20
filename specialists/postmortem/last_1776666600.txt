@@ -1,0 +1,95 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 06:30 UTC) ══════════════════════════════
+Signal     : DOWN  (65%)
+Start price: $0.00
+Reasoning  : MICROSTRUCTURE: Taker aggressor flow is decisively bearish (BSR=0.634), showing active selling pressure hitting bids. This overwhelms the bullish but passive order book support. Spot whale flow is bullish but low-confidence.
+FUNDING + POSITIONING: Negative aggregate funding (-0.4615%) is structurally bullish, but OI is stable and smart money positioning is neutral (49.5% long). No strong directional bias from positioning.
+TECHNICAL + CROSS-EXCHANGE: Stochastic is overbought (94.8) and showing a bearish cross-down signal—this indicator has an excellent track record (66.7% accuracy). Price is at a 64% Fibonacci pullback level, often a reversal zone. The ensemble vote is bullish (76.7%) but conflicts with high-trust oscillators.
+SYNTHESIS: The dominant bias is short-term bearish due to aggressive selling pressure (taker flow) and an overbought stochastic reversal. The most decisive factor is the high-confidence bearish signal from the stochastic oscillator at an overbought extreme. The biggest risk is the strong passive bid wall providing immediate support. Final conviction is for a dip below entry within the 5-minute window.
+Narrative  : The market spiked to $74,430.70 at 06:03 on a 31.6 BTC absorption candle but has since failed to hold the highs, coiling in a contracting range. From 06:10 to 06:30, price action has been choppy between $74,339.70 and $74,388.60, showing a lack of follow-through above the entry level of $74,370.80. The immediate structure suggests a rejection from the 06:03 high and a test of lower support.
+Free obs   : The most significant convergence is the stark conflict between bullish order book depth (+75.7% bid-heavy) and decisively bearish taker aggressor flow (BSR=0.634), with the aggressive selling pressure likely to overwhelm passive bids in the short term.
+Data recv  : All signals available including microstructure, funding, technicals, and ensemble.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : UP
+End price        : $74,507.70
+Move             : +0.00 (+0.0000%)
+VERDICT          : WRONG
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+06:06,74389.30,74389.30,74354.60,74354.60,7.3760
+06:07,74354.60,74380.90,74354.30,74366.60,4.8764
+06:08,74366.60,74369.00,74358.50,74358.60,2.0489
+06:09,74358.60,74370.50,74354.40,74365.90,2.8247
+06:10,74365.90,74365.90,74344.20,74346.60,3.5368
+06:11,74346.60,74348.20,74278.90,74288.60,8.9743
+06:12,74288.60,74307.90,74288.60,74305.70,3.8179
+06:13,74305.70,74316.60,74300.50,74313.80,4.1709
+06:14,74313.80,74313.80,74285.70,74298.20,3.3971
+06:15,74298.20,74298.20,74251.10,74278.40,7.3803
+06:16,74278.40,74298.70,74268.50,74296.00,4.3989
+06:17,74296.00,74338.60,74289.80,74336.70,9.4145
+06:18,74336.70,74378.30,74334.10,74378.30,6.2779
+06:19,74378.30,74403.80,74352.50,74403.70,7.8463
+06:20,74403.70,74409.00,74395.00,74395.00,2.7407
+06:21,74395.00,74397.90,74347.80,74357.80,6.2247
+06:22,74357.80,74357.80,74336.40,74344.70,4.9778
+06:23,74344.70,74363.60,74335.50,74335.60,5.3870
+06:24,74335.60,74358.70,74335.50,74358.60,1.7244
+06:25,74358.60,74363.50,74315.30,74363.50,6.7277
+06:26,74363.50,74363.60,74354.80,74363.60,1.7259
+06:27,74363.60,74386.20,74357.90,74380.00,5.8262
+06:28,74380.00,74388.60,74380.00,74384.80,1.5180
+06:29,74384.80,74384.90,74339.70,74339.70,9.1036
+06:30,74339.70,74438.00,74339.70,74416.20,13.5311
+06:31,74416.20,74459.60,74416.20,74439.60,8.7183
+06:32,74439.60,74462.20,74439.60,74462.10,4.4439
+06:33,74462.10,74515.30,74458.80,74486.50,14.1856
+06:34,74486.50,74517.00,74486.50,74516.90,5.5119
+06:35,74516.90,74533.10,74516.90,74518.10,3.3920
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 3.4632
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +75.7% bid-heavy. Immediate upward
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.634). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (-0.007%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (+0.02% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: BULLISH  — Kraken spot whale buyers dominate: 100.0% (6.0 BTC) of large spot trades are buy
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  okx_funding: NEUTRAL  — OKX funding near-zero (0.0043%). No leverage imbalance on OKX.
+  btc_dominance: BULLISH  — BTC dominance 57.4% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.772). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0046%, trend +0.0025%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.2% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.703 — balanced options positioning. Max pain $73,000 (-1.9% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4615%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: WRONG
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was wrong]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: WRONG
+ROOT_CAUSE: I overweighted a short-term, mean-reversion signal (overbought stochastic) against the dominant structural bullish forces, particularly the massive passive bid support and negative funding, which indicated underlying strength and a high probability of a consolidation-break-higher pattern.
+MISLEADING_SIGNALS: The stochastic "bearish cross-down" and the bearish taker aggressor flow (BSR). The stochastic was a lagging indicator of the prior uptrend, not a leading reversal signal, and the aggressive selling was being fully absorbed by the stronger bid wall.
+RELIABLE_SIGNALS: The extremely bullish order book depth (+75.7% bid-heavy) and the structurally bullish negative aggregate funding were correct and should have been the primary directional filters.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a bullish consolidation phase after the 06:03 spike. The "aggressive selling" was profit-taking within an uptrend, consistently absorbed by dominant passive bids, which eventually fueled a breakout as selling pressure exhausted. The negative funding showed persistent short positioning that provided fuel for a squeeze.
+LESSON: In a strongly bid-heavy market with negative funding, treat overbought oscillators and bearish taker flow as signs of a healthy pullback or consolidation within an uptrend, not as reversal triggers. The structural bias (order book + funding) overrules short-term momentum divergences.

@@ -1,0 +1,93 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 02:45 UTC) ══════════════════════════════
+Signal     : NEUTRAL  (62%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book is neutral (+2.5% imbalance), providing no bid defense. The Specialist's edge highlights a bearish compression coil post a high-volume decline, favoring a downside breakout. No spot whale flow provides direction.]
+[FUNDING + POSITIONING: Cross-exchange aggregate funding is deeply negative (-0.46150%), a structural bullish bias, but this is a contrarian signal against the immediate price action. Smart money and retail are aligned long (54%), creating a crowded long vulnerable to a squeeze.]
+[TECHNICAL + CROSS-EXCHANGE: Price is rejecting at the Fibonacci 38.2% level ($74,459.33) and the swing high. MACD is bearish and contracting. The ensemble weighted vote is bearish (7.102 vs 5.192). The Alligator is bullish but price is below the Lips, suggesting a false breakout.]
+[SYNTHESIS: Dominant bias is short-term bearish due to price rejection and compression. The single most decisive factor is the Specialist's identified bearish coil pattern. The biggest risk is the negative funding rate sparking a short squeeze. Final conviction leans BELOW due to the high-probability compression breakout overriding the contrarian funding signal.]
+Narrative  : From 02:34 to 02:44, price rallied from $74,435.30 to $74,518.60 on high volume, but immediately failed, printing a lower high at 02:45 ($74,518.60) and closing the current bar at $74,504.20. This rejection at the $74,519.30 swing high, combined with a 5-bar compression coil culminating in the tightest ranges at 02:43-02:44, signals an imminent bearish breakdown targeting the $74,384.57 support.
+Free obs   : The most significant convergence is the bearish compression coil identified by the Specialist, aligning with the high-trust Accumulation/Distribution indicator showing distribution (slope +6 but A/D only 23), and the reliable Stochastic giving a sell signal (K=24.0, D=21.9, cross down imminent).
+Data recv  : All signals available except Taker Flow and BTC On-Chain.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : UP
+End price        : $74,497.50
+Move             : +0.00 (+0.0000%)
+VERDICT          : ABSTENTION (NEUTRAL)
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+02:20,74376.40,74411.10,74376.40,74411.10,8.7343
+02:21,74411.10,74412.20,74362.30,74372.30,6.7187
+02:22,74372.30,74400.50,74362.80,74369.20,5.9976
+02:23,74369.20,74419.90,74365.50,74419.90,4.6050
+02:24,74419.90,74458.90,74419.90,74446.60,6.5643
+02:25,74446.60,74446.70,74424.30,74425.30,4.0750
+02:26,74425.30,74427.00,74402.30,74411.10,5.2371
+02:27,74411.10,74462.40,74411.10,74462.30,6.2089
+02:28,74462.30,74474.70,74442.50,74474.70,3.5438
+02:29,74474.70,74474.70,74451.80,74451.80,3.0469
+02:30,74451.80,74495.60,74451.80,74466.30,8.0382
+02:31,74466.30,74466.30,74437.10,74446.70,4.4960
+02:32,74446.70,74455.10,74437.00,74441.30,2.6859
+02:33,74441.30,74451.50,74407.00,74451.40,5.9902
+02:34,74451.40,74493.70,74435.30,74485.20,13.8477
+02:35,74485.20,74487.40,74461.20,74470.10,7.5329
+02:36,74470.10,74518.70,74470.10,74512.10,5.7489
+02:37,74512.10,74519.30,74495.10,74495.20,3.0589
+02:38,74495.20,74495.20,74475.30,74484.10,5.1950
+02:39,74484.10,74504.10,74470.10,74504.10,4.9236
+02:40,74504.10,74504.10,74480.80,74503.40,3.8582
+02:41,74503.40,74510.90,74469.90,74469.90,5.4180
+02:42,74469.90,74469.90,74432.60,74460.00,7.9182
+02:43,74460.00,74475.00,74437.80,74437.90,6.0553
+02:44,74437.90,74518.60,74437.80,74518.60,10.3769
+02:45,74518.60,74518.60,74484.40,74484.40,5.3777
+02:46,74484.40,74484.40,74456.30,74456.30,2.0539
+02:47,74456.30,74461.70,74433.90,74434.00,4.9173
+02:48,74434.00,74474.70,74434.00,74474.70,2.3920
+02:49,74474.70,74518.70,74469.50,74510.50,7.0312
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 1.8502
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: NEUTRAL  — Balanced order book (+2.5%). Neither side defending aggressively; defer to taker
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (-0.018%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (+0.07% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Kraken spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dire
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  okx_funding: NEUTRAL  — OKX funding near-zero (0.0022%). No leverage imbalance on OKX.
+  btc_dominance: BULLISH  — BTC dominance 57.4% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 54% long by notional (ratio 1.166) (Bybit approx). No extreme positi
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0014%, trend +0.0064%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.9% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.700 — balanced options positioning. Max pain $73,000 (-2.1% 
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4615%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was abstention]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: The prediction correctly identified a compression/coil but misjudged its directional bias, as the market was actually coiling within a shallow uptrend (trend_slope: 1.8502) to continue higher rather than preparing for a bearish breakdown.
+MISLEADING_SIGNALS: Over-weighted the Specialist's "bearish compression coil" and the MACD/rejection narrative, while under-weighting the persistent, structurally bullish signal from deeply negative cross-exchange funding (-0.4615%).
+RELIABLE_SIGNALS: The negative funding rate was correct as a structural bullish bias (price ended higher), and the order book neutrality (+2.5% imbalance) correctly indicated no immediate directional edge from microstructure.
+DATA_GAPS: NONE
+UPDATED_READING: Price was in a slow, grinding uptrend, consolidating near local highs. The "rejection" at the prior swing high was not a failure but a brief pause; the compression was a continuation pattern within the uptrend, resolved with another push up to $74,518.70.
+LESSON: When a strong contrarian structural signal (deep negative funding) conflicts with a short-term technical pattern, require stronger confirmation (e.g., a clear breakdown below a key support level on volume) before siding with the pattern.
