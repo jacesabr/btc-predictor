@@ -16,7 +16,12 @@ from typing import Dict, List, Optional
 import numpy as np
 import psycopg2
 import psycopg2.extras
-from pgvector.psycopg2 import register_vector
+
+try:
+    from pgvector.psycopg2 import register_vector as _register_vector
+    _PGVECTOR_AVAILABLE = True
+except ImportError:
+    _PGVECTOR_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +42,11 @@ def _session_label(ts: float) -> str:
 def _conn():
     from storage_pg import _get_pool
     conn = _get_pool().getconn()
-    register_vector(conn)
+    if _PGVECTOR_AVAILABLE:
+        try:
+            _register_vector(conn)
+        except Exception:
+            pass
     return conn
 
 
@@ -48,15 +57,18 @@ def _put(conn):
 
 # ── Schema ────────────────────────────────────────────────────────────────────
 
-_DDL = """
-CREATE EXTENSION IF NOT EXISTS vector;
+_DDL_BASE = """
 CREATE TABLE IF NOT EXISTS pattern_history (
     window_start DOUBLE PRECISION PRIMARY KEY,
     data         TEXT NOT NULL,
-    created_at   DOUBLE PRECISION NOT NULL,
-    embedding    vector(1024)
+    created_at   DOUBLE PRECISION NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pattern_history_ws ON pattern_history (window_start);
+"""
+
+_DDL_VECTOR = """
+CREATE EXTENSION IF NOT EXISTS vector;
+ALTER TABLE pattern_history ADD COLUMN IF NOT EXISTS embedding vector(1024);
 CREATE INDEX IF NOT EXISTS idx_pattern_history_emb ON pattern_history
     USING hnsw (embedding vector_cosine_ops);
 """
@@ -66,7 +78,13 @@ def _ensure_table():
     conn = _conn()
     try:
         with conn.cursor() as cur:
-            cur.execute(_DDL)
+            cur.execute(_DDL_BASE)
+            if _PGVECTOR_AVAILABLE:
+                try:
+                    cur.execute(_DDL_VECTOR)
+                except Exception as e:
+                    conn.rollback()
+                    logger.warning("pgvector extension not available — embeddings disabled: %s", e)
         conn.commit()
     finally:
         _put(conn)
@@ -206,35 +224,41 @@ def store_embedding(window_start: float, vector: np.ndarray):
 def search_similar(query_vec: np.ndarray, k: int = 50) -> List[Dict]:
     """
     Return up to k most similar bars using pgvector cosine distance.
-    Bars without embeddings are excluded automatically.
-    Returns list of bar dicts ordered by similarity (most similar first).
+    Falls back to most recent k bars if pgvector is not available.
     """
     _init()
+    if not _PGVECTOR_AVAILABLE:
+        return load_all()[-k:]
     conn = _conn()
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT data, embedding <=> %s AS distance
-                FROM pattern_history
-                WHERE embedding IS NOT NULL
-                ORDER BY embedding <=> %s
-                LIMIT %s
-                """,
-                (query_vec.astype(np.float32), query_vec.astype(np.float32), k),
-            )
-            rows = cur.fetchall()
-        results = []
-        for data_str, distance in rows:
             try:
-                bar = json.loads(data_str)
-                bar["_similarity"] = round(1.0 - float(distance), 4)
-                results.append(bar)
+                cur.execute(
+                    """
+                    SELECT data, embedding <=> %s AS distance
+                    FROM pattern_history
+                    WHERE embedding IS NOT NULL
+                    ORDER BY embedding <=> %s
+                    LIMIT %s
+                    """,
+                    (query_vec.astype(np.float32), query_vec.astype(np.float32), k),
+                )
+                rows = cur.fetchall()
+                results = []
+                for data_str, distance in rows:
+                    try:
+                        bar = json.loads(data_str)
+                        bar["_similarity"] = round(1.0 - float(distance), 4)
+                        results.append(bar)
+                    except Exception:
+                        pass
+                if results:
+                    logger.info("pgvector search: %d similar bars found (top sim=%.3f)",
+                                len(results), results[0]["_similarity"])
+                    return results
             except Exception:
                 pass
-        logger.info("pgvector search: %d similar bars found (top sim=%.3f)",
-                    len(results), results[0]["_similarity"] if results else 0)
-        return results
+        return load_all()[-k:]
     finally:
         _put(conn)
 
