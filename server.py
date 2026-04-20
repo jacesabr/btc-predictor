@@ -120,12 +120,16 @@ async def _do_backfill():
         logger.info("startup backfill: no resolved bars in deepseek_predictions")
         return
 
+    from signals import extract_signal_directions as _extract_dirs
+
     inserted = 0
     for row in rows:
         try:
-            sv = _json.loads(row["strategy_snapshot"] or "{}")
-            iv = _json.loads(row["indicators_snapshot"] or "{}")
-            dv = _json.loads(row["dashboard_signals_snapshot"] or "{}")
+            sv     = _json.loads(row["strategy_snapshot"] or "{}")
+            iv     = _json.loads(row["indicators_snapshot"] or "{}")
+            dv_raw = _json.loads(row["dashboard_signals_snapshot"] or "{}")
+            # dashboard_signals_raw must be flat {key: "UP"/"DOWN"} — not nested signal dicts
+            dv = _extract_dirs(dv_raw) if dv_raw else {}
             _append_ph(
                 window_start          = float(row["window_start"]),
                 actual_direction      = row["actual_direction"] or "",
@@ -757,11 +761,13 @@ async def backfill_pattern_history():
     finally:
         _pg_put(conn)
 
+    from signals import extract_signal_directions as _extract_dirs2
     for row in rows:
         try:
-            sv = _json.loads(row["strategy_snapshot"] or "{}")
-            iv = _json.loads(row["indicators_snapshot"] or "{}")
-            dv = _json.loads(row["dashboard_signals_snapshot"] or "{}")
+            sv     = _json.loads(row["strategy_snapshot"] or "{}")
+            iv     = _json.loads(row["indicators_snapshot"] or "{}")
+            dv_raw = _json.loads(row["dashboard_signals_snapshot"] or "{}")
+            dv     = _extract_dirs2(dv_raw) if dv_raw else {}
             _append_ph(
                 window_start       = float(row["window_start"]),
                 actual_direction   = row["actual_direction"] or "",
