@@ -504,7 +504,7 @@ async def _run_full_prediction(prices, is_force=False):
             logger.info("Binance expert task fired")
 
     # Step 4 — Ensemble
-    pred                              = ensemble.predict(strategy_preds)
+    pred                              = _json_safe(ensemble.predict(strategy_preds))
     strategy_preds                    = _json_safe(strategy_preds)
     pred["source"]                    = "ensemble"
     current_state["prediction"]       = pred
