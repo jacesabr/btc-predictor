@@ -1,0 +1,95 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 11:35 UTC) ══════════════════════════════
+Signal     : DOWN  (65%)
+Start price: $0.00
+Reasoning  : MICROSTRUCTURE: Extremely ask-heavy order book (-82.3% imbalance) and strong aggressive selling (Taker Buy/Sell Ratio 0.382) show sellers are in control and hitting bids.
+FUNDING + POSITIONING: Negative aggregate funding (-0.4778%) provides a structural long bias, but this is a slower-acting counter-trend force; the immediate L/S ratios and OI are neutral, not contradicting the bearish microstructure.
+TECHNICAL + CROSS-EXCHANGE: Price is at a 72.7% Fibonacci retracement (resistance) with RSI(4) at 71.4 (overbought for scalping). The macro trend is down, and the ensemble's 75.9% UP confidence is heavily contradicted by the high-accuracy bearish taker flow signal.
+SYNTHESIS: Dominant bias is BEARISH for the next 5 minutes. The single most decisive factor is the overwhelming aggressive selling pressure (taker flow) at a technical resistance. The biggest risk is the negative funding rate sparking a short squeeze, but the immediate order flow suggests that is not imminent. Final conviction is for a move BELOW $75,202.
+Narrative  : From 11:15 to 11:16 UTC, price rallied from $75,167.90 to a high of $75,259.80, but failed to hold. It has since been rejected, forming a lower high at 11:33 UTC ($75,255.10) and is now consolidating bearishly below the $75,202 entry level. The last completed 1-minute candle at 11:35 UTC closed at $75,188.30, indicating immediate selling pressure.
+Free obs   : The most significant convergence is the bearish order book imbalance (-82.3%) and aggressive taker sell flow (BSR 0.382) occurring at a key Fibonacci rejection zone (72.7% pullback), suggesting a failed rally and imminent downside.
+Data recv  : All signals available including microstructure, funding, technicals, and ensemble.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : UP
+End price        : $75,256.80
+Move             : +0.00 (+0.0000%)
+VERDICT          : WRONG
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+11:10,75167.40,75168.60,75120.00,75139.90,4.5254
+11:11,75139.90,75139.90,75085.70,75085.80,4.1276
+11:12,75085.80,75122.60,75085.80,75109.80,5.0028
+11:13,75109.80,75141.90,75109.80,75141.90,3.8590
+11:14,75141.90,75167.90,75141.90,75167.90,2.0575
+11:15,75167.90,75229.90,75167.90,75208.60,7.4055
+11:16,75208.60,75259.80,75202.10,75246.20,5.4753
+11:17,75246.20,75246.20,75179.70,75179.70,7.6243
+11:18,75179.70,75189.00,75172.90,75183.00,2.4036
+11:19,75183.00,75204.40,75178.60,75199.90,4.3129
+11:20,75199.90,75199.90,75081.80,75081.80,6.6105
+11:21,75081.80,75094.80,75048.40,75089.00,8.4147
+11:22,75089.00,75129.60,75089.00,75123.50,5.1955
+11:23,75123.50,75123.50,75104.80,75115.40,4.7321
+11:24,75115.40,75203.30,75115.40,75196.80,7.3439
+11:25,75196.80,75228.60,75188.90,75209.10,6.8329
+11:26,75209.10,75209.20,75187.30,75206.00,3.5684
+11:27,75206.00,75216.50,75204.50,75212.10,0.8692
+11:28,75212.10,75212.10,75192.90,75192.90,2.4766
+11:29,75192.90,75208.20,75165.60,75167.80,6.2192
+11:30,75167.80,75167.80,75100.90,75105.50,6.9575
+11:31,75105.50,75105.50,75074.00,75100.00,5.3776
+11:32,75100.00,75208.60,75090.50,75142.60,12.6421
+11:33,75142.60,75255.10,75142.50,75205.90,13.6073
+11:34,75205.90,75231.90,75201.90,75201.90,8.0938
+11:35,75201.90,75230.00,75188.20,75230.00,6.5953
+11:36,75230.00,75236.90,75199.20,75225.10,7.6323
+11:37,75225.10,75241.10,75225.00,75241.10,5.0255
+11:38,75241.10,75281.10,75241.10,75277.30,9.7237
+11:39,75277.30,75277.30,75245.30,75245.30,1.1239
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: -0.7886
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BEARISH  — Ask-heavy book — sellers in control. -82.3% ask dominant. Sell-side wall capping
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.382). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (+0.010%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (-0.09% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Kraken spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dire
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  okx_funding: BULLISH  — OKX funding NEGATIVE (-0.0007%) — shorts paying longs. OKX structural long bias;
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.780). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.9% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-3.0% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: WRONG
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was wrong]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: WRONG
+ROOT_CAUSE: I overweighted immediate microstructure signals (order book, taker flow) and treated them as predictive of imminent price action, while the market was in a consolidation phase where these signals were merely reactive noise, not directional drivers.
+MISLEADING_SIGNALS: The extreme ask-heavy order book (-82.3%) and aggressive taker sell ratio (0.382) were the primary misleading signals; they indicated selling pressure *at that moment* but failed to predict the next 5-minute move as price absorbed the selling and continued its underlying grind higher.
+RELIABLE_SIGNALS: The negative funding rate and its trend (BULLISH), the contrarian Fear & Greed signal, and the ensemble's original 75.9% UP confidence were correct and should have been given more weight as counter-trend structural forces.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a choppy, low-volume uptrend within a larger downtrend. The "aggressive selling" I saw was likely profit-taking at resistance, which was fully absorbed by latent bid-side interest (not visible in the snapshot order book), allowing the slow bullish pressure from negative funding and sentiment to push price higher.
+LESSON: In a low-volatility, range-bound consolidation following a sharp move, extreme microstructure readings are often traps; defer to higher-timeframe structural signals (funding, sentiment) and ensemble models over reactive order flow snapshots.

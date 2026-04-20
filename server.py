@@ -186,7 +186,7 @@ async def _do_embed_all():
         try:
             text = _bar_embed_text(rec)
             vec  = await _embed(config.cohere_api_key, text, input_type="search_document")
-            await asyncio.to_thread(_store_emb, ws, vec)
+            _store_emb(ws, vec)
             done += 1
             if done % 10 == 0:
                 logger.info("startup embed: %d/%d done", done, len(to_embed))
@@ -827,7 +827,7 @@ async def embed_pattern_history(background_tasks: BackgroundTasks):
             try:
                 text = _bar_embed_text(rec)
                 vec  = await _embed(config.cohere_api_key, text, input_type="search_document")
-                await asyncio.to_thread(_store_emb, ws, vec)
+                _store_emb(ws, vec)
                 done += 1
                 if done % 10 == 0:
                     logging.getLogger("server").info("embed-pattern-history: %d/%d done", done, len(to_embed))

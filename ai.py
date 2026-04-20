@@ -1904,7 +1904,7 @@ async def run_historical_analyst(
     # ── Step 2: pgvector cosine search → top-50 most similar bars ──
     total_searched = len(history_records)
     if pgvector_search_fn is not None:
-        pre_bars = await asyncio.to_thread(pgvector_search_fn, current_vec, COHERE_PRE_FILTER_K)
+        pre_bars = pgvector_search_fn(current_vec, COHERE_PRE_FILTER_K)
         if not pre_bars:
             logger.info("pgvector: no embedded bars yet, falling back to most recent %d", COHERE_PRE_FILTER_K)
             pre_bars = history_records[-COHERE_PRE_FILTER_K:]

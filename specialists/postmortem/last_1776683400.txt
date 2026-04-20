@@ -1,0 +1,94 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 11:10 UTC) ══════════════════════════════
+Signal     : UP  (65%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book is bid-heavy (+25.9%), providing immediate support. Spot whale flow shows 100% of large trades are buys (3.1 BTC), indicating genuine spot accumulation. Taker flow is bearish (BSR=0.828), but this is likely sellers being absorbed by strong passive bids.]
+[FUNDING + POSITIONING: Deeply negative aggregate funding (-0.4778%) creates a structural incentive for shorts to cover, supporting upward pressure. Fear & Greed at 29 (Extreme Fear) provides a contrarian bullish signal. OI is stable, suggesting this is not a leveraged pump.]
+[TECHNICAL + CROSS-EXCHANGE: Price is above VWAP and EMA5/13, with a bullish MACD histogram. The 90.2% Fib pullback in a downtrend shows strong rejection of lower prices. The ensemble weighted vote is strongly UP (77% confidence, 17↑ vs 6↓).]
+[SYNTHESIS: Dominant bias is UP, driven by spot accumulation, negative funding squeeze, and momentum off the $74,969 low. The single most decisive factor is the combination of spot whale buying and negative funding incentivizing short covering. Biggest risk is overbought RSI(4)=83.4 and Stoch at 96.0, suggesting a potential pullback, but the microstructure support argues for a continued grind higher into the 11:15 close.]
+Narrative  : Price has rallied sharply from the 11:01 low of $74,969.20, climbing over $200 in 8 minutes to the current $75,171.80. This move from 11:07-11:09 shows strong buying momentum, breaking above the immediate resistance at $75,144.70. The market is testing the downtrend structure with a 90% Fibonacci pullback, indicating a strong counter-trend bounce is underway.
+Free obs   : The most significant convergence is between strong spot whale buying (100% of large trades), a bullish order book imbalance (+25.9%), and deeply negative aggregate funding rates (-0.4778%), all supporting a continued short squeeze higher despite overbought oscillators.
+Data recv  : Order Book, Taker Flow, OI+Funding, Fear & Greed, Coinalyze, BTC Dominance, Funding Trend, Spot Whale Flow, All Technical Indicators, Ensemble Vote, Last 50 Bars.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $75,167.90
+Move             : +0.00 (+0.0000%)
+VERDICT          : WRONG
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+10:45,75172.80,75185.30,75167.40,75167.40,3.2520
+10:46,75167.40,75183.90,75167.40,75183.90,1.2744
+10:47,75183.90,75189.80,75178.80,75189.30,5.3972
+10:48,75189.30,75189.30,75154.70,75154.70,1.8164
+10:49,75154.70,75169.80,75110.30,75113.90,7.0890
+10:50,75113.90,75144.30,75113.90,75138.70,5.9744
+10:51,75138.70,75138.70,75079.00,75079.90,1.7522
+10:52,75079.90,75129.50,75075.00,75113.30,4.8397
+10:53,75113.30,75113.30,75072.80,75072.80,5.2379
+10:54,75072.80,75101.10,75072.70,75100.60,3.1541
+10:55,75100.60,75100.60,75079.00,75096.00,5.1802
+10:56,75096.00,75110.10,75050.10,75051.20,5.7672
+10:57,75051.20,75055.60,75037.40,75037.40,4.3098
+10:58,75037.40,75037.40,75000.10,75010.60,6.8017
+10:59,75010.60,75027.30,75010.50,75027.30,4.2904
+11:00,75027.30,75053.10,75001.10,75003.40,8.7720
+11:01,75003.40,75003.40,74955.70,74969.20,7.7276
+11:02,74969.20,75078.00,74969.10,75077.90,7.1856
+11:03,75077.90,75078.50,75047.40,75047.40,6.1935
+11:04,75047.40,75068.80,75033.40,75041.20,7.2264
+11:05,75041.20,75121.40,75041.20,75096.20,10.8202
+11:06,75096.20,75116.70,75070.00,75109.10,8.8719
+11:07,75109.10,75159.40,75096.40,75159.30,12.9184
+11:08,75159.30,75164.50,75159.20,75159.20,0.9166
+11:09,75159.20,75177.30,75159.20,75167.40,3.7234
+11:10,75167.40,75168.60,75120.00,75139.90,4.5254
+11:11,75139.90,75139.90,75085.70,75085.80,4.1276
+11:12,75085.80,75122.60,75085.80,75109.80,5.0028
+11:13,75109.80,75141.90,75109.80,75141.90,3.8590
+11:14,75141.90,75167.50,75141.90,75167.50,2.0423
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 1.9752
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +25.9% bid-heavy. Immediate upward
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.828). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (+0.038%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (-0.02% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: BULLISH  — Kraken spot whale buyers dominate: 100.0% (3.1 BTC) of large spot trades are buy
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.781). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.9% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.698 — balanced options positioning. Max pain $73,000 (-2.9% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: WRONG
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was wrong]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: WRONG
+ROOT_CAUSE: The prediction was a momentum-chasing call at the exact peak of a short-term, overbought bounce, mistaking a local exhaustion point for the start of a new leg higher.
+MISLEADING_SIGNALS: Overbought RSI(4)=83.4 and Stoch=96.0 were correctly noted as a risk but were catastrophically under-weighted. The "bullish" spot whale flow and order book imbalance were ephemeral and provided no forward-looking power, merely describing the buying that had *just occurred* to create the peak.
+RELIABLE_SIGNALS: The bearish Taker Flow (BSR=0.828) was correct, signaling aggressive selling into the bounce. The negative funding was a structural condition, not a timing signal, and did not force an immediate squeeze.
+DATA_GAPS: Real-time cumulative volume delta (CVD) or a depth-of-market heatmap to see if the bid wall was being depleted as price stalled at the high.
+UPDATED_READING: The market had just completed a sharp, ~$200 relief rally from the 11:01 low, exhausting the immediate short-covering fuel. The bullish microstructure signals were lagging artifacts of that completed move. Sellers (takers) immediately stepped in at the 11:10 open, overwhelming the passive bids and causing a rejection and consolidation lower.
+LESSON: When price makes a sharp, high-momentum move into extreme overbought territory on intraday oscillators (RSI(4) > 80), the default next action is a pullback or consolidation; do not predict a continuation unless there is overwhelming, *sustained* taker buying (BSR > 1.1) to confirm a breakout.

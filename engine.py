@@ -275,7 +275,7 @@ async def _embed_bar_background(window_start: float, bar_record: dict):
     try:
         text = _bar_embed_text(bar_record)
         vec  = await embed_text(config.cohere_api_key, text, input_type="search_document")
-        await asyncio.to_thread(store_bar_embedding, window_start, vec)
+        store_bar_embedding(window_start, vec)
         logger.info("Cohere embedding stored in pgvector for bar %.0f (%d dims)", window_start, len(vec))
     except CohereUnavailableError as exc:
         logger.warning("Cohere embed background failed (bar %.0f): %s", window_start, exc)

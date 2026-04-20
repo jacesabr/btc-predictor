@@ -1,0 +1,94 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 11:50 UTC) ══════════════════════════════
+Signal     : NEUTRAL  (62%)
+Start price: $0.00
+Reasoning  : MICROSTRUCTURE: Order book is ask-heavy (-23.8% imbalance), and taker aggressor flow is decisively bearish (BSR 0.6447), confirming sellers are hitting bids. The 19.6 BTC bearish engulfing candle at 11:46 is a high-conviction distribution signal.
+FUNDING + POSITIONING: While negative aggregate funding (-0.4778%) provides a structural bullish bias, it is a slow-moving indicator. The immediate microstructure (taker flow, book imbalance) and weak price action after the distribution candle dominate the 5-minute horizon.
+TECHNICAL + CROSS-EXCHANGE: Price is mid-range and below the nearest resistance ($75,292). MACD histogram is bearish and contracting, and Stoch %K is low at 30.0, indicating room for further downside before oversold. The ensemble vote (65.7% UP) is contradicted by the more immediate and accurate microstructure signals.
+SYNTHESIS: Dominant bias is bearish for the next 5 minutes due to confirmed selling pressure and failed rally. The single most decisive factor is the high-volume bearish engulfing candle at 11:46 followed by sustained taker sell flow. The biggest risk is the contrarian bullish signal from deeply negative funding rates. Final conviction is for a retest of support near $75,092.44.
+Narrative  : The chart shows a failed rally attempt from 11:45-11:46, where price spiked to $75,271.40 on 8.1 BTC volume, only to be met with a massive 19.6 BTC bearish engulfing candle that closed at $75,206.30. This high-volume rejection at the 11:46 high established a local top and initiated distribution, with price grinding down to the $75,218.00 entry level by 11:50. The subsequent 5-minute window is characterized by weak bids and aggressive taker sell flow.
+Free obs   : The most significant convergence is the bearish order book imbalance (-23.8%) and the aggressive taker sell flow (BSR 0.6447) occurring immediately after a high-volume distribution signal, creating strong near-term selling pressure.
+Data recv  : All signals available except Polymarket, OKX funding, and historical analyst.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $75,198.20
+Move             : +0.00 (+0.0000%)
+VERDICT          : ABSTENTION (NEUTRAL)
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+11:25,75196.80,75228.60,75188.90,75209.10,6.8329
+11:26,75209.10,75209.20,75187.30,75206.00,3.5684
+11:27,75206.00,75216.50,75204.50,75212.10,0.8692
+11:28,75212.10,75212.10,75192.90,75192.90,2.4766
+11:29,75192.90,75208.20,75165.60,75167.80,6.2192
+11:30,75167.80,75167.80,75100.90,75105.50,6.9575
+11:31,75105.50,75105.50,75074.00,75100.00,5.3776
+11:32,75100.00,75208.60,75090.50,75142.60,12.6421
+11:33,75142.60,75255.10,75142.50,75205.90,13.6073
+11:34,75205.90,75231.90,75201.90,75201.90,8.0938
+11:35,75201.90,75230.00,75188.20,75230.00,6.5953
+11:36,75230.00,75236.90,75199.20,75225.10,7.6323
+11:37,75225.10,75241.10,75225.00,75241.10,5.0255
+11:38,75241.10,75281.10,75241.10,75277.30,9.7237
+11:39,75277.30,75278.40,75243.80,75256.90,6.3905
+11:40,75256.90,75260.50,75233.50,75236.30,4.0442
+11:41,75236.30,75252.30,75236.20,75248.70,3.2904
+11:42,75248.70,75248.70,75212.30,75241.10,9.1450
+11:43,75241.10,75252.40,75233.90,75233.90,4.4275
+11:44,75233.90,75244.30,75212.20,75217.50,6.5763
+11:45,75217.50,75281.30,75217.50,75271.40,8.1402
+11:46,75271.40,75271.40,75193.90,75206.30,19.5748
+11:47,75206.30,75265.70,75206.20,75259.70,7.7023
+11:48,75259.70,75259.70,75221.40,75225.70,2.9668
+11:49,75225.70,75238.70,75220.00,75225.40,2.5879
+11:50,75225.40,75235.30,75200.60,75235.30,6.1509
+11:51,75235.30,75235.50,75204.50,75213.90,8.0776
+11:52,75213.90,75213.90,75155.60,75181.40,7.2435
+11:53,75181.40,75210.80,75181.40,75210.70,2.0222
+11:54,75210.70,75210.80,75208.20,75210.80,0.3486
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 5.0250
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BEARISH  — Ask-heavy book — sellers in control. -23.8% ask dominant. Sell-side wall capping
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.645). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (+0.009%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (-0.02% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Binance spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dir
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.779). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 43.0% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-3.0% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was abstention]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: The prediction correctly identified bearish microstructure pressure, but the 5-minute window was dominated by a brief, shallow retracement followed by a bounce, resulting in a net flat move that did not reach the predicted support level.
+MISLEADING_SIGNALS: Over-weighted the immediate bearish taker flow and engulfing candle as definitive for the entire 5-minute window, underestimating the counter-pressure from the deeply negative funding rate and the market's ability to absorb selling within a tight range.
+RELIABLE_SIGNALS: The bearish order book imbalance and taker flow (BSR) were correct about immediate selling pressure, and the negative funding rate correctly indicated a structural bullish bias that limited downside.
+DATA_GAPS: NONE
+UPDATED_READING: The market experienced a high-volume rejection (the 11:46 candle), but the subsequent selling was shallow and quickly met with responsive bids, leading to consolidation. The bearish microstructure signals caused a dip, but the structural funding bias prevented a sustained breakdown, resulting in a stalemate.
+LESSON: In a 5-minute prediction, when a strong bearish microstructure signal (engulfing candle, taker sells) conflicts with a strong structural bullish signal (deeply negative funding), default to NEUTRAL/ABSTENTION as the opposing forces are likely to cause chop, not a clean directional move.

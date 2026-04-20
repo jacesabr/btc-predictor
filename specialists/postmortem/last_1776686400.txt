@@ -1,0 +1,93 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 12:00 UTC) ══════════════════════════════
+Signal     : NEUTRAL  (62%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book is ask-heavy (-5.85% imbalance), and taker aggressor flow is bearish (BSR=0.866), confirming sellers are hitting bids. Spot whale flow is neutral, offering no counter-accumulation signal.]
+[FUNDING + POSITIONING: While cross-exchange funding is negative (bullish bias), the immediate signals are weak; smart money and retail L/S ratios are neutral/aligned, and OI is stable, showing no strong positioning to drive a reversal in the next 5 minutes.]
+[TECHNICAL + CROSS-EXCHANGE: Price is in a micro downtrend, below the Williams Alligator (bearish alignment), and oscillators (RSI 32.4) show room for further downside. The ensemble weighted vote is bearish (7.600 vs 4.715).]
+[SYNTHESIS: The dominant bias is short-term bearish, driven by the confirmed sell-side pressure in the order book and taker flow following the clear distribution candle. The biggest risk is a snap-back rally from oversold levels or negative funding, but the immediate price action and microstructure favor a test of support. Final conviction is for a move BELOW $75,198.40.]
+Narrative  : Price rallied to $75,271.40 at 11:45 but was met with a massive 19.6 BTC rejection candle at 11:46, forming a long upper wick and closing at $75,206.30, establishing a strong resistance zone. The subsequent price action from 11:47 to 11:59 shows a series of failed rallies and lower highs (e.g., $75,265.70, $75,259.70, $75,238.70), indicating persistent selling pressure and distribution into strength, leading into the current window.
+Free obs   : The most significant convergence is between bearish microstructure (ask-heavy order book, aggressive taker sell flow) and the clear price-action story of distribution following the high-volume rejection at 11:46.
+Data recv  : Full microstructure (order book, taker flow, L/S ratios, funding, OI, whale flow, DVOL, F&G, Coingecko, dominance, options), full technical suite (price structure, Alligator, A/D, oscillators, EMAs, ensemble), full 50-bar price history.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $75,181.50
+Move             : +0.00 (+0.0000%)
+VERDICT          : ABSTENTION (NEUTRAL)
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+11:35,75201.90,75230.00,75188.20,75230.00,6.5953
+11:36,75230.00,75236.90,75199.20,75225.10,7.6323
+11:37,75225.10,75241.10,75225.00,75241.10,5.0255
+11:38,75241.10,75281.10,75241.10,75277.30,9.7237
+11:39,75277.30,75278.40,75243.80,75256.90,6.3905
+11:40,75256.90,75260.50,75233.50,75236.30,4.0442
+11:41,75236.30,75252.30,75236.20,75248.70,3.2904
+11:42,75248.70,75248.70,75212.30,75241.10,9.1450
+11:43,75241.10,75252.40,75233.90,75233.90,4.4275
+11:44,75233.90,75244.30,75212.20,75217.50,6.5763
+11:45,75217.50,75281.30,75217.50,75271.40,8.1402
+11:46,75271.40,75271.40,75193.90,75206.30,19.5748
+11:47,75206.30,75265.70,75206.20,75259.70,7.7023
+11:48,75259.70,75259.70,75221.40,75225.70,2.9668
+11:49,75225.70,75238.70,75220.00,75225.40,2.5879
+11:50,75225.40,75235.30,75200.60,75235.30,6.1509
+11:51,75235.30,75235.50,75204.50,75213.90,8.0776
+11:52,75213.90,75213.90,75155.60,75181.40,7.2435
+11:53,75181.40,75210.80,75181.40,75210.70,2.0222
+11:54,75210.70,75210.80,75197.00,75198.10,2.0864
+11:55,75198.10,75220.90,75188.20,75208.00,4.4600
+11:56,75208.00,75208.00,75180.00,75200.80,2.6398
+11:57,75200.80,75200.80,75168.60,75168.60,4.1371
+11:58,75168.60,75168.60,75154.20,75163.70,6.5607
+11:59,75163.70,75203.40,75163.70,75194.80,7.6128
+12:00,75194.80,75194.80,75128.90,75150.20,8.2891
+12:01,75150.20,75150.30,75104.30,75104.30,4.9910
+12:02,75104.30,75120.90,75084.40,75117.10,9.0686
+12:03,75117.10,75117.10,75078.90,75095.20,4.5540
+12:04,75095.20,75208.30,75095.10,75173.50,12.4955
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: -4.0426
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BEARISH  — Ask-heavy book — sellers in control. -5.9% ask dominant. Sell-side wall capping 
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.866). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  oi_velocity: NEUTRAL  — OI stable (-0.03% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Kraken spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dire
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.778). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.9% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-3.0% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was abstention]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: The prediction correctly identified bearish microstructure and distribution, but the market moved sideways for the first 4 minutes of the 5-minute window, only breaking down decisively in the final minute, resulting in a net move too small to trigger a directional call.
+MISLEADING_SIGNALS: Over-weighted the immediate bearish momentum from the 11:46 rejection candle; the subsequent price action (11:47-11:59) was actually a consolidation, not a continuous downtrend. The "room for further downside" in the RSI was premature.
+RELIABLE_SIGNALS: The bearish microstructure (ask-heavy order book, taker sell flow) and the narrative of distribution were correct, as price ultimately failed to reclaim the rejection zone and broke lower.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a bearish consolidation phase, digesting the prior rejection. Sellers were in control but lacked immediate catalyst for a breakdown until the final minute of the window, when accumulated sell pressure finally overwhelmed the shallow bids.
+LESSON: In a clear distribution setup following a rejection, wait for a break below the consolidation low (e.g., $75168.60) before confirming bearish momentum for the next 5-minute window, rather than assuming immediate continuation.

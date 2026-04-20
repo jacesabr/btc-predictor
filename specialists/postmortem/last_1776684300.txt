@@ -1,0 +1,93 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 11:25 UTC) ══════════════════════════════
+Signal     : NEUTRAL  (58%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book shows a +51.94% bid imbalance (bullish), taker buy/sell ratio is 1.214 (bullish), and spot whale flow is 100% buys (bullish weak). The 11:20 sell-off was fully absorbed, indicating buyer conviction.]
+[FUNDING + POSITIONING: Aggregate funding is negative (-0.47780%), a structural bullish signal as shorts pay longs. Fear & Greed at 29 (Extreme Fear) is a contrarian bullish signal. OI is stable, suggesting no mass exit.]
+[TECHNICAL + CROSS-EXCHANGE: Williams Alligator is bullish (Lips>Teeth>Jaw). Price is in mid-range and above key Fib 38.2% level. The ensemble vote is nearly neutral but the micro uptrend and absorption pattern support a bounce.]
+[SYNTHESIS: Dominant bias is cautiously bullish, driven by microstructure absorption and negative funding. The most decisive factor is the high-volume sell-off failure at 11:20 followed by immediate recovery. Biggest risk is the overarching macro downtrend and weak volume trend. Final conviction leans ABOVE due to immediate buyer defense and supportive funding structure.]
+Narrative  : The market sold off sharply at 11:20 to $75,081.80 on 6.6 BTC volume, but that selling was immediately absorbed, forming a higher low at 11:21 ($75,048.40) and driving price to $75,196.80 by 11:24. This bounce from the lows shows strong buyer defense, aligning with the bid-heavy order book and aggressive taker buy flow.
+Free obs   : The most significant convergence is between the strong bullish absorption after the 11:20 sell-off and the structurally supportive negative funding rates across exchanges, which incentivizes short covering and creates upward pressure.
+Data recv  : Order Book Imbalance, Taker Flow, Funding Rates, Fear & Greed, Spot Whale Flow, BTC Dominance, Key Technicals (Alligator, Fib, Oscillators), Last 50 Bars with Price/Volume.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $75,178.30
+Move             : +0.00 (+0.0000%)
+VERDICT          : ABSTENTION (NEUTRAL)
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+11:01,75003.40,75003.40,74955.70,74969.20,7.7276
+11:02,74969.20,75078.00,74969.10,75077.90,7.1856
+11:03,75077.90,75078.50,75047.40,75047.40,6.1935
+11:04,75047.40,75068.80,75033.40,75041.20,7.2264
+11:05,75041.20,75121.40,75041.20,75096.20,10.8202
+11:06,75096.20,75116.70,75070.00,75109.10,8.8719
+11:07,75109.10,75159.40,75096.40,75159.30,12.9184
+11:08,75159.30,75164.50,75159.20,75159.20,0.9166
+11:09,75159.20,75177.30,75159.20,75167.40,3.7234
+11:10,75167.40,75168.60,75120.00,75139.90,4.5254
+11:11,75139.90,75139.90,75085.70,75085.80,4.1276
+11:12,75085.80,75122.60,75085.80,75109.80,5.0028
+11:13,75109.80,75141.90,75109.80,75141.90,3.8590
+11:14,75141.90,75167.90,75141.90,75167.90,2.0575
+11:15,75167.90,75229.90,75167.90,75208.60,7.4055
+11:16,75208.60,75259.80,75202.10,75246.20,5.4753
+11:17,75246.20,75246.20,75179.70,75179.70,7.6243
+11:18,75179.70,75189.00,75172.90,75183.00,2.4036
+11:19,75183.00,75204.40,75178.60,75199.90,4.3129
+11:20,75199.90,75199.90,75081.80,75081.80,6.6105
+11:21,75081.80,75094.80,75048.40,75089.00,8.4147
+11:22,75089.00,75129.60,75089.00,75123.50,5.1955
+11:23,75123.50,75123.50,75104.80,75115.40,4.7321
+11:24,75115.40,75203.30,75115.40,75196.80,7.3439
+11:25,75196.80,75228.60,75188.90,75209.10,6.8329
+11:26,75209.10,75209.20,75187.30,75206.00,3.5684
+11:27,75206.00,75216.50,75204.50,75212.10,0.8692
+11:28,75212.10,75212.10,75192.90,75192.90,2.4766
+11:29,75192.90,75208.20,75165.60,75167.80,6.2192
+11:30,75167.80,75167.80,75137.00,75137.00,1.0861
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 1.9218
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +51.9% bid-heavy. Immediate upward
+  taker_flow: BULLISH  — Aggressive buyers crossing the ask (BSR=1.214). Real directional conviction — pa
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  oi_velocity: NEUTRAL  — OI stable (-0.05% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: BULLISH  — Kraken spot whale buyers dominate: 100.0% (3.1 BTC) of large spot trades are buy
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.781). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.9% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-3.0% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was abstention]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: The prediction correctly identified a short-term bullish absorption but failed to recognize it as a consolidation within a larger, dominant downtrend, resulting in a neutral outcome with no directional move.
+MISLEADING_SIGNALS: Over-weighted the "bullish absorption" of the 11:20 sell-off and the negative funding; these were merely stabilizing forces, not catalysts for a new leg up. The "ensemble vote is nearly neutral" was the correct dominant signal, which was downplayed.
+RELIABLE_SIGNALS: The overarching macro downtrend (mentioned as the "biggest risk") and the weak volume trend were the correct, dominant factors. The stable OI and neutral technical positioning accurately reflected a lack of conviction.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a downtrend consolidation phase. The absorption after 11:20 was not the start of a bounce but simply a pause; buyers lacked follow-through, and the downtrend's momentum reasserted itself, leading to a slow grind lower after the prediction bar closed.
+LESSON: When the higher-timeframe trend is down and intraday bullish signals (absorption, negative funding) only produce a weak, low-volume bounce, treat it as a counter-trend consolidation, not a reversal. Default to the higher-timeframe trend direction unless the counter-trend move breaks key levels with significant volume.
