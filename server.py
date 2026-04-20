@@ -251,10 +251,10 @@ async def deepseek_status():
         "specialist_completed_at":     current_state.get("specialist_completed_at"),
         "bar_historical_analysis":     current_state.get("bar_historical_analysis", ""),
         "bar_historical_context":      current_state.get("bar_historical_context", ""),
+        "bar_binance_expert":          current_state.get("bar_binance_expert", {}),   # <-- ADD THIS LINE
         "service_unavailable":         current_state.get("service_unavailable", False),
         "service_unavailable_reason":  current_state.get("service_unavailable_reason", ""),
     }
-
 
 @app.get("/predict", response_model=PredictionResponse)
 async def get_prediction():

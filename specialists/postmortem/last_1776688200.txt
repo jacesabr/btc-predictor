@@ -1,0 +1,93 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 12:30 UTC) ══════════════════════════════
+Signal     : NEUTRAL  (62%)
+Start price: $0.00
+Reasoning  : MICROSTRUCTURE: Order book shows a -40.2% ask-heavy imbalance (bearish), and spot whale flow is bullish but weak (41.7% accuracy). Taker flow is accelerating bullish (BSR 1.90) but price is not responding—a classic sign of absorption by sellers.
+FUNDING + POSITIONING: Aggregate funding is negative (-0.4778%), structurally bullish, but OI is stable and smart money L/S ratio is neutral. The negative funding suggests shorts are paying, but price action is not yet reflecting upward pressure.
+TECHNICAL + CROSS-EXCHANGE: RSI (35.1) and Stoch (10.2) are oversold, but MACD histogram is bearish and contracting. Alligator is bullish but price is below Lips/Teeth. Ensemble vote is neutral (51.8% UP).
+SYNTHESIS: Dominant bias is bearish for the next 5 minutes due to the failed breakout and distribution narrative. The single most decisive factor is the high-volume rejection at 12:20-12:21 and subsequent inability to reclaim $75,550. Biggest risk is an oversold bounce from the Fib 50% ($75,366.30). Final conviction is BELOW entry.
+Narrative  : The chart shows a failed breakout attempt at 12:20 UTC with a massive 43.3 BTC candle to $75,649.40, which was immediately rejected, forming a bearish engulfing structure by 12:21. Subsequent high-volume bars (12:24-12:28) failed to reclaim the $75,550 midpoint of that surge, confirming aggressive distribution and targeting a fill of the gap back toward $75,300. Price is currently consolidating below the Fib 38.2% level ($75,434.13) and the Alligator's Lips ($75,444.81), indicating weakening bullish momentum.
+Free obs   : The most significant convergence is between the bearish order book imbalance (-40.2%), the accelerating taker buy/sell ratio (1.90) failing to lift price, and the specialist's note of distribution targeting ~$75,300, all pointing to a rejection of the recent rally.
+Data recv  : All signals available except Kraken Premium, OKX Funding, and Polymarket.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $75,391.90
+Move             : +0.00 (+0.0000%)
+VERDICT          : ABSTENTION (NEUTRAL)
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+12:06,75255.10,75322.60,75255.10,75281.50,11.6266
+12:07,75281.50,75306.00,75242.20,75301.80,10.1064
+12:08,75301.80,75305.70,75273.40,75282.30,9.2419
+12:09,75282.30,75343.80,75282.30,75302.00,8.4291
+12:10,75302.00,75404.40,75302.00,75394.40,11.5509
+12:11,75394.40,75394.50,75315.60,75315.60,7.6548
+12:12,75315.60,75365.90,75315.60,75352.40,5.2201
+12:13,75352.40,75388.90,75352.30,75365.60,4.2324
+12:14,75365.60,75365.60,75347.30,75347.40,4.8052
+12:15,75347.40,75347.40,75290.70,75311.70,9.7162
+12:16,75311.70,75384.10,75311.70,75384.10,4.4653
+12:17,75384.10,75432.80,75369.80,75416.10,9.1955
+12:18,75416.10,75452.20,75407.80,75430.10,7.1779
+12:19,75430.10,75451.30,75424.50,75450.10,4.1460
+12:20,75450.10,75649.40,75450.10,75588.60,43.2703
+12:21,75588.60,75653.70,75489.70,75494.40,27.6708
+12:22,75494.40,75546.80,75494.40,75546.80,6.1287
+12:23,75546.80,75546.80,75473.30,75473.30,9.3634
+12:24,75473.30,75539.50,75463.30,75509.90,17.3416
+12:25,75509.90,75540.00,75459.70,75470.00,13.2632
+12:26,75470.00,75502.40,75427.80,75427.80,9.0280
+12:27,75427.80,75455.60,75410.50,75448.40,11.2983
+12:28,75448.40,75450.60,75421.20,75421.30,13.6108
+12:29,75421.30,75427.90,75402.00,75416.10,7.6086
+12:30,75416.10,75459.90,75416.10,75457.50,4.2871
+12:31,75457.50,75457.50,75380.80,75423.30,14.5049
+12:32,75423.30,75458.60,75403.40,75410.80,10.6610
+12:33,75410.80,75410.80,75355.10,75370.70,7.9453
+12:34,75370.70,75404.90,75370.60,75391.90,9.8558
+12:35,75391.90,75391.90,75377.00,75377.00,1.0311
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 6.9169
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BEARISH  — Ask-heavy book — sellers in control. -40.2% ask dominant. Sell-side wall capping
+  taker_flow: BULLISH  — Aggressive buyers crossing the ask (BSR=1.902). Real directional conviction — pa
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  oi_velocity: NEUTRAL  — OI stable (+0.01% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: BULLISH  — Kraken spot whale buyers dominate: 100.0% (2.9 BTC) of large spot trades are buy
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.779). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 43.0% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.698 — balanced options positioning. Max pain $73,000 (-3.2% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was abstention]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: The prediction correctly identified a distribution structure but failed to account for the market's immediate transition into a low-volatility consolidation phase, resulting in no decisive directional move within the 5-minute window.
+MISLEADING_SIGNALS: Over-weighted the bearish order book imbalance (-40.2%) and the "failed breakout" narrative; the accelerating taker buy/sell ratio (1.90) was interpreted as absorption but was actually a sign of balanced, two-sided flow preventing a breakdown.
+RELIABLE_SIGNALS: Negative aggregate funding (-0.4778%) and oversold RSI/Stoch were correct in providing a structural bullish floor, preventing the predicted bearish move from materializing.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a post-rejection equilibrium. Sellers were indeed present (ask-heavy book), but aggressive takers (high BSR) and negative funding created a buying cushion, leading to a tight, range-bound consolidation between ~$75,370 and $75,450 instead of a clear downtrend.
+LESSON: When high taker buy volume fails to move price up *and* an oversold bounce fails to materialize, the market is likely in a temporary balance; default to NEUTRAL and wait for a volume spike to break the consolidation.

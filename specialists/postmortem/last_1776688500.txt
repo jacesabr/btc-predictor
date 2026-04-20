@@ -1,0 +1,94 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 12:35 UTC) ══════════════════════════════
+Signal     : NEUTRAL  (62%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book is heavily ask-dominated (-99.7%) with a 15.6 BTC wall, and taker aggressor flow is bearish (BSR 0.565), confirming active selling pressure hitting bids. Spot whale flow is bullish but has a weak 42% accuracy track record.]
+[FUNDING + POSITIONING: Negative aggregate funding (-0.4778%) is a structural bullish bias, but current positioning shows smart money and retail nearly aligned (both ~49% long), offering no strong contrarian signal. OI is stable, indicating no new bullish accumulation.]
+[TECHNICAL + CROSS-EXCHANGE: Price is at a 63.6% Fibonacci pullback level, oscillators are oversold (Stoch 18.1), and the Alligator is sleeping, suggesting a coiled spring. However, the micro trend is down, EMA fast cross is bearish, and the ensemble weighted vote is bearish (8.045 vs 6.174).]
+[SYNTHESIS: The dominant bias is short-term bearish, driven by microstructure selling pressure and the clear rejection at the $75,649 supply zone. The single most decisive factor is the bearish engulfing candle at 12:21 following the high-volume pump. The biggest risk is the oversold conditions and negative funding, which could spark a sharp squeeze. Final conviction is for a move BELOW entry as selling pressure overwhelms the weak, ranging structure.]
+Narrative  : The story is one of a failed breakout and immediate rejection. At 12:20, a massive 43.3 BTC volume candle pushed price to a high of $75,649.40, but it was immediately engulfed by a bearish reversal candle at 12:21, creating a firm supply zone between $75,588 and $75,653. Since that rejection, price has been coiling in a contracting range below this zone, with the most recent bars (12:34-12:35) showing low-volume compression just above $75,377, indicating a loss of upward momentum and a high probability of a downside resolution.
+Free obs   : The most significant convergence is between the aggressive selling pressure in the taker flow (BSR 0.56), the ask-heavy order book (-99.7% imbalance), and the clear price-action rejection at the 12:20 high, all pointing to immediate selling dominance.
+Data recv  : All signals available including order book, taker flow, funding, oscillators, and full 50-bar price history.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $75,257.40
+Move             : +0.00 (+0.0000%)
+VERDICT          : ABSTENTION (NEUTRAL)
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+12:10,75302.00,75404.40,75302.00,75394.40,11.5509
+12:11,75394.40,75394.50,75315.60,75315.60,7.6548
+12:12,75315.60,75365.90,75315.60,75352.40,5.2201
+12:13,75352.40,75388.90,75352.30,75365.60,4.2324
+12:14,75365.60,75365.60,75347.30,75347.40,4.8052
+12:15,75347.40,75347.40,75290.70,75311.70,9.7162
+12:16,75311.70,75384.10,75311.70,75384.10,4.4653
+12:17,75384.10,75432.80,75369.80,75416.10,9.1955
+12:18,75416.10,75452.20,75407.80,75430.10,7.1779
+12:19,75430.10,75451.30,75424.50,75450.10,4.1460
+12:20,75450.10,75649.40,75450.10,75588.60,43.2703
+12:21,75588.60,75653.70,75489.70,75494.40,27.6708
+12:22,75494.40,75546.80,75494.40,75546.80,6.1287
+12:23,75546.80,75546.80,75473.30,75473.30,9.3634
+12:24,75473.30,75539.50,75463.30,75509.90,17.3416
+12:25,75509.90,75540.00,75459.70,75470.00,13.2632
+12:26,75470.00,75502.40,75427.80,75427.80,9.0280
+12:27,75427.80,75455.60,75410.50,75448.40,11.2983
+12:28,75448.40,75450.60,75421.20,75421.30,13.6108
+12:29,75421.30,75427.90,75402.00,75416.10,7.6086
+12:30,75416.10,75459.90,75416.10,75457.50,4.2871
+12:31,75457.50,75457.50,75380.80,75423.30,14.5049
+12:32,75423.30,75458.60,75403.40,75410.80,10.6610
+12:33,75410.80,75410.80,75355.10,75370.70,7.9453
+12:34,75370.70,75404.90,75370.60,75391.90,9.8558
+12:35,75391.90,75433.60,75371.10,75424.80,10.8450
+12:36,75424.80,75442.60,75393.80,75424.20,9.0634
+12:37,75424.20,75432.30,75370.60,75370.60,7.0459
+12:38,75370.60,75370.70,75215.70,75238.70,28.1719
+12:39,75238.70,75249.00,75232.70,75236.30,2.8703
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: -1.3995
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BEARISH  — Ask-heavy book — sellers in control. -99.7% ask dominant. Sell-side wall capping
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.565). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (-0.007%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (-0.11% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: BULLISH  — Kraken spot whale buyers dominate: 100.0% (2.9 BTC) of large spot trades are buy
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.776). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 43.0% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.698 — balanced options positioning. Max pain $73,000 (-3.2% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was abstention]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: The prediction correctly identified dominant bearish microstructure but failed to account for the market's immediate state of compression and the time required for that selling pressure to resolve; price was coiling in a tight range at the prediction bar, leading to a neutral outcome within the 5-minute window.
+MISLEADING_SIGNALS: Over-weighted the "immediate" bearish narrative from the 12:21 engulfing candle and taker flow, expecting an instant breakdown, while under-weighting the significance of the "sleeping" Alligator and low-volume compression, which indicated a pause, not an immediate continuation.
+RELIABLE_SIGNALS: The bearish microstructure (ask-heavy order book, bearish taker BSR) and the rejection at the $75,649 supply zone were correct, as price ultimately moved down significantly shortly after the prediction window closed (see 12:38 bar).
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a consolidation phase directly following a high-volume rejection. The bearish pressure was real but was being digested; the prediction bar (12:35) was part of this compression, which preceded a delayed breakdown.
+LESSON: In a coiled, low-volume range following a rejection, wait for a confirmed break of the compression (e.g., a close below the recent low of the range) before assigning high probability to a directional move within a very short time frame.

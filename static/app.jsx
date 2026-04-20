@@ -2615,9 +2615,11 @@ function App() {
 
               {/* HISTORICAL LEAN — 1-line summary only */}
               {historicalAnalysis && (() => {
-                const pos  = historicalAnalysis.match(/\*\*POSITION:\s*(\w+)\*\*/i)?.[1]?.toUpperCase();
-                const conf = historicalAnalysis.match(/\*\*CONFIDENCE:\s*([\d]+)%\*\*/i)?.[1];
-                const lean = historicalAnalysis.match(/\*\*LEAN:\*\*\s*(.+)/i)?.[1]?.trim();
+               // Strip markdown bold markers before matching
+                const cleanText = historicalAnalysis.replace(/\*\*/g, '');
+                const pos  = cleanText.match(/POSITION:\s*(\w+)/i)?.[1]?.toUpperCase();
+                const conf = cleanText.match(/CONFIDENCE:\s*([\d]+)%/i)?.[1];
+                const lean = cleanText.match(/LEAN:\s*(.+)/i)?.[1]?.trim();
                 if (!lean) return null;
                 const posColor  = pos==="UP" ? C.green : pos==="DOWN" ? C.red : C.amber;
                 const posBg     = pos==="UP" ? C.greenBg : pos==="DOWN" ? C.redBg : C.amberBg;
