@@ -34,10 +34,16 @@ async def _get(url: str, headers: Optional[Dict] = None) -> Any:
 
 
 async def _fetch_order_book() -> Dict:
-    data = await _get("https://api.kraken.com/0/public/Depth?pair=XBTUSD&count=20")
-    book = (data.get("result") or {}).get("XXBTZUSD", {})
-    bv = sum(float(b[1]) for b in book.get("bids", []))
-    av = sum(float(a[1]) for a in book.get("asks", []))
+    try:
+        data = await _get("https://api.kraken.com/0/public/Depth?pair=XBTUSD&count=20")
+        book = (data.get("result") or {}).get("XXBTZUSD", {})
+        bv = sum(float(b[1]) for b in book.get("bids", []))
+        av = sum(float(a[1]) for a in book.get("asks", []))
+    except Exception as _e:
+        logger.debug("Kraken order book failed, using Binance fallback: %s", _e)
+        data = await _get("https://api.binance.com/api/v3/depth?symbol=BTCUSDT&limit=20")
+        bv = sum(float(b[1]) for b in data.get("bids", []))
+        av = sum(float(a[1]) for a in data.get("asks", []))
     imb = ((bv - av) / (bv + av)) * 100 if (bv + av) > 0 else 0.0
     sig = "BULLISH" if imb > 5 else "BEARISH" if imb < -5 else "NEUTRAL"
     interp = (
@@ -378,23 +384,35 @@ async def _fetch_deribit_dvol() -> Dict:
 
 
 async def _fetch_kraken_premium() -> Dict:
-    kraken_data, okx_data = await asyncio.gather(
-        _get("https://api.kraken.com/0/public/Ticker?pair=XBTUSD"),
-        _get("https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT"),
-    )
-    k_price    = float(kraken_data["result"]["XXBTZUSD"]["c"][0])
-    okx_rows   = okx_data.get("data") or []
-    o_price    = float(okx_rows[0]["last"]) if okx_rows else 0.0
+    try:
+        kraken_data, okx_data = await asyncio.gather(
+            _get("https://api.kraken.com/0/public/Ticker?pair=XBTUSD"),
+            _get("https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT"),
+        )
+        k_price = float(kraken_data["result"]["XXBTZUSD"]["c"][0])
+        okx_rows = okx_data.get("data") or []
+        o_price  = float(okx_rows[0]["last"]) if okx_rows else 0.0
+        ref_label = "OKX"
+    except Exception as _e:
+        logger.debug("Kraken/OKX premium failed, using Binance fallback: %s", _e)
+        binance_data, okx_data = await asyncio.gather(
+            _get("https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"),
+            _get("https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT"),
+        )
+        k_price = float(binance_data["price"])
+        okx_rows = okx_data.get("data") or []
+        o_price  = float(okx_rows[0]["last"]) if okx_rows else k_price
+        ref_label = "OKX"
     spread_pct = (k_price - o_price) / o_price * 100 if o_price else 0.0
     sig = "BULLISH" if spread_pct > 0.05 else "BEARISH" if spread_pct < -0.05 else "NEUTRAL"
     interp = (
-        f"Kraken premium +{spread_pct:.3f}% over OKX. "
+        f"Kraken premium +{spread_pct:.3f}% over {ref_label}. "
         "EU/US regulated buyers paying above global average — institutional accumulation."
         if spread_pct > 0.05 else
-        f"Kraken discount {spread_pct:.3f}% vs OKX. "
+        f"Kraken discount {spread_pct:.3f}% vs {ref_label}. "
         "Regulated market selling pressure; bearish for EU/US demand outlook."
         if spread_pct < -0.05 else
-        f"Kraken/OKX near-parity ({spread_pct:+.3f}%). "
+        f"Kraken/{ref_label} near-parity ({spread_pct:+.3f}%). "
         "No cross-exchange arbitrage pressure — neutral signal."
     )
     return {
@@ -452,32 +470,46 @@ async def _fetch_oi_velocity() -> Dict:
 
 
 async def _fetch_spot_whale_flow() -> Dict:
-    data = await _get("https://api.kraken.com/0/public/Trades?pair=XBTUSD")
-    trades = (data.get("result") or {}).get("XXBTZUSD", [])
-    if not trades:
-        raise ValueError("Empty Kraken trades response")
     threshold_btc = 2.0
     buy_vol = sell_vol = 0.0
-    for t in trades:
-        # Format: [price, volume, time, buy/sell("b"/"s"), market/limit, misc, trade_id]
-        vol = float(t[1])
-        if vol < threshold_btc:
-            continue
-        if t[3] == "b":
-            buy_vol += vol
-        else:
-            sell_vol += vol
+    source = "Kraken"
+    try:
+        data = await _get("https://api.kraken.com/0/public/Trades?pair=XBTUSD")
+        trades = (data.get("result") or {}).get("XXBTZUSD", [])
+        if not trades:
+            raise ValueError("Empty Kraken trades response")
+        for t in trades:
+            # Format: [price, volume, time, buy/sell("b"/"s"), market/limit, misc, trade_id]
+            vol = float(t[1])
+            if vol < threshold_btc:
+                continue
+            if t[3] == "b":
+                buy_vol += vol
+            else:
+                sell_vol += vol
+    except Exception as _e:
+        logger.debug("Kraken spot whale failed, using Binance fallback: %s", _e)
+        source = "Binance"
+        data = await _get("https://api.binance.com/api/v3/trades?symbol=BTCUSDT&limit=500")
+        for t in data:
+            vol = float(t["qty"])
+            if vol < threshold_btc:
+                continue
+            if not t["isBuyerMaker"]:
+                buy_vol += vol
+            else:
+                sell_vol += vol
     total   = buy_vol + sell_vol
     buy_pct = buy_vol / total * 100 if total > 0 else 50.0
     sig = "BULLISH" if buy_pct > 60 else "BEARISH" if buy_pct < 40 else "NEUTRAL"
     interp = (
-        f"Kraken spot whale buyers dominate: {buy_pct:.1f}% ({buy_vol:.1f} BTC) of large "
+        f"{source} spot whale buyers dominate: {buy_pct:.1f}% ({buy_vol:.1f} BTC) of large "
         f"spot trades are buys. Genuine spot accumulation — no leverage involved."
         if buy_pct > 60 else
-        f"Kraken spot whale sellers dominate: only {buy_pct:.1f}% buys ({sell_vol:.1f} BTC "
+        f"{source} spot whale sellers dominate: only {buy_pct:.1f}% buys ({sell_vol:.1f} BTC "
         "sold). Spot distribution — real holders exiting."
         if buy_pct < 40 else
-        f"Kraken spot whales balanced ({buy_pct:.1f}% buys, {total:.1f} BTC in large trades). "
+        f"{source} spot whales balanced ({buy_pct:.1f}% buys, {total:.1f} BTC in large trades). "
         "No clear direction from block orders."
     )
     return {
@@ -802,7 +834,15 @@ async def _fetch_deribit_options() -> Dict:
     }
 
 
+_btc_onchain_cache: Dict = {}
+_btc_onchain_cache_ts: float = 0.0
+_BTC_ONCHAIN_TTL = 3600.0  # 1 hour — bitcoin-data.com rate-limits aggressively
+
 async def _fetch_btc_onchain() -> Dict:
+    global _btc_onchain_cache, _btc_onchain_cache_ts
+    if _btc_onchain_cache and (time.time() - _btc_onchain_cache_ts) < _BTC_ONCHAIN_TTL:
+        return _btc_onchain_cache
+
     sopr_r, mvrv_r = await asyncio.gather(
         _get("https://api.bitcoin-data.com/v1/sopr"),
         _get("https://api.bitcoin-data.com/v1/mvrv-zscore"),
@@ -835,7 +875,7 @@ async def _fetch_btc_onchain() -> Dict:
         if mvrv < 0.5 else
         f"MVRV Z-Score {mvrv:.3f} — fair value range. No extreme macro over/undervaluation."
     )
-    return {
+    _btc_onchain_cache = {
         "sopr":               round(sopr, 5),
         "sopr_date":          sopr_date,
         "sopr_signal":        sopr_sig,
@@ -847,6 +887,8 @@ async def _fetch_btc_onchain() -> Dict:
         "signal":             sopr_sig,
         "interpretation":     sopr_interp,
     }
+    _btc_onchain_cache_ts = time.time()
+    return _btc_onchain_cache
 
 
 async def _fetch_coinglass_liquidations(api_key: str) -> Dict:

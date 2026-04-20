@@ -37,8 +37,9 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
-DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
-DEEPSEEK_MODEL   = "deepseek-reasoner"
+DEEPSEEK_API_URL   = "https://api.deepseek.com/v1/chat/completions"
+DEEPSEEK_MODEL     = "deepseek-reasoner"  # chain-of-thought — final prediction only
+DEEPSEEK_FAST_MODEL = "deepseek-chat"     # fast — specialists, analyst, expert, postmortem
 
 COHERE_EMBED_URL  = "https://api.cohere.com/v2/embed"
 COHERE_RERANK_URL = "https://api.cohere.com/v2/rerank"
@@ -85,10 +86,11 @@ async def _api_call(
     prompt: str,
     max_tokens: int = 1000,
     timeout_s: float = 90.0,
+    model: str = DEEPSEEK_FAST_MODEL,
 ) -> str:
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload = {
-        "model":       DEEPSEEK_MODEL,
+        "model":       model,
         "messages":    [{"role": "user", "content": prompt}],
         "max_tokens":  max_tokens,
         "temperature": 0.1,
@@ -1128,7 +1130,7 @@ LESSON: [one concrete rule to apply next time in a similar setup]"""
 
     try:
         t0 = time.time()
-        raw = await _api_call(api_key, prompt, max_tokens=1200, timeout_s=50.0)
+        raw = await _api_call(api_key, prompt, max_tokens=1200, timeout_s=20.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = int((time.time() - t0) * 1000)
         logger.info("Postmortem completed for bar %s (%s) in %dms", bar_ts, verdict, elapsed)
         _save(_PM_DIR / f"last_{int(window_start)}.txt", f"=== PROMPT ===\n{prompt}\n\n=== RESPONSE ===\n{raw}")
@@ -1238,7 +1240,7 @@ async def run_specialists(
     _save(_SPEC_PROMPT_OUT, f"# Sent at {ts_str}\n\n{prompt}")
 
     try:
-        raw = await _api_call(api_key, prompt, max_tokens=1000, timeout_s=90.0)
+        raw = await _api_call(api_key, prompt, max_tokens=1500, timeout_s=20.0, model=DEEPSEEK_FAST_MODEL)
         _append(_SPEC_RESPONSE, f"\n{'='*60}\n# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n{'='*60}\n\n{raw}")
         strategies, creative_edge, suggestion = _parse_specialist_response(raw)
         if suggestion:
@@ -1925,7 +1927,7 @@ async def run_historical_analyst(
     _save(_HIST_PROMPT_OUT, f"# {ts_str}\n\n{prompt}")
 
     try:
-        raw     = await _api_call(api_key, prompt, max_tokens=1500, timeout_s=100.0)
+        raw     = await _api_call(api_key, prompt, max_tokens=1500, timeout_s=20.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = time.time() - t0
         _save(_HIST_RESPONSE, f"# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}  elapsed={elapsed:.1f}s\n\n{raw}")
         for line in raw.splitlines():
@@ -2076,7 +2078,7 @@ async def run_binance_expert(
 
     t0 = time.time()
     try:
-        raw = await _api_call(api_key, prompt, max_tokens=600, timeout_s=30.0)
+        raw = await _api_call(api_key, prompt, max_tokens=1500, timeout_s=20.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = time.time() - t0
         ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
         _save(_BNX_RESPONSE,
@@ -2142,7 +2144,7 @@ class DeepSeekPredictor:
         raw_response: Optional[str] = None
         error_msg    = ""
         try:
-            raw_response = await _api_call(self.api_key, prompt, max_tokens=8000, timeout_s=120.0)
+            raw_response = await _api_call(self.api_key, prompt, max_tokens=2000, timeout_s=30.0, model=DEEPSEEK_FAST_MODEL)
         except Exception as exc:
             error_msg = repr(exc)
             logger.error("DeepSeek call failed: %r", exc)

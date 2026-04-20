@@ -300,13 +300,13 @@ async def _run_deepseek(
         if binance_expert_task is not None:
             try:
                 binance_expert_result = await asyncio.wait_for(
-                    asyncio.shield(binance_expert_task), timeout=25.0
+                    asyncio.shield(binance_expert_task), timeout=70.0
                 )
                 if binance_expert_result:
                     current_state["bar_binance_expert"] = _json_safe(binance_expert_result)
                     logger.info("Binance expert result received before DeepSeek API call — injected into prompt")
             except asyncio.TimeoutError:
-                logger.warning("Binance expert timed out (25s) — DeepSeek fires without it")
+                logger.warning("Binance expert timed out (70s) — DeepSeek fires without it")
             except Exception as bx_exc:
                 logger.warning("Binance expert task error: %s — DeepSeek fires without it", bx_exc)
 
