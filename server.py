@@ -605,7 +605,7 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             if current_state["price"] is not None:
                 try:
-                    await websocket.send_json({
+                    payload = _json_safe({
                         "type":                        "tick",
                         "price":                       current_state["price"],
                         "window_start_price":          current_state["window_start_price"],
@@ -621,11 +621,13 @@ async def websocket_endpoint(websocket: WebSocket):
                         "specialist_completed_at":     current_state.get("specialist_completed_at"),
                         "bar_historical_analysis":     current_state.get("bar_historical_analysis", ""),
                         "bar_historical_context":      current_state.get("bar_historical_context", ""),
+                        "bar_binance_expert":          current_state.get("bar_binance_expert", {}),
                         "service_unavailable":         current_state.get("service_unavailable", False),
                         "service_unavailable_reason":  current_state.get("service_unavailable_reason", ""),
                     })
+                    await websocket.send_json(payload)
                 except Exception as ws_exc:
-                    logger.warning("WS send failed: %s", ws_exc)
+                    logger.warning("WS send failed: %r", ws_exc)
                     break
             await asyncio.sleep(1)
     except WebSocketDisconnect:

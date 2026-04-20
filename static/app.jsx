@@ -1812,6 +1812,7 @@ function App() {
   const [historicalContext,     setHistoricalContext]     = useState("");
   const [serviceUnavailable,    setServiceUnavailable]    = useState(false);
   const [serviceUnavailReason,  setServiceUnavailReason]  = useState("");
+  const [binanceExpert,         setBinanceExpert]         = useState(null);
   const [tab,                   setTab]                   = useState("live");
   const [errorLog,              setErrorLog]              = useState([]);
   const [backendSnap,    setBackendSnap]    = useState(null);
@@ -1875,6 +1876,7 @@ function App() {
         if (d.bar_historical_context !== undefined)   setHistoricalContext(d.bar_historical_context || "");
         if (d.service_unavailable !== undefined)      setServiceUnavailable(!!d.service_unavailable);
         if (d.service_unavailable_reason !== undefined) setServiceUnavailReason(d.service_unavailable_reason || "");
+        if (d.bar_binance_expert && d.bar_binance_expert.signal) setBinanceExpert(d.bar_binance_expert);
       };
     }
     connect();
@@ -3251,7 +3253,7 @@ function App() {
         {/* ══ BINANCE TEST TAB ══ */}
         {tab==="binance_test" && (
           <ErrorBoundary key="binance-test-tab">
-            <BinanceTestTab />
+            <BinanceTestTab binanceExpert={binanceExpert} />
           </ErrorBoundary>
         )}
 
@@ -3349,7 +3351,7 @@ const BINANCE_ENDPOINTS = [
   { id:"funding_history",  label:"Funding Rate History",  url:"https://fapi.binance.com/fapi/v1/fundingRate",                                       params:{symbol:"BTCUSDT",limit:6},                  desc:"Last 6 funding rates" },
 ];
 
-function BinanceTestTab() {
+function BinanceTestTab({ binanceExpert }) {
   const [results, setResults] = React.useState({});
   const [loading, setLoading] = React.useState(false);
   const [lastRun, setLastRun] = React.useState(null);
@@ -3415,6 +3417,46 @@ function BinanceTestTab() {
           </div>
         )}
       </div>
+
+      {/* Latest Binance AI Analysis */}
+      {binanceExpert && (
+        <div style={{ ...card, flexShrink:0, borderLeft:`3px solid ${
+          binanceExpert.signal==="UP" ? C.green : binanceExpert.signal==="DOWN" ? C.red : C.amber}` }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+            <div style={{ fontSize:11, fontWeight:800, color:C.text }}>Latest Binance Expert Analysis</div>
+            <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:6 }}>
+              <div style={{ fontSize:12, fontWeight:900,
+                color: binanceExpert.signal==="UP" ? C.green : binanceExpert.signal==="DOWN" ? C.red : C.amber }}>
+                {binanceExpert.signal==="UP" ? "▲ ABOVE" : binanceExpert.signal==="DOWN" ? "▼ BELOW" : "◆ NEUTRAL"}
+              </div>
+              <div style={{ fontSize:10, fontWeight:700, color:C.textSec,
+                background: binanceExpert.signal==="UP" ? C.greenBg : binanceExpert.signal==="DOWN" ? C.redBg : C.amberBg,
+                border:`1px solid ${binanceExpert.signal==="UP" ? C.greenBorder : binanceExpert.signal==="DOWN" ? C.redBorder : C.amberBorder}`,
+                borderRadius:4, padding:"2px 8px" }}>
+                {binanceExpert.confidence}% confidence
+              </div>
+            </div>
+          </div>
+          {binanceExpert.analysis && (
+            <div style={{ fontSize:10, color:C.textSec, lineHeight:1.5, marginBottom:4 }}>
+              <span style={{ fontWeight:700, color:C.muted, fontSize:9, letterSpacing:1, textTransform:"uppercase" }}>Analysis · </span>
+              {binanceExpert.analysis}
+            </div>
+          )}
+          {binanceExpert.reasoning && (
+            <div style={{ fontSize:10, color:C.textSec, lineHeight:1.5 }}>
+              <span style={{ fontWeight:700, color:C.muted, fontSize:9, letterSpacing:1, textTransform:"uppercase" }}>Reasoning · </span>
+              {binanceExpert.reasoning}
+            </div>
+          )}
+        </div>
+      )}
+      {!binanceExpert && (
+        <div style={{ ...card, flexShrink:0, background:C.amberBg, border:`1px solid ${C.amberBorder}` }}>
+          <div style={{ fontSize:10, color:C.amber, fontWeight:700 }}>Binance Expert Analysis · Waiting for next bar...</div>
+          <div style={{ fontSize:9, color:C.muted, marginTop:2 }}>The AI analysis of Binance microstructure data will appear here after the next 5-minute bar opens.</div>
+        </div>
+      )}
 
       {/* Grid of endpoint cards */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6 }}>

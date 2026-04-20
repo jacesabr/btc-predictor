@@ -136,19 +136,24 @@ async def _fetch_taker_flow() -> Dict:
         _data_for_trend = data
     except Exception as _e:
         logger.debug("Binance taker flow failed, using OKX fallback: %s", _e)
-        raw = await _get(
-            "https://www.okx.com/api/v5/rubik/stat/taker-volume"
-            "?ccy=BTC&instType=SWAP&period=5m&limit=3"
-        )
-        rows = raw.get("data") or []
-        if not rows:
-            raise ValueError("Empty OKX taker volume response")
-        bv, sv = float(rows[0][1]), float(rows[0][2])
-        bsr = bv / sv if sv > 0 else 1.0
-        _data_for_trend = [
-            {"buySellRatio": float(r[1]) / float(r[2]) if float(r[2]) > 0 else 1.0}
-            for r in reversed(rows)
-        ]
+        try:
+            raw = await _get(
+                "https://www.okx.com/api/v5/rubik/stat/taker-volume"
+                "?ccy=BTC&instType=SWAP&period=5m&limit=3"
+            )
+            rows = raw.get("data") or []
+            if not rows:
+                raise ValueError("Empty OKX taker volume response")
+            bv, sv = float(rows[0][1]), float(rows[0][2])
+            bsr = bv / sv if sv > 0 else 1.0
+            _data_for_trend = [
+                {"buySellRatio": float(r[1]) / float(r[2]) if float(r[2]) > 0 else 1.0}
+                for r in reversed(rows)
+            ]
+        except Exception as _e2:
+            logger.debug("OKX taker flow also failed (%s) — using neutral defaults", _e2)
+            bsr, bv, sv = 1.0, 0.0, 0.0
+            _data_for_trend = []
     sig = "BULLISH" if bsr > 1.12 else "BEARISH" if bsr < 0.90 else "NEUTRAL"
     if len(_data_for_trend) >= 3:
         ratios  = [float(d.get("buySellRatio", 1)) for d in _data_for_trend]
