@@ -54,6 +54,7 @@ from ai import (
     DeepSeekPredictor, run_specialists, run_historical_analyst,
     run_binance_expert, SPECIALIST_KEYS, _build_current_bar, run_postmortem,
     embed_text, _bar_embed_text, CohereUnavailableError,
+    run_embedding_audit, load_embedding_audit_log,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -320,7 +321,7 @@ async def _run_deepseek(
             indicator_accuracy=indicator_accuracy, ensemble_weights=ensemble_weights,
             historical_analysis=historical_analysis, creative_edge=creative_edge,
             dashboard_accuracy=dashboard_accuracy, neutral_analysis=neutral_analysis,
-            binance_expert_analysis=binance_expert_result,
+            binance_expert_analysis=binance_expert_result or current_state.get("bar_binance_expert") or None,
         )
 
         # Stale-window guard
@@ -475,16 +476,11 @@ async def _run_full_prediction(prices, is_force=False):
     except Exception as exc:
         logger.warning("Dashboard signals error: %s", exc)
 
-    # Step 3 — Inject dashboard into ensemble + fire Binance expert immediately
+    # Step 3 — Inject dashboard into ensemble
     binance_expert_task = None
     if dashboard_signals:
         dash_preds = _dashboard_signals_to_preds(dashboard_signals)
         strategy_preds.update(dash_preds)
-        if deepseek:
-            binance_expert_task = asyncio.create_task(
-                run_binance_expert(config.deepseek_api_key, dashboard_signals)
-            )
-            logger.info("Binance expert task fired")
 
     # Step 4 — Ensemble
     pred                              = _json_safe(ensemble.predict(strategy_preds))
@@ -495,18 +491,7 @@ async def _run_full_prediction(prices, is_force=False):
     current_state["strategies"]       = strategy_preds
     current_state["agree_accuracy"]   = _safe_storage(storage.get_agree_accuracy, default={})
 
-    # Step 5 — Historical analyst (fires AFTER specialist AND binance expert to avoid
-    # DeepSeek API congestion — binance expert is awaited here so its DS call finishes
-    # before historical analyst fires its own DS call).
-    if binance_expert_task is not None and not binance_expert_task.done():
-        try:
-            _bx_early = await asyncio.wait_for(asyncio.shield(binance_expert_task), timeout=20.0)
-            if _bx_early:
-                current_state["bar_binance_expert"] = _json_safe(_bx_early)
-            logger.info("Binance expert pre-awaited before historical analyst")
-        except (asyncio.TimeoutError, Exception) as _bx_e:
-            logger.info("Binance expert pre-await skipped: %s", _bx_e)
-
+    # Step 5 — Historical analyst (sequential: specialist already done, no other DS call running)
     historical_analysis = None
     hist_signal         = None
     dash_directions: Dict = {}
@@ -560,6 +545,22 @@ async def _run_full_prediction(prices, is_force=False):
             logger.info("Historical analyst completed in %.1fs — injected into DeepSeek prompt", _hist_elapsed)
         else:
             logger.warning("Historical analyst returned no output after %.1fs — DeepSeek fires without it", _hist_elapsed)
+
+    # Step 5b — Binance expert (sequential: historical analyst DS call is done)
+    if deepseek and dashboard_signals:
+        try:
+            _bx_result = await asyncio.wait_for(
+                run_binance_expert(config.deepseek_api_key, dashboard_signals),
+                timeout=30.0,
+            )
+            if _bx_result:
+                current_state["bar_binance_expert"] = _json_safe(_bx_result)
+                binance_expert_task = _bx_result
+            logger.info("Binance expert done (sequential)")
+        except asyncio.TimeoutError:
+            logger.warning("Binance expert timed out")
+        except Exception as _bx_e:
+            logger.warning("Binance expert failed: %s", _bx_e)
 
     pm_odds_open = polymarket_feed.market_odds if polymarket_feed.is_live else None
     pm_ev_open   = (calculate_ev(pred["confidence"], pm_odds_open).expected_value
@@ -625,7 +626,7 @@ async def _run_full_prediction(prices, is_force=False):
                 ensemble_weights=ensemble.get_weights(),
                 historical_analysis=historical_analysis,
                 creative_edge=creative_edge, dashboard_accuracy=dashboard_acc,
-                binance_expert_task=binance_expert_task,
+                binance_expert_task=None,
             )
         )
 
