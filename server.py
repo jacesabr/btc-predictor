@@ -247,6 +247,34 @@ async def proxy_coinalyze():
         return {"error": str(exc)}
 
 
+@app.get("/api/proxy/coinapi")
+async def proxy_coinapi():
+    import aiohttp
+    try:
+        url = "https://rest.coinapi.io/v1/exchangerate/BTC/USD"
+        headers = {"X-CoinAPI-Key": config.coinapi_key}
+        connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+        async with aiohttp.ClientSession(connector=connector) as session:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=8)) as resp:
+                data = await resp.json(content_type=None)
+                return {"rate": data.get("rate")}
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.get("/api/proxy/okx-liquidations")
+async def proxy_okx_liquidations():
+    import aiohttp
+    try:
+        url = "https://www.okx.com/api/v5/public/liquidation-orders?instType=SWAP&mgnMode=cross&instId=BTC-USDT-SWAP&state=filled&limit=100"
+        connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+        async with aiohttp.ClientSession(connector=connector) as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=8)) as resp:
+                return await resp.json(content_type=None)
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 @app.get("/weights")
 async def get_weights():
     from strategies import accuracy_to_label

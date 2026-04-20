@@ -2062,9 +2062,7 @@ function App() {
 
   const fetchLQ = useCallback(async () => {
     try {
-      const d = await fetch(
-        "https://www.okx.com/api/v5/public/liquidation-orders?instType=SWAP&mgnMode=cross&instId=BTC-USDT-SWAP&state=filled&limit=100"
-      ).then(r=>r.json());
+      const d = await fetch("/api/proxy/okx-liquidations").then(r=>r.json());
       const rows = (d.data||[]).flatMap(e=>e.details||[]);
       const cutoff = Date.now() - 300_000;
       const window = rows.filter(r=>+r.ts>=cutoff).length ? rows.filter(r=>+r.ts>=cutoff) : rows;
