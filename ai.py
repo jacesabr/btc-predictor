@@ -772,16 +772,24 @@ def build_prompt(
                         else "  (historical analyst did not fire this window — no resolved bars yet)")
 
     _bx = binance_expert_analysis or {}
-    if _bx and _bx.get("analysis"):
+    if _bx and (_bx.get("edge") or _bx.get("analysis")):
         _bx_sig  = _bx.get("signal", "?")
         _bx_conf = _bx.get("confidence", 0)
-        _bx_ana  = _bx.get("analysis", "")
-        _bx_rsn  = _bx.get("reasoning", "")
-        binance_expert_block = (
-            f"  Signal     : {_bx_sig}  ({_bx_conf}% confidence)\n"
-            f"  Analysis   : {_bx_ana}"
-            + (f"\n  Key driver : {_bx_rsn}" if _bx_rsn else "")
-        )
+        _lines = [f"  Signal       : {_bx_sig}  ({_bx_conf}% confidence)"]
+        for _label, _fkey in [
+            ("Taker flow  ", "taker_flow"),
+            ("Positioning ", "positioning"),
+            ("Whale flow  ", "whale_flow"),
+            ("OI/Funding  ", "oi_funding"),
+            ("Order book  ", "order_book"),
+            ("Confluence  ", "confluence"),
+            ("Key edge    ", "edge"),
+            ("Watch for   ", "watch"),
+        ]:
+            _val = _bx.get(_fkey, "")
+            if _val:
+                _lines.append(f"  {_label}: {_val}")
+        binance_expert_block = "\n".join(_lines)
     else:
         binance_expert_block = "  (Binance expert did not complete this window)"
 
@@ -1877,6 +1885,11 @@ async def run_historical_analyst(
     if not template:
         return None, None
 
+    _MIN_BARS = 5
+    if len(history_records) < _MIN_BARS:
+        logger.info("Historical analyst skipped — only %d resolved bars (need %d)", len(history_records), _MIN_BARS)
+        return None, None
+
     t0 = time.time()
 
     current_bar = _build_current_bar(
@@ -2023,36 +2036,60 @@ def _build_binance_expert_block(ds: Optional[Dict]) -> str:
 
 def _parse_binance_expert_response(text: str) -> Dict:
     signal, confidence = "NEUTRAL", 50
-    analysis = ""
-    reasoning = ""
-    in_analysis = False
-    in_reasoning = False
+    fields = {
+        "taker_flow": "", "positioning": "", "whale_flow": "",
+        "oi_funding": "", "order_book": "", "confluence": "",
+        "edge": "", "watch": "",
+        # legacy compat
+        "analysis": "", "reasoning": "",
+    }
+    current_field = None
+
+    _KEY_MAP = {
+        "POSITION": None, "CONFIDENCE": None,
+        "TAKER_FLOW": "taker_flow", "POSITIONING": "positioning",
+        "WHALE_FLOW": "whale_flow", "OI_FUNDING": "oi_funding",
+        "ORDER_BOOK": "order_book", "CONFLUENCE": "confluence",
+        "EDGE": "edge", "WATCH": "watch",
+        "ANALYSIS": "analysis", "REASONING": "reasoning",
+    }
 
     for line in text.strip().splitlines():
         s = line.strip()
-        u = s.upper()
-        if u.startswith("POSITION:"):
-            val = u.replace("POSITION:", "").strip()
-            if "ABOVE" in val:    signal = "UP"
-            elif "BELOW" in val:  signal = "DOWN"
-            else:                 signal = "NEUTRAL"
-            in_analysis = in_reasoning = False
-        elif u.startswith("CONFIDENCE:"):
-            try: confidence = int(float(u.replace("CONFIDENCE:", "").replace("%", "").strip()))
-            except: pass
-            in_analysis = in_reasoning = False
-        elif s.upper().startswith("ANALYSIS:"):
-            analysis = s[len("ANALYSIS:"):].strip()
-            in_analysis = True; in_reasoning = False
-        elif s.upper().startswith("REASONING:"):
-            reasoning = s[len("REASONING:"):].strip()
-            in_reasoning = True; in_analysis = False
-        elif in_analysis and s:
-            analysis += " " + s
-        elif in_reasoning and s:
-            reasoning += " " + s
+        if not s:
+            continue
+        colon = s.find(":")
+        if colon > 0:
+            key_candidate = s[:colon].upper().replace(" ", "_")
+            if key_candidate in _KEY_MAP:
+                value = s[colon + 1:].strip()
+                if key_candidate == "POSITION":
+                    v = value.upper()
+                    signal = "UP" if "ABOVE" in v else ("DOWN" if "BELOW" in v else "NEUTRAL")
+                    current_field = None
+                elif key_candidate == "CONFIDENCE":
+                    try: confidence = int(float(value.replace("%", "").strip()))
+                    except: pass
+                    current_field = None
+                else:
+                    fname = _KEY_MAP[key_candidate]
+                    fields[fname] = value
+                    current_field = fname
+                continue
+        if current_field and s:
+            fields[current_field] += " " + s
 
-    return {"signal": signal, "confidence": confidence, "analysis": analysis, "reasoning": reasoning}
+    # Build combined analysis string for legacy callers
+    parts = []
+    for f in ("taker_flow", "positioning", "whale_flow", "oi_funding", "order_book"):
+        if fields[f]:
+            parts.append(fields[f])
+    if not fields["analysis"]:
+        fields["analysis"] = " | ".join(parts) if parts else ""
+    if not fields["reasoning"]:
+        fields["reasoning"] = fields["edge"] or fields["confluence"] or ""
+
+    return {"signal": signal, "confidence": confidence, **fields}
 
 
 async def run_binance_expert(
@@ -2078,7 +2115,7 @@ async def run_binance_expert(
 
     t0 = time.time()
     try:
-        raw = await _api_call(api_key, prompt, max_tokens=1500, timeout_s=20.0, model=DEEPSEEK_FAST_MODEL)
+        raw = await _api_call(api_key, prompt, max_tokens=2000, timeout_s=25.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = time.time() - t0
         ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
         _save(_BNX_RESPONSE,
