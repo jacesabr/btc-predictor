@@ -64,13 +64,7 @@ CREATE TABLE IF NOT EXISTS pattern_history (
     created_at   DOUBLE PRECISION NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pattern_history_ws ON pattern_history (window_start);
-"""
-
-_DDL_VECTOR = """
-CREATE EXTENSION IF NOT EXISTS vector;
-ALTER TABLE pattern_history ADD COLUMN IF NOT EXISTS embedding vector(1024);
-CREATE INDEX IF NOT EXISTS idx_pattern_history_emb ON pattern_history
-    USING hnsw (embedding vector_cosine_ops);
+ALTER TABLE pattern_history ADD COLUMN IF NOT EXISTS embedding REAL[];
 """
 
 
@@ -79,12 +73,6 @@ def _ensure_table():
     try:
         with conn.cursor() as cur:
             cur.execute(_DDL_BASE)
-            if _PGVECTOR_AVAILABLE:
-                try:
-                    cur.execute(_DDL_VECTOR)
-                except Exception as e:
-                    conn.rollback()
-                    logger.warning("pgvector extension not available — embeddings disabled: %s", e)
         conn.commit()
     finally:
         _put(conn)
@@ -202,63 +190,71 @@ def load_all(limit: int = 10000) -> List[Dict]:
 # ── Vector search ─────────────────────────────────────────────────────────────
 
 def store_embedding(window_start: float, vector: np.ndarray):
-    """Store a Cohere 1024-dim embedding for a resolved bar in pattern_history."""
+    """Store a Cohere 1024-dim embedding for a resolved bar as a REAL[] array."""
     _init()
     conn = _conn()
     try:
         with conn.cursor() as cur:
             cur.execute(
                 "UPDATE pattern_history SET embedding = %s WHERE window_start = %s",
-                (vector.astype(np.float32), float(window_start)),
+                (vector.astype(np.float32).tolist(), float(window_start)),
             )
             if cur.rowcount == 0:
                 logger.warning(
                     "store_embedding: no pattern_history row for window_start=%.0f — bar not embedded",
                     window_start,
                 )
+            else:
+                logger.info("store_embedding: saved %d-dim vector for bar %.0f", len(vector), window_start)
         conn.commit()
     finally:
         _put(conn)
 
 
+def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
+    norm_a = np.linalg.norm(a)
+    norm_b = np.linalg.norm(b)
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return float(np.dot(a, b) / (norm_a * norm_b))
+
+
 def search_similar(query_vec: np.ndarray, k: int = 50) -> List[Dict]:
     """
-    Return up to k most similar bars using pgvector cosine distance.
-    Falls back to most recent k bars if pgvector is not available.
+    Return up to k most similar bars using cosine similarity on stored REAL[] embeddings.
+    Falls back to most recent k bars if no embeddings are stored.
     """
     _init()
-    if not _PGVECTOR_AVAILABLE:
-        return load_all()[-k:]
     conn = _conn()
     try:
         with conn.cursor() as cur:
+            cur.execute(
+                "SELECT data, embedding FROM pattern_history WHERE embedding IS NOT NULL ORDER BY window_start DESC LIMIT 2000",
+            )
+            rows = cur.fetchall()
+
+        if not rows:
+            logger.info("search_similar: no embeddings stored yet, falling back to recent bars")
+            return load_all()[-k:]
+
+        q = query_vec.astype(np.float32)
+        scored = []
+        for data_str, emb_list in rows:
             try:
-                cur.execute(
-                    """
-                    SELECT data, embedding <=> %s AS distance
-                    FROM pattern_history
-                    WHERE embedding IS NOT NULL
-                    ORDER BY embedding <=> %s
-                    LIMIT %s
-                    """,
-                    (query_vec.astype(np.float32), query_vec.astype(np.float32), k),
-                )
-                rows = cur.fetchall()
-                results = []
-                for data_str, distance in rows:
-                    try:
-                        bar = json.loads(data_str)
-                        bar["_similarity"] = round(1.0 - float(distance), 4)
-                        results.append(bar)
-                    except Exception:
-                        pass
-                if results:
-                    logger.info("pgvector search: %d similar bars found (top sim=%.3f)",
-                                len(results), results[0]["_similarity"])
-                    return results
+                bar = json.loads(data_str)
+                emb = np.array(emb_list, dtype=np.float32)
+                sim = _cosine_similarity(q, emb)
+                bar["_similarity"] = round(sim, 4)
+                scored.append((sim, bar))
             except Exception:
                 pass
-        return load_all()[-k:]
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        results = [bar for _, bar in scored[:k]]
+        if results:
+            logger.info("cosine search: %d/%d bars scored, top sim=%.3f",
+                        len(scored), len(rows), results[0]["_similarity"])
+        return results if results else load_all()[-k:]
     finally:
         _put(conn)
 

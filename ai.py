@@ -772,7 +772,7 @@ def build_prompt(
                         else "  (historical analyst did not fire this window — no resolved bars yet)")
 
     _bx = binance_expert_analysis or {}
-    if _bx and (_bx.get("edge") or _bx.get("analysis")):
+    if _bx and _bx.get("signal") and _bx["signal"] != "NEUTRAL" or (_bx and (_bx.get("edge") or _bx.get("analysis"))):
         _bx_sig  = _bx.get("signal", "?")
         _bx_conf = _bx.get("confidence", 0)
         _lines = [f"  Signal       : {_bx_sig}  ({_bx_conf}% confidence)"]
@@ -2054,13 +2054,16 @@ def _parse_binance_expert_response(text: str) -> Dict:
         "ANALYSIS": "analysis", "REASONING": "reasoning",
     }
 
+    import re as _re
     for line in text.strip().splitlines():
         s = line.strip()
         if not s:
             continue
         colon = s.find(":")
         if colon > 0:
-            key_candidate = s[:colon].upper().replace(" ", "_")
+            # Strip markdown bold/italic and non-alphanumeric chars from key
+            raw_key = s[:colon]
+            key_candidate = _re.sub(r'[^A-Z0-9 _]', '', raw_key.upper()).strip().replace(" ", "_")
             if key_candidate in _KEY_MAP:
                 value = s[colon + 1:].strip()
                 if key_candidate == "POSITION":
