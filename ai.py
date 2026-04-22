@@ -1389,7 +1389,9 @@ def _fmt_dashboard_directions(dash: Dict) -> str:
     }
     parts = []
     for key, abbrev in _ABBREV.items():
-        v = (dash.get(key) or "").upper()
+        raw_v = dash.get(key)
+        v = raw_v.get("signal", "") if isinstance(raw_v, dict) else (raw_v or "")
+        v = v.upper() if isinstance(v, str) else ""
         if v == "UP":   parts.append(f"{abbrev}=UP")
         elif v == "DOWN": parts.append(f"{abbrev}=DN")
     return " ".join(parts) if parts else "all_neutral"
@@ -1476,7 +1478,9 @@ def _bar_feature_vector(record: Dict) -> Optional[np.ndarray]:
 
     def dsig(key):
         """Encode UP→+1, DOWN→-1, anything else→0."""
-        v = (dash.get(key) or "").upper()
+        raw_v = dash.get(key)
+        v = raw_v.get("signal", "") if isinstance(raw_v, dict) else (raw_v or "")
+        v = v.upper() if isinstance(v, str) else ""
         return 1.0 if v == "UP" else -1.0 if v == "DOWN" else 0.0
 
     features = np.array([
@@ -1722,7 +1726,9 @@ def _bar_embed_text(record: Dict) -> str:
     L.append("")
     L.append("MARKET MICROSTRUCTURE (live derivatives & sentiment data)")
     for key in sorted(dash.keys()):
-        v = (dash.get(key) or "").upper()
+        raw_v = dash.get(key)
+        v = raw_v.get("signal", "") if isinstance(raw_v, dict) else (raw_v or "")
+        v = v.upper() if isinstance(v, str) else ""
         if v in ("UP", "DOWN", "NEUTRAL"):
             L.append(f"  {key}: {v}")
     L.append("")
@@ -1840,7 +1846,9 @@ def _build_history_table(records: List[Dict], compact: bool = False) -> str:
             dash   = r.get("dashboard_signals_raw", {})
             dp     = []
             for key, abbrev in _KEY_DASH_COMPACT:
-                v = (dash.get(key) or "").upper()
+                raw_v = dash.get(key)
+                v = raw_v.get("signal", "") if isinstance(raw_v, dict) else (raw_v or "")
+                v = v.upper() if isinstance(v, str) else ""
                 if v == "UP":   dp.append(f"{abbrev}=UP")
                 elif v == "DOWN": dp.append(f"{abbrev}=DN")
             dash_c = " ".join(dp) if dp else "neutral"
