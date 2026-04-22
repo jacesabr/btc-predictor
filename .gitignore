@@ -25,6 +25,7 @@ charts/
 specialists/**/last_prompt.txt
 specialists/**/last_response.txt
 specialists/**/last_sent.txt
+specialists/**/last_*.txt
 specialists/**/suggestions.txt
 
 # Secrets
