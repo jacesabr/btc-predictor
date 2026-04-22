@@ -108,7 +108,6 @@ def append_resolved_window(
     deepseek_narrative:     str                  = "",
     deepseek_free_obs:      str                  = "",
     specialist_signals:     Optional[Dict]       = None,
-    creative_edge:          str                  = "",
     historical_analysis:    str                  = "",
     dashboard_signals_raw:  Optional[Dict]       = None,
     accuracy_snapshot:      Optional[Dict]       = None,
@@ -139,7 +138,6 @@ def append_resolved_window(
         "deepseek_narrative": deepseek_narrative,
         "deepseek_free_obs":  deepseek_free_obs,
         "specialist_signals": specialist_signals or {},
-        "creative_edge":      creative_edge,
         "historical_analysis": historical_analysis,
         "binance_expert_analysis": binance_expert_analysis or {},
         "strategy_votes":     strategy_votes,
@@ -316,28 +314,49 @@ def compute_all_indicator_accuracy(n: Optional[int] = None) -> Dict:
             if strat_name.startswith("dash:") or strat_name.startswith("spec:"):
                 continue
             sig = ""
-            if isinstance(vote, dict):
-                sig = (vote.get("signal") or "").upper()
-            elif isinstance(vote, str):
-                sig = vote.upper()
+            try:
+                if isinstance(vote, dict):
+                    signal_val = vote.get("signal")
+                    sig = (signal_val.upper() if isinstance(signal_val, str) else "")
+                elif isinstance(vote, str):
+                    sig = vote.upper()
+            except (AttributeError, TypeError):
+                sig = ""
             _tally(f"strat:{strat_name}", sig, actual)
 
         for spec_name, spec in (rec.get("specialist_signals") or {}).items():
             sig = ""
-            if isinstance(spec, dict):
-                sig = (spec.get("signal") or "").upper()
+            try:
+                if isinstance(spec, dict):
+                    signal_val = spec.get("signal")
+                    sig = (signal_val.upper() if isinstance(signal_val, str) else "")
+            except (AttributeError, TypeError):
+                sig = ""
             _tally(f"spec:{spec_name}", sig, actual)
 
         for ind_name, ind_sig in (rec.get("dashboard_signals_raw") or {}).items():
             sig = ""
-            if isinstance(ind_sig, dict):
-                sig = (ind_sig.get("signal") or "").upper()
-            else:
-                sig = (ind_sig or "").upper()
+            try:
+                if isinstance(ind_sig, dict):
+                    signal_val = ind_sig.get("signal")
+                    sig = (signal_val.upper() if isinstance(signal_val, str) else "")
+                elif isinstance(ind_sig, str):
+                    sig = ind_sig.upper()
+            except (AttributeError, TypeError):
+                sig = ""
             _tally(f"dash:{ind_name}", sig, actual)
 
-        _tally("deepseek", (rec.get("deepseek_signal") or "").upper(), actual)
-        _tally("ensemble", (rec.get("ensemble_signal") or "").upper(), actual)
+        try:
+            ds = rec.get("deepseek_signal")
+            _tally("deepseek", (ds.upper() if isinstance(ds, str) else ""), actual)
+        except (AttributeError, TypeError):
+            _tally("deepseek", "", actual)
+
+        try:
+            es = rec.get("ensemble_signal")
+            _tally("ensemble", (es.upper() if isinstance(es, str) else ""), actual)
+        except (AttributeError, TypeError):
+            _tally("ensemble", "", actual)
 
     result = {}
     for name, c in counts.items():

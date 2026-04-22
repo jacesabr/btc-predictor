@@ -206,7 +206,6 @@ current_state: Dict = {
     "specialist_completed_at":    None,
     "backend_snapshot":           None,
     "bar_specialist_signals":     {},
-    "bar_creative_edge":          "",
     "bar_historical_analysis":    "",
     "bar_historical_context":     "",
     "bar_historical_analyst_fired": False,
@@ -382,7 +381,7 @@ async def _run_deepseek(
     window_start_time, window_end_time, window_start_price,
     ensemble_result=None, polymarket_slug=None, dashboard_signals=None,
     indicator_accuracy=None, ensemble_weights=None,
-    historical_analysis=None, creative_edge=None, dashboard_accuracy=None,
+    historical_analysis=None, dashboard_accuracy=None,
     dry_run=False, binance_expert_task=None,
 ):
     """Fire DeepSeek at bar open; stage result until bar closes."""
@@ -413,7 +412,7 @@ async def _run_deepseek(
             window_start_price=window_start_price, polymarket_slug=polymarket_slug,
             ensemble_result=ensemble_result, dashboard_signals=dashboard_signals,
             indicator_accuracy=indicator_accuracy, ensemble_weights=ensemble_weights,
-            historical_analysis=historical_analysis, creative_edge=creative_edge,
+            historical_analysis=historical_analysis,
             dashboard_accuracy=dashboard_accuracy, neutral_analysis=neutral_analysis,
             binance_expert_analysis=binance_expert_result or current_state.get("bar_binance_expert") or None,
         )
@@ -541,20 +540,18 @@ async def _run_full_prediction(prices, is_force=False):
         pass
 
     # Step 1 — Unified specialist
-    creative_edge      = None
     specialist_results = {}
     if deepseek and klines and _features_ok:
         try:
             spec_raw = await asyncio.wait_for(
                 run_specialists(config.deepseek_api_key, klines), timeout=100.0,
             )
-            if isinstance(spec_raw, tuple):
-                specialist_results, creative_edge = spec_raw
+            specialist_results = spec_raw or {}
+            if specialist_results:
                 for key, result in specialist_results.items():
                     if result is not None:
                         strategy_preds[key] = result
                 current_state["bar_specialist_signals"] = _json_safe(specialist_results)
-                current_state["bar_creative_edge"]      = creative_edge or ""
         except asyncio.TimeoutError:
             logger.warning("Unified specialist timed out")
         except Exception as exc:
@@ -608,7 +605,6 @@ async def _run_full_prediction(prices, is_force=False):
                     {k: v for k, v in strategy_preds.items()},
                     window_start_time=window_start_time,
                     specialist_signals=specialist_results or None,
-                    creative_edge=creative_edge or "",
                     ensemble_signal=pred["signal"],
                     ensemble_conf=float(pred.get("confidence", 0.0)),
                     dashboard_directions=dash_directions or None,
@@ -639,7 +635,7 @@ async def _run_full_prediction(prices, is_force=False):
             current_state["bar_historical_analysis"] = historical_analysis
             current_state["bar_historical_context"] = _build_current_bar(
                 features_dict, {k: v for k, v in strategy_preds.items()},
-                window_start_time, specialist_results, creative_edge or "",
+                window_start_time, specialist_results,
                 pred["signal"], pred["confidence"], dash_directions,
             )
             strategy_preds["historical_analyst"] = hist_signal
@@ -728,7 +724,7 @@ async def _run_full_prediction(prices, is_force=False):
                 indicator_accuracy=indicator_acc_full,
                 ensemble_weights=ensemble.get_weights(),
                 historical_analysis=historical_analysis,
-                creative_edge=creative_edge, dashboard_accuracy=dashboard_acc,
+                dashboard_accuracy=dashboard_acc,
                 binance_expert_task=binance_expert_task,
             )
         )
@@ -843,7 +839,6 @@ async def _resolve_window(
             "strategy_votes":       strategy_preds,
             "specialist_signals":   current_state.get("bar_specialist_signals", {}),
             "dashboard_signals_raw": snap_dash_raw,
-            "creative_edge":            current_state.get("bar_creative_edge", ""),
             "historical_analysis":      current_state.get("bar_historical_analysis", ""),
             "binance_expert_analysis":  current_state.get("bar_binance_expert", {}),
             "full_prompt":              ds_pred_snap.get("full_prompt", ""),
@@ -920,7 +915,6 @@ async def _resolve_window(
                 deepseek_narrative = ds_pred_snap.get("narrative", ""),
                 deepseek_free_obs  = ds_pred_snap.get("free_observation", ""),
                 specialist_signals         = current_state.get("bar_specialist_signals", {}),
-                creative_edge              = current_state.get("bar_creative_edge", ""),
                 historical_analysis        = current_state.get("bar_historical_analysis", ""),
                 binance_expert_analysis    = current_state.get("bar_binance_expert", {}),
                 strategy_votes             = strategy_preds,
@@ -950,7 +944,6 @@ async def _resolve_window(
 
         # Reset bar-level state (historical analysis cleared at next bar open, not here)
         current_state["bar_specialist_signals"]  = {}
-        current_state["bar_creative_edge"]       = ""
         current_state["bar_binance_expert"]      = {}
 
         logger.info("Window closed | actual:%s | predicted:%s | %s | Δ%.2f",

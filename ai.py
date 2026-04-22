@@ -5,7 +5,7 @@ All three DeepSeek calls that fire each 5-minute bar, plus the full prompt
 builder and response parser.
 
 Call order per bar:
-  1. run_specialists()        — OHLCV → 5 specialist signals + creative_edge
+  1. run_specialists()        — OHLCV → 5 specialist signals
   2. run_historical_analyst() — all resolved bars + current context → free-form analysis
   3. DeepSeekPredictor.predict() — everything → final UP/DOWN/NEUTRAL + reasoning
 
@@ -17,7 +17,7 @@ Debug output written to specialists/*/last_*.txt for inspection.
 
 Public exports:
   SPECIALIST_KEYS            — set of strategy keys from the specialist call
-  run_specialists(api_key, klines)  -> (strategy_dict, creative_edge)
+  run_specialists(api_key, klines)  -> strategy_dict
   run_historical_analyst(...)       -> str | None
   DeepSeekPredictor                 — main prediction class
   build_prompt(...)                 -> str
@@ -674,7 +674,7 @@ def build_prompt(
     deepseek_accuracy, window_start_price, window_start_time,
     polymarket_slug=None, ensemble_result=None, dashboard_signals=None,
     indicator_accuracy=None, ensemble_weights=None, historical_analysis=None,
-    creative_edge=None, dashboard_accuracy=None, neutral_analysis=None,
+    dashboard_accuracy=None, neutral_analysis=None,
     binance_expert_analysis=None,
 ) -> str:
     f  = features
@@ -810,8 +810,6 @@ def build_prompt(
 
     indicator_track_record  = _build_indicator_track_record(indicator_accuracy, ensemble_weights)
     dashboard_accuracy_block = _build_dashboard_accuracy_block(dashboard_accuracy)
-    creative_block   = (creative_edge.strip() if creative_edge and creative_edge.strip()
-                        else "  (no creative edge observation this window)")
 
     # Build historical block with anti-hallucination warning if analyst didn't fire
     if historical_analysis and historical_analysis.strip():
@@ -876,8 +874,18 @@ def build_prompt(
     n_bars_v = sa['n_bars']
 
     return f"""\
-You are a professional price-action trader and narrative analyst for BTCUSDT, 1-minute candles.
+You are the final decision analyst for a BTC/USDT 5-minute directional prediction system.
 All data below is REAL, computed from live Binance OHLCV + live market microstructure feeds.
+
+You are NOT a vote-tallier. You synthesize evidence from independent specialists (Binance
+microstructure expert, historical similarity analyst, unified technical analyst, ensemble vote)
+into a single probabilistic call. Each specialist is fallible in predictable ways; your job is
+to know which one's call to trust when they disagree.
+
+ABSTENTION PAYOFF: NEUTRAL = 0 reward. Correct UP/DOWN = +1. Wrong UP/DOWN = −1.
+Therefore any directional call must have expected edge > 0 to be rational. If your honest read is
+below 65% confidence, NEUTRAL is mathematically correct — the system auto-overrides sub-65 calls
+to NEUTRAL anyway, so outputting a weak direction just wastes the confidence signal.
 
 ══════════════════════════════════════════════
   WINDOW #{window_num}
@@ -957,11 +965,6 @@ All data below is REAL, computed from live Binance OHLCV + live market microstru
 {chr(10).join(strat_lines)}
 
 ──────────────────────────────────────────────
-  SPECIALIST CREATIVE EDGE
-──────────────────────────────────────────────
-{creative_block}
-
-──────────────────────────────────────────────
   MICROSTRUCTURE INDICATOR ACCURACY
 ──────────────────────────────────────────────
 {dashboard_accuracy_block}
@@ -1002,6 +1005,63 @@ All data below is REAL, computed from live Binance OHLCV + live market microstru
   Your prior          {ds_str}
 
 ══════════════════════════════════════════════
+  REASONING PROTOCOL  (follow in order before producing the output)
+══════════════════════════════════════════════
+
+STEP A — BLIND BASELINE (your own read, ignore specialists)
+Look ONLY at raw price structure, OHLCV, oscillators, and the last 50 bars CSV. Form your own
+directional lean and confidence based on price action alone. This is your anchor — if you end up
+agreeing with every specialist but your own baseline disagreed, something is wrong.
+
+STEP B — SPECIALIST EVIDENCE WEIGHING (treat as Bayesian updates, not votes)
+For each specialist that fired (historical_analyst, binance_expert, unified_analyst, ensemble_vote):
+  • Note their call (UP/DOWN/NEUTRAL) and stated confidence.
+  • Note their known bias: historical_analyst tends to mirror ensemble; binance_expert over-weights
+    ephemeral bid walls; ensemble is a lagging weighted vote; unified_analyst misreads post-rally
+    distribution as compression. Discount each accordingly.
+  • On <15-minute horizons, when microstructure flow and technical frameworks disagree,
+    microstructure wins (Easley-O'Hara; Hasbrouck). When aggregate cross-exchange funding disagrees
+    with local Binance funding, aggregate wins for 5m directional.
+  • When two specialists look at the same data (e.g., both parse the same CSV), treat them as ONE
+    piece of evidence, not two — don't double-count correlated calls.
+
+STEP C — CONFLICT RESOLUTION
+If specialists split — e.g., historical says UP 70%, binance says DOWN 65%, technical says UP 60% —
+the setup is LOW-EDGE by default. A crisp trade needs ≥2 non-correlated specialists agreeing with your
+blind baseline AND no trap pattern firing in microstructure. If any of those fail, NEUTRAL is the
+mathematically correct call.
+
+SPECIAL RULES (lessons from past losses):
+  • POST-RALLY DISTRIBUTION TRAP: if prior 5–10 bars delivered ≥0.25% rally AND current bar shows a
+    static bid wall + taker flow weakening (BSR drifting toward 1.0) + cross-exchange funding
+    positive, the bid wall is LIKELY to be pulled. Do NOT go long on bid-wall + ensemble-UP alone.
+  • LOW-VOLUME RALLIES ARE SUSPECT: price up but BuyVol% trending down and volume below 30-bar mean
+    = distribution into strength, not continuation.
+  • EXTREME FUNDING + DECELERATION: |funding| >0.04% AND last 3 bars' bodies shrinking = reversal
+    watch; do not trade in the funding-implied direction.
+
+STEP D — PREMORTEM
+Assume your call is wrong in exactly 5 minutes. Write one specific sentence naming the most likely
+reason, with a cited field and number. If that reason is ALREADY partially visible in the current
+data, DOWNGRADE your confidence by 5–10pp or switch to NEUTRAL.
+
+STEP E — FAITHFULNESS CHECK
+Restate your call while omitting your strongest cited signal. Does the conclusion still follow from
+the remaining evidence? If yes: your stated reasoning is solid. If no: your reasoning is single-factor
+and fragile → cap confidence at 70%.
+
+STEP F — CONFIDENCE CALIBRATION
+  • 85–95%: blind baseline + ≥3 non-correlated specialists all agree AND no trap fires AND premortem
+    reason is weak or not visible in data.
+  • 75–84%: ≥2 non-correlated specialists agree with blind baseline, no trap, minor conflict.
+  • 65–74%: marginal edge — specialists partially agree, premortem has real ammunition.
+  • <65%: do not output a direction — output NEUTRAL.
+
+ASYMMETRIC ERROR CHECK: if your recent track record shows a pattern (e.g., "last 10 bars: 4 FALSE_UP,
+1 FALSE_DOWN"), raise the UP-call threshold by +5pp this bar. The cost of another same-direction
+false positive is higher than normal.
+
+══════════════════════════════════════════════
 RESPOND EXACTLY IN THIS FORMAT:
 ══════════════════════════════════════════════
 POSITION: ABOVE | BELOW | NEUTRAL
@@ -1011,10 +1071,14 @@ DATA_REQUESTS: [NONE — or list additional data needed]
 NARRATIVE: [2-4 sentences telling the STORY of the chart. Name specific prices and TIMES from Time(UTC) column. IMPORTANT: Only reference historical bar patterns if they appear in the HISTORICAL SIMILARITY ANALYST section above.]
 FREE_OBSERVATION: [1-2 sentences on anything unusual or most significant convergence of signals. CRITICAL: Do NOT cite specific bar numbers (#001, #002, etc.) or claim historical win rates unless those explicitly appear in the HISTORICAL SIMILARITY ANALYST section above. Only describe patterns visible in the current data provided.]
 REASONS:
-1. [MICROSTRUCTURE: Order book, taker flow, liquidations, spot whale flow]
-2. [FUNDING + POSITIONING: Funding rates, OI velocity, L/S ratio, top position ratio]
-3. [TECHNICAL + CROSS-EXCHANGE: RSI/Stoch/MACD, Alligator, Fib, CoinAPI Expert (OB imbalance, CVD, spread, 1s OHLCV, VWAP), ensemble]
-4. [SYNTHESIS: Dominant bias. Single most decisive factor. Biggest risk. Final conviction.]"""
+1. [MICROSTRUCTURE: Order book, taker flow, liquidations, spot whale flow — cite Binance expert's composite score if provided]
+2. [FUNDING + POSITIONING: Funding rates (local AND aggregate if both given), OI velocity, L/S ratio, top position ratio]
+3. [TECHNICAL + CROSS-EXCHANGE: RSI/Stoch/MACD, Alligator, Fib, CoinAPI Expert (OB imbalance, CVD, spread, 1s OHLCV, VWAP), ensemble. Note unified-analyst Wyckoff phase + exhaustion/absorption test results if provided.]
+4. [SYNTHESIS: Dominant bias. Single most decisive factor. Biggest risk. Final conviction. State which specialists agreed with your blind baseline vs disagreed.]
+BLIND_BASELINE: [direction + confidence your own price-action read gave BEFORE consulting specialists]
+SPECIALIST_AGREEMENT: [how many specialists agreed with your final call / how many fired]
+TRAP_CHECK: [named trap pattern if one fired, or NONE]
+PREMORTEM: [one sentence naming the most likely reason this call is wrong in 5 minutes, with field + number]"""
 
 
 def parse_response(text: str) -> Tuple[str, int, str, str, str, str, str]:
@@ -1152,8 +1216,10 @@ async def run_postmortem(
                 dash_lines.append(f"  {k}: {sig}  — {interp}")
     dash_block = "\n".join(dash_lines) or "  (not available)"
 
-    prompt = f"""You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
-Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+    prompt = f"""You are conducting a ruthless postmortem of your own 5-minute BTC/USDT prediction.
+The LESSON you produce will be embedded into the historical corpus and consulted on future predictions.
+A sloppy lesson becomes noise that pollutes thousands of future similarity searches. A sharp lesson
+becomes a rule that compounds in value. Be precise, be falsifiable, admit when outcomes were genuine noise.
 
 ══ ORIGINAL PREDICTION (bar {bar_ts}) ══════════════════════════════
 Signal     : {signal}  ({confidence}%)
@@ -1180,19 +1246,72 @@ VERDICT          : {verdict}
 {dash_block}
 
 ══ YOUR TASK ════════════════════════════════════════════════════════
-Analyze this prediction. Respond EXACTLY in this format:
+
+STEP 1 — OUTCOME-BLIND RE-READ  (do this BEFORE seeing the outcome colour your analysis)
+Re-read ONLY the original reasoning + narrative + free_obs above. Ignore the actual outcome for this step.
+Ask: "Based purely on the pre-bar data, what SHOULD a careful analyst have called, and at what confidence?"
+State that blind call + confidence in one line (BLIND_CALL). If it matches the original call, the original
+reasoning was internally consistent and the error (if any) is data/regime, not logic. If it differs, the
+original call was incoherent from its own inputs — a logic error.
+
+STEP 2 — ERROR CLASSIFICATION  (closed-set; choose exactly ONE)
+Pick one and ONE only. Do not hedge or combine.
+  • MISSING_DATA           — the signal needed to call correctly was not provided to the model
+  • NOISY_DATA             — provided signals were wrong/contradictory in a way that was unknowable ex-ante
+  • MISWEIGHTED_FEATURE    — the right data was present but the model gave too much weight to the wrong layer
+  • DISTRIBUTION_SHIFT     — market regime changed mid-bar; prior pattern assumptions no longer valid
+  • IRREDUCIBLE_NOISE      — the move was within normal 5m variance; no signal could have predicted it
+  • CORRECT_CALL_BAD_LUCK  — prediction was correct in expectation but lost to variance (only for WRONG verdicts with small |move|)
+  • N/A                    — only if verdict is CORRECT or NEUTRAL
+
+STEP 3 — COUNTERFACTUAL MINIMAL-EDIT  (single-variable flip)
+Identify the SINGLE input field such that, had it been different, the call would have flipped correctly.
+Format: FIELD | ORIGINAL_VALUE | COUNTERFACTUAL_VALUE | FLIP_THRESHOLD
+If no single field qualifies, state MULTI_CAUSE and list the minimal set of 2 fields.
+If the outcome is within normal noise and no counterfactual would have helped, state NO_COUNTERFACTUAL.
+
+STEP 4 — HINDSIGHT CHECK
+Would your LESSON (Step 6 below) have been identifiable from the ORIGINAL pre-bar inputs alone?
+Answer YES or NO. If NO, the LESSON is hindsight — flag HINDSIGHT_SUSPECT and weaken confidence language
+in Step 6. Rules learnable only from the outcome are NOT useful for future predictions.
+
+STEP 5 — SIGNAL ATTRIBUTION
+From the original inputs, name the ONE signal that was CLOSEST to correct (aligned with actual outcome).
+Name the ONE signal that was MOST misleading. Use specific field names and numbers.
+
+STEP 6 — LESSON (NPR form — all five elements required or output LESSON: NONE_ACTIONABLE)
+Structure:
+  NAME: snake_case unique identifier (e.g., post_rally_bid_wall_false_support)
+  PRECONDITIONS: 2–4 testable boolean predicates on fields observable at prediction time
+    (e.g., "ensemble_UP > 75% AND prior_5bar_rally_pct > 0.3% AND local_funding in [-0.005, +0.015]")
+  RULE: "IF preconditions THEN {{concrete adjustment — direction flip, confidence cap, or NEUTRAL}}"
+  EXPECTED_EFFECT: quantified (e.g., "reduce UP confidence by 12–18pp" or "force NEUTRAL")
+  FALSIFIER: what future observation would show this rule is wrong
+
+Reject lessons that fail ANY element. Generic advice ("watch volume") fails PRECONDITIONS + FALSIFIER.
+A good lesson fires on a small, specific subset of future bars. A bad lesson fires on everything or nothing.
+
+══ RESPOND EXACTLY IN THIS FORMAT  (each label on its own line) ════════
 
 VERDICT: {verdict}
-ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was {verdict.split()[0].lower()}]
-MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
-RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
-DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
-UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
-LESSON: [one concrete rule to apply next time in a similar setup]"""
+BLIND_CALL: [direction + confidence that pre-bar data alone supported]
+ERROR_CLASS: [one of the six categories or N/A]
+ROOT_CAUSE: [1–2 sentences — the single most important cause, consistent with ERROR_CLASS]
+COUNTERFACTUAL: [FIELD | ORIGINAL | WOULD_HAVE_NEEDED | THRESHOLD  or NO_COUNTERFACTUAL]
+MISLEADING_SIGNAL: [single most misleading signal with exact field name + number]
+RELIABLE_SIGNAL: [single most accurate signal with exact field name + number]
+HINDSIGHT_CHECK: [YES it was learnable ex-ante / NO it is hindsight]
+DATA_GAPS: [specific data you wish you had, or NONE if data was sufficient]
+UPDATED_READING: [1–2 sentences on what was really happening, referenced by time + price]
+LESSON_NAME: [snake_case or NONE_ACTIONABLE]
+LESSON_PRECONDITIONS: [boolean predicates on observable fields]
+LESSON_RULE: [IF preconditions THEN action]
+LESSON_EFFECT: [quantified adjustment]
+LESSON_FALSIFIER: [what observation would invalidate the rule]"""
 
     try:
         t0 = time.time()
-        raw = await _api_call(api_key, prompt, max_tokens=1200, timeout_s=20.0, model=DEEPSEEK_FAST_MODEL)
+        raw = await _api_call(api_key, prompt, max_tokens=1800, timeout_s=25.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = int((time.time() - t0) * 1000)
         logger.info("Postmortem completed for bar %s (%s) in %dms", bar_ts, verdict, elapsed)
         _save(_PM_DIR / f"last_{int(window_start)}.txt", f"=== PROMPT ===\n{prompt}\n\n=== RESPONSE ===\n{raw}")
@@ -1267,32 +1386,29 @@ def _parse_specialist_response(text: str) -> Tuple[Dict[str, Dict], Optional[str
                         "reasoning": raw.get("HAR_REASON", ""), "value": raw.get("HAR_PATTERN", "")[:20],
                         "htf_signal": "N/A", "crossover": False, "crossunder": False, "mtf_agree": None},
     }
-    creative_edge = raw.get("CREATIVE_EDGE", "").strip()
-    if creative_edge.upper() == "NONE" or not creative_edge:
-        creative_edge = None
     suggestion = raw.get("SUGGESTION", "").strip()
     if suggestion.upper() == "NONE" or not suggestion:
         suggestion = None
-    return strategies, creative_edge, suggestion
+    return strategies, suggestion
 
 
 async def run_specialists(
     api_key: str,
     klines:  List,
-) -> Tuple[Dict[str, Optional[Dict]], Optional[str]]:
-    """Fire ONE unified specialist call covering DOW/FIB/ALG/ACD/HAR + creative edge."""
+) -> Dict[str, Optional[Dict]]:
+    """Fire ONE unified specialist call covering DOW/FIB/ALG/ACD/HAR."""
     if not klines or len(klines) < 20:
         logger.warning("Specialists: not enough klines (%d) — skipping", len(klines) if klines else 0)
-        return {}, None
+        return {}
 
     try:
         template = _SPEC_PROMPT.read_text(encoding="utf-8")
     except Exception as exc:
         logger.error("Unified analyst: could not load PROMPT.md: %s", exc)
-        return {}, None
+        return {}
 
     if not template:
-        return {}, None
+        return {}
 
     t0     = time.time()
     csv    = _ohlcv_csv(klines, 60)
@@ -1302,20 +1418,19 @@ async def run_specialists(
     _save(_SPEC_PROMPT_OUT, f"# Sent at {ts_str}\n\n{prompt}")
 
     try:
-        raw = await _api_call(api_key, prompt, max_tokens=1500, timeout_s=30.0, model=DEEPSEEK_FAST_MODEL)
+        raw = await _api_call(api_key, prompt, max_tokens=2200, timeout_s=40.0, model=DEEPSEEK_FAST_MODEL)
         _append(_SPEC_RESPONSE, f"\n{'='*60}\n# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n{'='*60}\n\n{raw}")
-        strategies, creative_edge, suggestion = _parse_specialist_response(raw)
+        strategies, suggestion = _parse_specialist_response(raw)
         if suggestion:
             _append(_SPEC_SUGGEST, f"[{ts_str}] {suggestion}")
         elapsed = time.time() - t0
-        logger.info("Unified specialist %.1fs | %s | creative_edge: %s",
-                    elapsed, " ".join(f"{k[:3]}={v['signal']}" for k, v in strategies.items()),
-                    "YES" if creative_edge else "none")
-        return strategies, creative_edge
+        logger.info("Unified specialist %.1fs | %s",
+                    elapsed, " ".join(f"{k[:3]}={v['signal']}" for k, v in strategies.items()))
+        return strategies
     except Exception as exc:
         _append(_SPEC_RESPONSE, f"\n{'='*60}\n# ERROR {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n{'='*60}\n\n{repr(exc)}")
         logger.warning("Unified specialist failed: %r", exc)
-        return {}, None
+        return {}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1866,7 +1981,7 @@ def _build_history_table(records: List[Dict], compact: bool = False) -> str:
 
 def _build_current_bar(
     current_indicators, current_strategy_votes, window_start_time,
-    specialist_signals=None, creative_edge="", ensemble_signal="",
+    specialist_signals=None, ensemble_signal="",
     ensemble_conf=0.0, dashboard_directions=None,
 ) -> str:
     dt     = datetime.fromtimestamp(window_start_time, tz=timezone.utc) if window_start_time else None
@@ -1877,13 +1992,11 @@ def _build_current_bar(
     vote_s = _fmt_strategy_votes(current_strategy_votes)
     spec_s = _fmt_specialists(specialist_signals or {})
     dash_s = _fmt_dashboard_directions(dashboard_directions or {})
-    ce_s   = (creative_edge or "—").strip()
     return (
         f"  {day} {time_s}  {ses}\n"
         f"  Indicators   : {ind_s}\n  Strategies   : {vote_s}\n"
         f"  Specialists  : {spec_s}\n  Microstructure: {dash_s}\n"
-        f"  Ensemble     : {ensemble_signal or '?'} {int(ensemble_conf*100)}%\n"
-        f"  Creative edge: {ce_s}"
+        f"  Ensemble     : {ensemble_signal or '?'} {int(ensemble_conf*100)}%"
     )
 
 
@@ -1920,7 +2033,6 @@ async def run_historical_analyst(
     current_strategy_votes: Dict,
     window_start_time: float = 0.0,
     specialist_signals: Optional[Dict] = None,
-    creative_edge: str = "",
     ensemble_signal: str = "",
     ensemble_conf: float = 0.0,
     dashboard_directions: Optional[Dict] = None,
@@ -1956,7 +2068,7 @@ async def run_historical_analyst(
 
     current_bar = _build_current_bar(
         current_indicators, current_strategy_votes, window_start_time,
-        specialist_signals, creative_edge, ensemble_signal, ensemble_conf, dashboard_directions,
+        specialist_signals, ensemble_signal, ensemble_conf, dashboard_directions,
     )
 
     # ── Step 1: Embed current bar opening conditions via Cohere ──
@@ -2010,7 +2122,7 @@ async def run_historical_analyst(
     _save(_HIST_PROMPT_OUT, f"# {ts_str}\n\n{prompt}")
 
     try:
-        raw     = await _api_call(api_key, prompt, max_tokens=1500, timeout_s=45.0, model=DEEPSEEK_FAST_MODEL)
+        raw     = await _api_call(api_key, prompt, max_tokens=2000, timeout_s=55.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = time.time() - t0
         _save(_HIST_RESPONSE, f"# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}  elapsed={elapsed:.1f}s\n\n{raw}")
         for line in raw.splitlines():
@@ -2190,7 +2302,7 @@ async def run_binance_expert(
 
     t0 = time.time()
     try:
-        raw = await _api_call(api_key, prompt, max_tokens=2000, timeout_s=25.0, model=DEEPSEEK_FAST_MODEL)
+        raw = await _api_call(api_key, prompt, max_tokens=2500, timeout_s=35.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = time.time() - t0
         ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
         _save(_BNX_RESPONSE,
@@ -2228,7 +2340,7 @@ class DeepSeekPredictor:
         deepseek_accuracy, window_start_time, window_start_price,
         polymarket_slug=None, ensemble_result=None, dashboard_signals=None,
         indicator_accuracy=None, ensemble_weights=None,
-        historical_analysis=None, creative_edge=None, dashboard_accuracy=None,
+        historical_analysis=None, dashboard_accuracy=None,
         neutral_analysis=None, binance_expert_analysis=None,
     ) -> Dict:
         self.window_count += 1
@@ -2246,7 +2358,7 @@ class DeepSeekPredictor:
             polymarket_slug=polymarket_slug, ensemble_result=ensemble_result,
             dashboard_signals=dashboard_signals, indicator_accuracy=indicator_accuracy,
             ensemble_weights=ensemble_weights, historical_analysis=historical_analysis,
-            creative_edge=creative_edge, dashboard_accuracy=dashboard_accuracy,
+            dashboard_accuracy=dashboard_accuracy,
             neutral_analysis=neutral_analysis, binance_expert_analysis=binance_expert_analysis,
         )
 
@@ -2256,7 +2368,7 @@ class DeepSeekPredictor:
         raw_response: Optional[str] = None
         error_msg    = ""
         try:
-            raw_response = await _api_call(self.api_key, prompt, max_tokens=2000, timeout_s=30.0, model=DEEPSEEK_FAST_MODEL)
+            raw_response = await _api_call(self.api_key, prompt, max_tokens=2800, timeout_s=45.0, model=DEEPSEEK_FAST_MODEL)
         except Exception as exc:
             error_msg = repr(exc)
             logger.error("DeepSeek call failed: %r", exc)
