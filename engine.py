@@ -654,7 +654,7 @@ async def _run_full_prediction(prices, is_force=False):
             binance_expert_task = asyncio.create_task(
                 asyncio.wait_for(
                     run_binance_expert(config.deepseek_api_key, dashboard_signals),
-                    timeout=45.0,
+                    timeout=75.0,
                 )
             )
             logger.info("Binance expert task created — DeepSeek will await it")
