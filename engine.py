@@ -101,6 +101,101 @@ binance_klines: List = []
 # In-memory error log — ERROR/UNAVAILABLE bars logged here, never embedded
 _error_log: list = []
 
+# Embedding bootstrap state
+_embedding_bootstrap_running: bool = False
+
+
+async def _bootstrap_embeddings_background():
+    """
+    Background task: embed all un-embedded bars in pattern_history to pgvector.
+    Runs on startup if embedding coverage < 50%, at ~10 bars/sec to respect Cohere rate limits.
+    """
+    global _embedding_bootstrap_running
+    if _embedding_bootstrap_running:
+        return
+
+    _embedding_bootstrap_running = True
+    try:
+        if not config.cohere_api_key or not config.deepseek_api_key:
+            logger.info("Embedding bootstrap skipped: Cohere or DeepSeek API key not configured")
+            return
+
+        # Load all bars from pattern history
+        all_history = load_pattern_history()
+        if not all_history:
+            logger.info("Embedding bootstrap: no bars in history yet")
+            return
+
+        # Check coverage via search_similar (0 results = 0 coverage)
+        test_search = pgvector_search(None, 1) if pgvector_search else []
+        current_coverage = len(test_search) if test_search else 0
+        total_bars = len(all_history)
+        coverage_pct = (current_coverage / total_bars * 100) if total_bars > 0 else 0
+
+        logger.info("Embedding bootstrap: coverage %.0f%% (%d/%d bars embedded)",
+                    coverage_pct, current_coverage, total_bars)
+
+        # Only bootstrap if coverage is below 50%
+        if coverage_pct >= 50:
+            logger.info("Embedding bootstrap: coverage sufficient (%.0f%% >= 50%%), skipping", coverage_pct)
+            return
+
+        # Identify un-embedded bars (those not in pgvector results)
+        embedded_window_starts = set(r.get("window_start") for r in test_search if pgvector_search)
+        bars_to_embed = [r for r in all_history if r.get("window_start") not in embedded_window_starts]
+
+        if not bars_to_embed:
+            logger.info("Embedding bootstrap: all bars already embedded")
+            return
+
+        logger.info("Embedding bootstrap: starting background job for %d bars (target: ~10/sec)", len(bars_to_embed))
+
+        # Embed at ~10 bars/second (100ms per bar = 0.1 sec)
+        embedded_count = 0
+        start_time = time.time()
+
+        for bar in bars_to_embed:
+            try:
+                # Build the bar's text representation for embedding
+                text = _bar_embed_text(bar)
+                # Embed via Cohere
+                vec = await embed_text(config.cohere_api_key, text, input_type="search_document")
+                # Store in pgvector
+                store_bar_embedding(bar.get("window_start"), vec)
+                embedded_count += 1
+
+                # Rate limiting: ~100ms per bar = ~10/second
+                if embedded_count % 10 == 0:
+                    elapsed = time.time() - start_time
+                    rate = embedded_count / elapsed if elapsed > 0 else 0
+                    logger.info("Embedding bootstrap: %d/%d bars embedded (%.1f bars/sec)",
+                                embedded_count, len(bars_to_embed), rate)
+                    # Sleep to maintain ~10 bars/sec rate
+                    await asyncio.sleep(0.05)
+            except CohereUnavailableError as cohere_exc:
+                logger.warning("Embedding bootstrap: Cohere failed, pausing: %s", cohere_exc)
+                break
+            except Exception as exc:
+                logger.warning("Embedding bootstrap: failed to embed bar at %.0f: %s",
+                               bar.get("window_start", 0), exc)
+                continue
+
+        elapsed = time.time() - start_time
+        logger.info("Embedding bootstrap complete: %d bars embedded in %.1fs (%.1f bars/sec)",
+                    embedded_count, elapsed, embedded_count / elapsed if elapsed > 0 else 0)
+    except Exception as exc:
+        logger.error("Embedding bootstrap failed: %s", exc)
+    finally:
+        _embedding_bootstrap_running = False
+
+
+def _trigger_embedding_bootstrap():
+    """Trigger the embedding bootstrap task (called at startup)."""
+    if deepseek and config.cohere_api_key:
+        asyncio.create_task(_bootstrap_embeddings_background())
+    else:
+        logger.info("Embedding bootstrap skipped: DeepSeek or Cohere not configured")
+
 
 current_state: Dict = {
     "price":                      None,
@@ -119,9 +214,11 @@ current_state: Dict = {
     "bar_creative_edge":          "",
     "bar_historical_analysis":    "",
     "bar_historical_context":     "",
+    "bar_historical_analyst_fired": False,
     "bar_binance_expert":         {},
     "service_unavailable":        False,
     "service_unavailable_reason": "",
+    "embedding_audit_log":        [],
 }
 
 
@@ -401,6 +498,7 @@ async def _run_full_prediction(prices, is_force=False):
     current_state["pending_deepseek_ready"]      = False
     current_state["bar_historical_analysis"]     = ""
     current_state["bar_historical_context"]      = ""
+    current_state["bar_historical_analyst_fired"] = False
     current_state["bar_binance_expert"]          = {}
 
     tag = "FORCE" if is_force else "BAR OPEN"
@@ -425,6 +523,7 @@ async def _run_full_prediction(prices, is_force=False):
         fetch_dashboard_signals(
             coinalyze_key=config.coinalyze_key,
             coinglass_key=config.coinglass_key,
+            coinapi_key=config.coinapi_key,
         )
     )
     dashboard_acc = compute_dashboard_accuracy(200)
@@ -501,6 +600,10 @@ async def _run_full_prediction(prices, is_force=False):
         try: dash_directions = extract_signal_directions(dashboard_signals)
         except: pass
 
+    # Track whether historical analyst fired (used to prevent hallucination)
+    historical_analyst_fired = False
+    hist_signal = None
+    historical_analysis = None
     if deepseek and _features_ok:
         _hist_t0 = time.time()
         try:
@@ -526,7 +629,7 @@ async def _run_full_prediction(prices, is_force=False):
             current_state["service_unavailable_reason"] = ""
         except asyncio.TimeoutError:
             _hist_elapsed = time.time() - _hist_t0
-            logger.warning("Historical analyst timed out after %.1fs", _hist_elapsed)
+            logger.warning("Historical analyst TIMEOUT after %.1fs — no similarity context available", _hist_elapsed)
         except CohereUnavailableError as cohere_exc:
             logger.error("Cohere unavailable — pausing predictions: %s", cohere_exc)
             current_state["service_unavailable"]        = True
@@ -534,9 +637,10 @@ async def _run_full_prediction(prices, is_force=False):
             return None, {}, None, None, window_start_time, window_start_price
         except Exception as exc:
             _hist_elapsed = time.time() - _hist_t0
-            logger.warning("Historical analyst error after %.1fs: %s", _hist_elapsed, exc)
+            logger.warning("Historical analyst ERROR after %.1fs: %s", _hist_elapsed, exc)
 
         if historical_analysis and hist_signal:
+            historical_analyst_fired = True
             current_state["bar_historical_analysis"] = historical_analysis
             current_state["bar_historical_context"] = _build_current_bar(
                 features_dict, {k: v for k, v in strategy_preds.items()},
@@ -544,25 +648,27 @@ async def _run_full_prediction(prices, is_force=False):
                 pred["signal"], pred["confidence"], dash_directions,
             )
             strategy_preds["historical_analyst"] = hist_signal
-            logger.info("Historical analyst completed in %.1fs — injected into DeepSeek prompt", _hist_elapsed)
+            logger.info("Historical analyst FIRED in %.1fs — %d-bar context injected into DeepSeek prompt",
+                        _hist_elapsed, len(_all_history))
         else:
-            logger.warning("Historical analyst returned no output after %.1fs — DeepSeek fires without it", _hist_elapsed)
+            logger.warning("Historical analyst NO OUTPUT after %.1fs — DeepSeek fires without similarity context", _hist_elapsed)
 
-    # Step 5b — Binance expert (sequential: historical analyst DS call is done)
+    # Expose to dashboard/state whether historical analyst actually fired
+    current_state["bar_historical_analyst_fired"] = historical_analyst_fired
+
+    # Step 5b — Binance expert (fire as background task, DeepSeek will await it)
+    binance_expert_task = None
     if deepseek and dashboard_signals:
         try:
-            _bx_result = await asyncio.wait_for(
-                run_binance_expert(config.deepseek_api_key, dashboard_signals),
-                timeout=30.0,
+            binance_expert_task = asyncio.create_task(
+                asyncio.wait_for(
+                    run_binance_expert(config.deepseek_api_key, dashboard_signals),
+                    timeout=30.0,
+                )
             )
-            if _bx_result:
-                current_state["bar_binance_expert"] = _json_safe(_bx_result)
-                binance_expert_task = _bx_result
-            logger.info("Binance expert done (sequential)")
-        except asyncio.TimeoutError:
-            logger.warning("Binance expert timed out")
+            logger.info("Binance expert task created — DeepSeek will await it")
         except Exception as _bx_e:
-            logger.warning("Binance expert failed: %s", _bx_e)
+            logger.warning("Binance expert task creation failed: %s", _bx_e)
 
     pm_odds_open = polymarket_feed.market_odds if polymarket_feed.is_live else None
     pm_ev_open   = (calculate_ev(pred["confidence"], pm_odds_open).expected_value
@@ -628,7 +734,7 @@ async def _run_full_prediction(prices, is_force=False):
                 ensemble_weights=ensemble.get_weights(),
                 historical_analysis=historical_analysis,
                 creative_edge=creative_edge, dashboard_accuracy=dashboard_acc,
-                binance_expert_task=None,
+                binance_expert_task=binance_expert_task,
             )
         )
 
@@ -674,10 +780,9 @@ async def _resolve_window(
         snap_dash_raw   = {}
         if snap_ds_raw:
             try:
-                snap_dash_signals = (
+                snap_dash_raw = (
                     json.loads(snap_ds_raw) if isinstance(snap_ds_raw, str) else snap_ds_raw
                 )
-                snap_dash_raw = extract_signal_directions(snap_dash_signals)
             except Exception:
                 pass
 
@@ -1041,3 +1146,30 @@ async def run_prediction_loop():
         except Exception as exc:
             logger.error("Prediction loop CRASHED — recovering in 10s: %s", exc, exc_info=True)
             await asyncio.sleep(10)
+
+
+async def run_embedding_audit_loop():
+    """Fire embedding audit every 4 hours using deepseek-reasoner."""
+    await asyncio.sleep(60)
+    while True:
+        try:
+            await asyncio.sleep(14400)
+            if not config.deepseek_api_key:
+                logger.info("Embedding audit skipped: no DeepSeek API key")
+                continue
+
+            history = _safe_storage(load_pattern_history, default=[])
+            audit_result = await run_embedding_audit(config.deepseek_api_key, history)
+
+            if audit_result:
+                current_state["embedding_audit_log"] = [
+                    audit_result,
+                    *current_state.get("embedding_audit_log", [])[:19]
+                ]
+                logger.info("Embedding audit completed: %s", audit_result.get("audit_signal"))
+            else:
+                logger.warning("Embedding audit failed or was skipped")
+
+        except Exception as exc:
+            logger.error("Embedding audit loop CRASHED: %s", exc, exc_info=True)
+            await asyncio.sleep(300)

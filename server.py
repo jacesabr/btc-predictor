@@ -52,8 +52,8 @@ from engine import (
     _json_safe, _safe_storage, _dashboard_signals_to_preds,
     _pred_for_ws, _run_full_prediction, _run_deepseek,
     generate_bar_chart, run_collector, run_binance_feed,
-    run_indicator_refresh, run_prediction_loop, SPECIALIST_KEYS,
-    _error_log,
+    run_indicator_refresh, run_prediction_loop, run_embedding_audit_loop, SPECIALIST_KEYS,
+    _error_log, load_embedding_audit_log, _trigger_embedding_bootstrap,
 )
 from signals import fetch_dashboard_signals, extract_signal_directions
 from strategies import get_all_predictions, calculate_ev, required_accuracy_for_odds
@@ -77,7 +77,10 @@ async def startup():
     asyncio.create_task(polymarket_feed.run())
     asyncio.create_task(run_binance_feed())
     asyncio.create_task(run_indicator_refresh())
+    asyncio.create_task(run_embedding_audit_loop())
     asyncio.create_task(_startup_backfill_and_embed())
+    # Trigger embedding bootstrap: embed any un-embedded bars in pattern_history to pgvector
+    _trigger_embedding_bootstrap()
 
 
 async def _startup_backfill_and_embed():
@@ -479,6 +482,73 @@ async def get_all_history():
     return _safe_storage(storage.get_all_deepseek_summaries, default=[])
 
 
+@app.get("/historical-analysis/{window_start}")
+async def get_historical_analysis(window_start: float):
+    """
+    Comprehensive audit of prediction pipeline for a single window.
+    Shows: embeddings query → re-ranking → final prompt → deepseek response.
+    """
+    docs = _safe_storage(storage.get_recent_deepseek_predictions, 9999, default=[])
+    doc = None
+    for d in docs:
+        if d.get("window_start") == window_start:
+            doc = d
+            break
+
+    if not doc:
+        return {"status": "not_found", "window_start": window_start}
+
+    # Parse JSON fields
+    try:
+        strategy_snap = json.loads(doc.get("strategy_snapshot") or "{}")
+        indicators_snap = json.loads(doc.get("indicators_snapshot") or "{}")
+        dashboard_snap = json.loads(doc.get("dashboard_signals_snapshot") or "{}")
+    except:
+        strategy_snap = {}
+        indicators_snap = {}
+        dashboard_snap = {}
+
+    # Extract data flow from request/response
+    data_received = doc.get("data_received", "").split("\n") if doc.get("data_received") else []
+    data_requests = doc.get("data_requests", "").split("\n") if doc.get("data_requests") else []
+
+    return {
+        "status": "ok",
+        "window_start": doc.get("window_start"),
+        "window_end": doc.get("window_end"),
+        "start_price": doc.get("start_price"),
+        "end_price": doc.get("end_price"),
+        "actual_direction": doc.get("actual_direction"),
+        "correct": doc.get("correct"),
+        "prediction": {
+            "signal": doc.get("signal"),
+            "confidence": doc.get("confidence"),
+            "reasoning": doc.get("reasoning", ""),
+            "narrative": doc.get("narrative", ""),
+            "free_observation": doc.get("free_observation", ""),
+        },
+        "input_data": {
+            "strategies": strategy_snap,
+            "indicators": indicators_snap,
+            "dashboard_signals": dashboard_snap,
+        },
+        "pipeline": {
+            "data_requests": [r.strip() for r in data_requests if r.strip()],
+            "data_received": [r.strip() for r in data_received if r.strip()],
+            "latency_ms": doc.get("latency_ms", 0),
+            "window_count": doc.get("window_count", 0),
+        },
+        "prompting": {
+            "full_prompt": doc.get("full_prompt", ""),
+            "raw_response": doc.get("raw_response", ""),
+        },
+        "metadata": {
+            "chart_path": doc.get("chart_path", ""),
+            "postmortem": doc.get("postmortem", ""),
+        },
+    }
+
+
 @app.post("/admin/clean-incomplete")
 async def admin_clean_incomplete():
     """Remove unresolved bars (no actual_direction) from all storage tables."""
@@ -578,6 +648,26 @@ async def export_audit(n: int = 500):
         io.BytesIO(body.encode()), media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@app.get("/api/embedding-audit")
+async def get_embedding_audit():
+    """Return embedding audit log (last N audits) + current stats."""
+    log = _safe_storage(load_embedding_audit_log, n=20, default=[])
+    return {
+        "audit_log": log,
+        "last_audit": log[0] if log else None,
+        "last_audit_time": log[0].get("timestamp_str") if log else None,
+    }
+
+
+@app.post("/api/embedding-audit/run")
+async def trigger_embedding_audit():
+    """Trigger an embedding audit immediately (non-blocking)."""
+    from engine import run_embedding_audit
+    history = _safe_storage(load_pattern_history, default=[])
+    asyncio.create_task(run_embedding_audit(config.deepseek_api_key, history))
+    return {"status": "audit triggered", "will_appear_in_log": True}
 
 
 @app.get("/accuracy/all")

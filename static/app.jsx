@@ -1727,6 +1727,359 @@ function SourceHistoryTab({ sourceHistory, selectedSource, setSelectedSource }) 
   );
 }
 
+// ── Historical Analysis Audit Tab ─────────────────────────────
+function HistoricalAnalysisAuditTab({ deepseekLog }) {
+  const [selectedWindow, setSelectedWindow] = React.useState(null);
+  const [auditData, setAuditData] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+
+  const fetchAudit = async (windowStart) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/historical-analysis/${windowStart}`);
+      const data = await res.json();
+      setAuditData(data);
+    } catch (e) {
+      console.error("Failed to load audit:", e);
+      setAuditData({ status: "error", message: e.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectWindow = (windowStart) => {
+    setSelectedWindow(windowStart);
+    fetchAudit(windowStart);
+  };
+
+  if (!deepseekLog || deepseekLog.length === 0) {
+    return (
+      <div style={{ padding: 24, textAlign: "center", color: C.muted }}>
+        <div style={{ fontSize: 12 }}>No prediction history available yet.</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", height: "100%", gap: 8, padding: "8px" }}>
+      {/* LEFT: List of predictions */}
+      <div style={{ flex: "0 0 28%", overflowY: "auto", borderRight: `1px solid ${C.borderSoft}`, paddingRight: 8 }}>
+        <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>
+          Predictions ({deepseekLog.length})
+        </div>
+        {deepseekLog.map((pred, i) => (
+          <div
+            key={i}
+            onClick={() => handleSelectWindow(pred.window_start)}
+            style={{
+              padding: "6px 8px",
+              marginBottom: 4,
+              background: selectedWindow === pred.window_start ? C.cardBg : "transparent",
+              border: selectedWindow === pred.window_start ? `1px solid ${C.amber}` : `1px solid ${C.borderSoft}`,
+              borderRadius: 4,
+              cursor: "pointer",
+              fontSize: 10,
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 2 }}>
+              <span style={{ fontWeight: 700, color: C.amber }}>{pred.signal}</span>
+              <span style={{ color: pred.correct ? C.green : pred.correct === false ? C.red : C.muted, fontSize: 9, fontWeight: 700 }}>
+                {pred.correct === true ? "✓" : pred.correct === false ? "✗" : "~"}
+              </span>
+            </div>
+            <div style={{ color: C.muted, fontSize: 9 }}>
+              {new Date(pred.window_start * 1000).toLocaleTimeString()}
+            </div>
+            <div style={{ color: C.muted, fontSize: 9 }}>
+              {pred.confidence ? `${(pred.confidence * 100).toFixed(0)}%` : "—"}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* RIGHT: Audit details */}
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column" }}>
+        {!selectedWindow ? (
+          <div style={{ padding: 12, color: C.muted, fontSize: 11 }}>
+            Select a prediction to view pipeline audit
+          </div>
+        ) : loading ? (
+          <div style={{ padding: 12, color: C.muted, fontSize: 11 }}>Loading...</div>
+        ) : auditData?.status === "not_found" ? (
+          <div style={{ padding: 12, color: C.muted, fontSize: 11 }}>Prediction not found</div>
+        ) : auditData?.status === "ok" ? (
+          <>
+            {/* Header info */}
+            <div style={{ ...card, marginBottom: 8, padding: "8px 10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 10 }}>
+                <div>
+                  <div style={{ color: C.muted, fontSize: 9 }}>START PRICE</div>
+                  <div style={{ fontWeight: 700, fontSize: 11 }}>${auditData.start_price?.toFixed(2)}</div>
+                </div>
+                <div>
+                  <div style={{ color: C.muted, fontSize: 9 }}>END PRICE</div>
+                  <div style={{ fontWeight: 700, fontSize: 11, color: auditData.end_price > auditData.start_price ? C.green : C.red }}>
+                    ${auditData.end_price?.toFixed(2)} {auditData.end_price > auditData.start_price ? "↑" : "↓"}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: C.muted, fontSize: 9 }}>SIGNAL</div>
+                  <div style={{ fontWeight: 700, fontSize: 11, color: auditData.prediction.signal === "UP" ? C.green : C.red }}>
+                    {auditData.prediction.signal} ({(auditData.prediction.confidence * 100).toFixed(0)}%)
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: C.muted, fontSize: 9 }}>RESULT</div>
+                  <div style={{ fontWeight: 700, fontSize: 11, color: auditData.correct ? C.green : C.red }}>
+                    {auditData.correct === true ? "✓ CORRECT" : auditData.correct === false ? "✗ WRONG" : "PENDING"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Pipeline: Requests & Received */}
+            <div style={{ ...card, marginBottom: 8, padding: "8px 10px" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: C.amber, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>
+                📊 Data Pipeline ({auditData.pipeline.latency_ms}ms)
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div>
+                  <div style={{ fontSize: 9, color: C.muted, marginBottom: 4 }}>REQUESTS ({auditData.pipeline.data_requests.length})</div>
+                  <div style={{ fontSize: 9, lineHeight: 1.4, color: C.textSec, maxHeight: 120, overflowY: "auto" }}>
+                    {auditData.pipeline.data_requests.length > 0 ? (
+                      auditData.pipeline.data_requests.map((req, i) => (
+                        <div key={i} style={{ marginBottom: 2, padding: "2px 4px", background: C.borderSoft, borderRadius: 2 }}>
+                          {req.substring(0, 80)}{req.length > 80 ? "…" : ""}
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ color: C.muted }}>—</div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 9, color: C.muted, marginBottom: 4 }}>RECEIVED ({auditData.pipeline.data_received.length})</div>
+                  <div style={{ fontSize: 9, lineHeight: 1.4, color: C.green, maxHeight: 120, overflowY: "auto" }}>
+                    {auditData.pipeline.data_received.length > 0 ? (
+                      auditData.pipeline.data_received.map((item, i) => (
+                        <div key={i} style={{ marginBottom: 2 }}>✓ {item.substring(0, 60)}{item.length > 60 ? "…" : ""}</div>
+                      ))
+                    ) : (
+                      <div style={{ color: C.muted }}>—</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Input Data: Strategies, Indicators, Dashboard */}
+            <div style={{ ...card, marginBottom: 8, padding: "8px 10px" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: C.amber, marginBottom: 6, textTransform: "uppercase", letterSpacing: 1 }}>
+                🎯 Input Signals
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 9 }}>
+                <div>
+                  <div style={{ color: C.muted, marginBottom: 2 }}>Strategies ({Object.keys(auditData.input_data.strategies || {}).length})</div>
+                  <div style={{ maxHeight: 100, overflowY: "auto", fontSize: 8 }}>
+                    {Object.entries(auditData.input_data.strategies || {}).map(([k, v], i) => (
+                      <div key={i} style={{ padding: "1px 2px" }}>
+                        <span style={{ color: C.amber }}>{k}:</span> {typeof v === "object" ? JSON.stringify(v).substring(0, 30) : String(v).substring(0, 30)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: C.muted, marginBottom: 2 }}>Dashboard ({Object.keys(auditData.input_data.dashboard_signals || {}).length})</div>
+                  <div style={{ maxHeight: 100, overflowY: "auto", fontSize: 8 }}>
+                    {Object.entries(auditData.input_data.dashboard_signals || {}).map(([k, v], i) => (
+                      <div key={i} style={{ padding: "1px 2px" }}>
+                        <span style={{ color: C.green }}>{k}:</span> {String(v).substring(0, 30)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Full Prompt */}
+            <div style={{ ...card, marginBottom: 8, padding: "8px 10px" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: C.amber, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1 }}>
+                💭 Full Prompt Sent to DeepSeek
+              </div>
+              <div
+                style={{
+                  background: C.borderSoft,
+                  padding: 6,
+                  borderRadius: 3,
+                  fontSize: 8,
+                  color: C.textSec,
+                  fontFamily: "monospace",
+                  maxHeight: 180,
+                  overflowY: "auto",
+                  whiteSpace: "pre-wrap",
+                  wordWrap: "break-word",
+                  lineHeight: 1.3,
+                }}
+              >
+                {auditData.prompting.full_prompt || "No prompt captured"}
+              </div>
+            </div>
+
+            {/* Raw Response */}
+            <div style={{ ...card, padding: "8px 10px" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: C.amber, marginBottom: 4, textTransform: "uppercase", letterSpacing: 1 }}>
+                🤖 DeepSeek Raw Response
+              </div>
+              <div
+                style={{
+                  background: C.borderSoft,
+                  padding: 6,
+                  borderRadius: 3,
+                  fontSize: 8,
+                  color: C.green,
+                  fontFamily: "monospace",
+                  maxHeight: 150,
+                  overflowY: "auto",
+                  whiteSpace: "pre-wrap",
+                  wordWrap: "break-word",
+                  lineHeight: 1.3,
+                }}
+              >
+                {auditData.prompting.raw_response || "No response captured"}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={{ padding: 12, color: C.red, fontSize: 11 }}>Error loading audit data</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Embedding Audit Tab ────────────────────────────────────────
+function EmbeddingAuditTab({ embeddingAuditLog }) {
+  const [expandedAudit, setExpandedAudit] = React.useState(null);
+
+  if (!embeddingAuditLog || embeddingAuditLog.length === 0) {
+    return (
+      <div style={{ padding:24, textAlign:"center", color:C.muted }}>
+        <div style={{ fontSize:12, marginBottom:16 }}>No embedding audits yet. First audit fires ~4 hours after startup.</div>
+        <button onClick={()=>fetch("/api/embedding-audit/run", {method:"POST"}).then(()=>console.log("Audit triggered"))}
+          style={{ background:C.amberBg, color:C.amber, border:`1px solid ${C.amberBorder}`,
+            padding:"6px 14px", borderRadius:4, cursor:"pointer", fontSize:11, fontFamily:"inherit", fontWeight:600 }}>
+          Run Audit Now
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", height:"100%", overflow:"hidden" }}>
+      {/* Header */}
+      <div style={{ ...card, flexShrink:0, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div>
+          <div style={label}>Embedding Audit Log</div>
+          <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>
+            Every 4 hours, DeepSeek reasoner audits the embedding pipeline. Issues, patterns, suggestions below.
+          </div>
+        </div>
+        <button onClick={()=>fetch("/api/embedding-audit/run", {method:"POST"}).then(()=>console.log("Audit triggered"))}
+          style={{ background:C.amberBg, color:C.amber, border:`1px solid ${C.amberBorder}`,
+            padding:"6px 12px", borderRadius:4, cursor:"pointer", fontSize:10, fontFamily:"inherit", fontWeight:600 }}>
+          Run Now
+        </button>
+      </div>
+
+      {/* Audit list */}
+      <div style={{ flex:1, overflowY:"auto", padding:"12px 0" }}>
+        {embeddingAuditLog.map((audit, idx) => {
+          const isExpanded = expandedAudit === idx;
+          const stats = audit.stats || {};
+          return (
+            <div key={idx} style={{ borderBottom:`1px solid ${C.border}`, padding:"0 16px" }}>
+              {/* Summary row */}
+              <div onClick={()=>setExpandedAudit(isExpanded ? null : idx)}
+                style={{ padding:"10px 0", cursor:"pointer", display:"flex", gap:12, alignItems:"center", justifyContent:"space-between" }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:600, fontSize:11, color:
+                    audit.audit_signal === "GOOD" ? C.green :
+                    audit.audit_signal === "NEEDS_IMPROVEMENT" ? C.amber :
+                    audit.audit_signal === "CRITICAL" ? C.red : C.text }}>
+                    {audit.timestamp_str}  —  {audit.audit_signal || "UNKNOWN"}
+                  </div>
+                  <div style={{ fontSize:10, color:C.textSec, marginTop:3, lineHeight:1.4 }}>
+                    {audit.summary || "No summary"}
+                  </div>
+                  <div style={{ fontSize:9, color:C.muted, marginTop:4, display:"flex", gap:16 }}>
+                    <span>Coverage: {stats.coverage_pct}%</span>
+                    <span>HA Acc: {stats.ha_accuracy ? `${(stats.ha_accuracy * 100).toFixed(1)}%` : "N/A"}</span>
+                    <span>Elapsed: {audit.elapsed_s}s</span>
+                  </div>
+                </div>
+                <div style={{ color:C.muted, fontSize:14, flexShrink:0 }}>
+                  {isExpanded ? "▼" : "▶"}
+                </div>
+              </div>
+
+              {/* Expanded details */}
+              {isExpanded && (
+                <div style={{ paddingBottom:12, borderTop:`1px solid ${C.borderSoft}`, marginTop:8, paddingTop:12, fontSize:10, lineHeight:1.6 }}>
+                  {/* Issues */}
+                  {audit.issues && audit.issues.length > 0 && (
+                    <div style={{ marginBottom:12 }}>
+                      <div style={{ fontWeight:600, color:C.red, marginBottom:6 }}>⚠ Issues Found: {audit.issues.length}</div>
+                      {audit.issues.map((issue, i) => (
+                        <div key={i} style={{ background:C.surfaceAlt, padding:"8px", borderRadius:3, marginBottom:6, borderLeft:`3px solid ${C.red}`, whiteSpace:"pre-wrap", wordBreak:"break-word" }}>
+                          {issue}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Suggestions */}
+                  {audit.suggestions && audit.suggestions.length > 0 && (
+                    <div style={{ marginBottom:12 }}>
+                      <div style={{ fontWeight:600, color:C.amber, marginBottom:6 }}>💡 Suggestions: {audit.suggestions.length}</div>
+                      {audit.suggestions.map((sugg, i) => (
+                        <div key={i} style={{ background:C.surfaceAlt, padding:"8px", borderRadius:3, marginBottom:6, borderLeft:`3px solid ${C.amber}`, whiteSpace:"pre-wrap", wordBreak:"break-word" }}>
+                          {sugg}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Full analysis (collapsible) */}
+                  {audit.full_analysis && (
+                    <div>
+                      <details style={{ marginBottom:8 }}>
+                        <summary style={{ cursor:"pointer", fontWeight:600, color:C.textSec, marginBottom:6 }}>
+                          Full Analysis (DeepSeek Reasoning)
+                        </summary>
+                        <div style={{ background:C.surfaceAlt, padding:"10px", borderRadius:3, marginTop:6, whiteSpace:"pre-wrap", wordBreak:"break-word", maxHeight:"300px", overflowY:"auto", fontSize:9 }}>
+                          {audit.full_analysis.substring(0, 3000)}{audit.full_analysis.length > 3000 ? "... (truncated)" : ""}
+                        </div>
+                      </details>
+                    </div>
+                  )}
+
+                  {/* Stats summary */}
+                  <div style={{ background:C.surfaceAlt, padding:"8px", borderRadius:3, marginTop:8, fontSize:9, display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                    <div>Total Bars: {stats.total_bars}</div>
+                    <div>Embedded: {stats.embedded_bars}</div>
+                    <div>HA Correct: {stats.ha_correct}/{stats.ha_total}</div>
+                    <div>Sim Min/Max: {stats.sim_stats?.min}/{stats.sim_stats?.max}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Errors Tab ────────────────────────────────────────────────
 function ErrorsTab({ errors }) {
   const [expanded, setExpanded] = React.useState(null);
@@ -1820,6 +2173,7 @@ function App() {
   const [selectedSource, setSelectedSource] = useState(0);
   const [allAccuracy,    setAllAccuracy]    = useState(null);
   const [allAccuracyErr, setAllAccuracyErr] = useState(false);
+  const [embeddingAuditLog, setEmbeddingAuditLog] = useState([]);
   const wsRef           = useRef(null);
   const reconnectRef    = useRef(null);
   const prevDsWindowRef = useRef(null);
@@ -1973,6 +2327,12 @@ function App() {
     const id = setInterval(fetchAllAccuracy, 20000);
     return () => clearInterval(id);
   }, [tab, fetchAllAccuracy]);
+
+  // ── Embedding audit — fetch on tab switch ──────────────────────
+  useEffect(() => {
+    if (tab !== "embed_audit") return;
+    fetch("/api/embedding-audit").then(r=>r.json()).then(d=>setEmbeddingAuditLog(d.audit_log||[])).catch(()=>{});
+  }, [tab]);
 
   useEffect(() => {
     const wc = deepseekPred?.window_count;
@@ -2235,7 +2595,7 @@ function App() {
             </div>
           )}
         </div>
-        {[["live","LIVE"],["history","HISTORY"],["ensemble","ENSEMBLE"],["sources","SOURCES"],["binance_test","BINANCE TEST"],["errors","ERRORS"]].map(([t,label])=>(
+        {[["live","LIVE"],["history","HISTORY"],["audit","AUDIT"],["ensemble","ENSEMBLE"],["sources","SOURCES"],["embed_audit","EMBED AUDIT"],["binance_test","BINANCE TEST"],["errors","ERRORS"]].map(([t,label])=>(
           <button key={t} onClick={()=>setTab(t)} style={{
             background:"none", border:"none",
             borderBottom:tab===t?`2px solid ${C.amber}`:"2px solid transparent",
@@ -2857,6 +3217,11 @@ function App() {
           </ErrorBoundary>
         )}
 
+        {/* ══ AUDIT TAB ══ */}
+        {tab==="audit" && (
+          <HistoricalAnalysisAuditTab deepseekLog={deepseekLog} />
+        )}
+
         {/* ══ SOURCES TAB ══ */}
         {tab==="sources" && (
           <SourceHistoryTab
@@ -2864,6 +3229,10 @@ function App() {
             selectedSource={selectedSource}
             setSelectedSource={setSelectedSource}
           />
+        )}
+
+        {tab==="embed_audit" && (
+          <EmbeddingAuditTab embeddingAuditLog={embeddingAuditLog} />
         )}
 
         {/* ══ OLD TABS (kept for reference, hidden) ══ */}

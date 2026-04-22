@@ -569,6 +569,47 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
             f"  → {cgl.get('interpretation','')}", "",
         ]
 
+    cab = ds.get("coinapi_orderbook")
+    cat = ds.get("coinapi_trades")
+    caq = ds.get("coinapi_quotes")
+    ca1s = ds.get("coinapi_ohlcv_1s")
+    cav = ds.get("coinapi_vwap")
+
+    if cab or cat or caq or ca1s or cav:
+        lines += [
+            "  [COINAPI EXPERT ANALYSIS — Multi-exchange real-time microstructure]",
+        ]
+        if cab:
+            imb = cab.get("imbalance", 0); bw = cab.get("largest_bid_wall", 0); aw = cab.get("largest_ask_wall", 0); sp = cab.get("spread_pct", 0)
+            lines += [
+                f"  Order Book Imbalance (L2, 50 levels): {imb:.2f}  Signal: {cab.get('signal','NEUTRAL')}{_acc_tag('coinapi_orderbook')}",
+                f"    Bid wall: {bw:.2f} BTC  |  Ask wall: {aw:.2f} BTC  |  Spread: {sp:.4f}%",
+            ]
+        if cat:
+            cvd = cat.get("cvd", 0); ratio = cat.get("buy_sell_ratio", 1); blocks = cat.get("block_trade_count", 0)
+            lines += [
+                f"  Cumulative Volume Delta (60s): {cvd:+.2f} BTC  |  Buy/Sell Ratio: {ratio:.2f}  Signal: {cat.get('signal','NEUTRAL')}{_acc_tag('coinapi_trades')}",
+                f"    Block Trades (>5 BTC): {blocks}",
+            ]
+        if caq:
+            bid = caq.get("bid", 0); ask = caq.get("ask", 0); sp = caq.get("spread_pct", 0)
+            lines += [
+                f"  Quote Spread: {sp:.4f}%  (Bid: ${bid:,.2f}  Ask: ${ask:,.2f}){_acc_tag('coinapi_quotes')}",
+            ]
+        if ca1s:
+            streak = ca1s.get("momentum_streak", 0); chg = ca1s.get("net_change_pct", 0); vol_trend = ca1s.get("volume_trend", ""); absorption = ca1s.get("absorption", False)
+            lines += [
+                f"  Micro-Momentum (1s OHLCV, 60 candles): Streak={streak}  Net Δ={chg:+.3f}%  Volume={vol_trend}  Absorption={'Yes' if absorption else 'No'}",
+                f"  Signal: {ca1s.get('signal','NEUTRAL')}{_acc_tag('coinapi_ohlcv_1s')}",
+            ]
+        if cav:
+            vwap = cav.get("vwap_24h", 0); rate = cav.get("current_rate", 0); dev = cav.get("deviation_pct", 0)
+            lines += [
+                f"  VWAP-24H: ${vwap:,.0f}  |  Current: ${rate:,.2f}  |  Deviation: {dev:+.2f}%",
+                f"  Signal: {cav.get('signal','NEUTRAL')}{_acc_tag('coinapi_vwap')}",
+            ]
+        lines += [""]
+
     return "\n".join(lines).rstrip()
 
 
@@ -586,6 +627,9 @@ def _build_dashboard_accuracy_block(dashboard_accuracy):
         "top_position_ratio": "Top Position Ratio", "funding_trend": "Funding Rate Trend",
         "deribit_options": "Deribit Options P/C", "btc_onchain": "BTC On-Chain SOPR",
         "coinglass_liquidations": "CoinGlass Liquidations",
+        "coinapi_orderbook": "CoinAPI Order Book", "coinapi_trades": "CoinAPI Trades CVD",
+        "coinapi_quotes": "CoinAPI Quotes", "coinapi_ohlcv_1s": "CoinAPI 1s OHLCV",
+        "coinapi_vwap": "CoinAPI VWAP-24H",
     }
     lines = []
     for key in _NAMES:
@@ -768,8 +812,18 @@ def build_prompt(
     dashboard_accuracy_block = _build_dashboard_accuracy_block(dashboard_accuracy)
     creative_block   = (creative_edge.strip() if creative_edge and creative_edge.strip()
                         else "  (no creative edge observation this window)")
-    historical_block = (historical_analysis.strip() if historical_analysis and historical_analysis.strip()
-                        else "  (historical analyst did not fire this window — no resolved bars yet)")
+
+    # Build historical block with anti-hallucination warning if analyst didn't fire
+    if historical_analysis and historical_analysis.strip():
+        historical_block = historical_analysis.strip()
+    else:
+        historical_block = (
+            "  (historical analyst did not fire this window — no resolved bars yet)\n\n"
+            "  ⚠️  WARNING: You have NO historical similarity data this window.\n"
+            "  Do NOT invent or reference specific bar numbers (#001, #002, #014, etc.)\n"
+            "  or claim patterns 'resolved X% of the time' — that is hallucination.\n"
+            "  Only reference patterns if they appear in the data shown above."
+        )
 
     _bx = binance_expert_analysis or {}
     if _bx and _bx.get("signal") and _bx["signal"] != "NEUTRAL" or (_bx and (_bx.get("edge") or _bx.get("analysis"))):
@@ -954,12 +1008,12 @@ POSITION: ABOVE | BELOW | NEUTRAL
 CONFIDENCE: XX%
 DATA_RECEIVED: [state which signals were available]
 DATA_REQUESTS: [NONE — or list additional data needed]
-NARRATIVE: [2-4 sentences telling the STORY of the chart. Name specific prices and TIMES from Time(UTC) column.]
-FREE_OBSERVATION: [1-2 sentences on anything unusual or most significant convergence of signals.]
+NARRATIVE: [2-4 sentences telling the STORY of the chart. Name specific prices and TIMES from Time(UTC) column. IMPORTANT: Only reference historical bar patterns if they appear in the HISTORICAL SIMILARITY ANALYST section above.]
+FREE_OBSERVATION: [1-2 sentences on anything unusual or most significant convergence of signals. CRITICAL: Do NOT cite specific bar numbers (#001, #002, etc.) or claim historical win rates unless those explicitly appear in the HISTORICAL SIMILARITY ANALYST section above. Only describe patterns visible in the current data provided.]
 REASONS:
 1. [MICROSTRUCTURE: Order book, taker flow, liquidations, spot whale flow]
 2. [FUNDING + POSITIONING: Funding rates, OI velocity, L/S ratio, top position ratio]
-3. [TECHNICAL + CROSS-EXCHANGE: RSI/Stoch/MACD, Alligator, Fib, CoinAPI momentum, ensemble]
+3. [TECHNICAL + CROSS-EXCHANGE: RSI/Stoch/MACD, Alligator, Fib, CoinAPI Expert (OB imbalance, CVD, spread, 1s OHLCV, VWAP), ensemble]
 4. [SYNTHESIS: Dominant bias. Single most decisive factor. Biggest risk. Final conviction.]"""
 
 
@@ -1903,15 +1957,23 @@ async def run_historical_analyst(
 
     # ── Step 2: pgvector cosine search → top-50 most similar bars ──
     total_searched = len(history_records)
+    pgvector_hit = False
     if pgvector_search_fn is not None:
         pre_bars = pgvector_search_fn(current_vec, COHERE_PRE_FILTER_K)
-        if not pre_bars:
-            logger.info("pgvector: no embedded bars yet, falling back to most recent %d", COHERE_PRE_FILTER_K)
-            pre_bars = history_records[-COHERE_PRE_FILTER_K:]
+        if pre_bars:
+            pgvector_hit = True
+            logger.info("pgvector: %d similar bars found via cosine search", len(pre_bars))
+        else:
+            logger.info("pgvector: no embedded bars found, falling back to all history (up to %d)", COHERE_PRE_FILTER_K)
+            # Fallback: if pgvector returns nothing, use all available bars instead of just recent
+            # This gives the analyst more context to work with
+            pre_bars = history_records[-COHERE_PRE_FILTER_K:] if len(history_records) <= COHERE_PRE_FILTER_K else history_records
     else:
+        logger.info("pgvector: search function not available, using recent bars")
         pre_bars = history_records[-COHERE_PRE_FILTER_K:]
     pre_texts = [_bar_embed_text(b) for b in pre_bars]
-    logger.info("pgvector search: %d candidates from %d total bars", len(pre_bars), total_searched)
+    logger.info("pgvector fallback: %s | %d candidates from %d total bars",
+                ("HIT" if pgvector_hit else "MISS→all_history"), len(pre_bars), total_searched)
 
     # ── Step 3: Cohere rerank → final top-20 (raises CohereUnavailableError if down) ──
     if len(pre_bars) > COHERE_FINAL_K:
