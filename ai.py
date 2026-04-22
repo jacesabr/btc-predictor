@@ -1318,7 +1318,7 @@ LESSON_FALSIFIER: [what observation would invalidate the rule]"""
 
     try:
         t0 = time.time()
-        raw = await _api_call(api_key, prompt, max_tokens=1800, timeout_s=25.0, model=DEEPSEEK_FAST_MODEL)
+        raw = await _api_call(api_key, prompt, max_tokens=1800, timeout_s=50.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = int((time.time() - t0) * 1000)
         logger.info("Postmortem completed for bar %s (%s) in %dms", bar_ts, verdict, elapsed)
         _save(_PM_DIR / f"last_{int(window_start)}.txt", f"=== PROMPT ===\n{prompt}\n\n=== RESPONSE ===\n{raw}")
