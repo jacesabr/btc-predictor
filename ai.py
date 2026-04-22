@@ -2402,7 +2402,7 @@ class DeepSeekPredictor:
         raw_response: Optional[str] = None
         error_msg    = ""
         try:
-            raw_response = await _api_call(self.api_key, prompt, max_tokens=2800, timeout_s=45.0, model=DEEPSEEK_FAST_MODEL)
+            raw_response = await _api_call(self.api_key, prompt, max_tokens=2800, timeout_s=60.0, model=DEEPSEEK_FAST_MODEL)
         except Exception as exc:
             error_msg = repr(exc)
             logger.error("DeepSeek call failed: %r", exc)
