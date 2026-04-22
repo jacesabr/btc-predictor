@@ -945,29 +945,41 @@ async def _fetch_coinglass_liquidations(api_key: str) -> Dict:
 
 
 async def _fetch_coinapi_orderbook(coinapi_key: str) -> Dict:
+    # CoinAPI REST clips book depth to 2x20 levels regardless of limit_levels.
+    # WebSocket book channel is tier-gated (Pro+). We accept the 20-level clip here.
+    # Use BINANCE_SPOT_BTC_USDT — deeper order book than Coinbase BTC/USD and matches our target pair.
     try:
         data = await _get_coinapi(
-            "https://rest.coinapi.io/v1/orderbooks/COINBASE_SPOT_BTC_USD/current",
+            "https://rest.coinapi.io/v1/orderbooks/BINANCE_SPOT_BTC_USDT/current",
             coinapi_key,
-            {"limit_levels": 50}
+            {"limit_levels": 20}
         )
         bids = data.get("bids", [])
         asks = data.get("asks", [])
         if not bids or not asks:
             return {"signal": "NEUTRAL", "interpretation": "Order book data incomplete"}
 
-        best_bid = float(bids[0][0])
-        best_ask = float(asks[0][0])
+        # CoinAPI order book levels are dicts with {price, size}, not tuples.
+        # Previous code treated them as indexed tuples which raised KeyError(0) silently.
+        def _lvl(l):
+            if isinstance(l, dict):
+                return float(l.get("price", 0)), float(l.get("size", 0))
+            # Defensive fallback for tuple-shaped responses from other sources
+            return float(l[0]), float(l[1])
+
+        b0_px, _  = _lvl(bids[0])
+        a0_px, _  = _lvl(asks[0])
+        best_bid, best_ask = b0_px, a0_px
         mid = (best_bid + best_ask) / 2.0
 
-        bid_1pct = sum(float(b[1]) for b in bids if float(b[0]) >= mid * 0.99)
-        ask_1pct = sum(float(a[1]) for a in asks if float(a[0]) <= mid * 1.01)
+        bid_1pct = sum(sz for px, sz in (_lvl(b) for b in bids) if px >= mid * 0.99)
+        ask_1pct = sum(sz for px, sz in (_lvl(a) for a in asks) if px <= mid * 1.01)
 
         imbalance = bid_1pct / ask_1pct if ask_1pct > 0 else 1.0
         sig = "BULLISH" if imbalance > 1.5 else "BEARISH" if imbalance < 0.7 else "NEUTRAL"
 
-        largest_bid_wall = max((float(b[1]) for b in bids if float(b[0]) >= mid * 0.98), default=0)
-        largest_ask_wall = max((float(a[1]) for a in asks if float(a[0]) <= mid * 1.02), default=0)
+        largest_bid_wall = max((sz for px, sz in (_lvl(b) for b in bids) if px >= mid * 0.98), default=0)
+        largest_ask_wall = max((sz for px, sz in (_lvl(a) for a in asks) if px <= mid * 1.02), default=0)
 
         spread_pct = (best_ask - best_bid) / mid * 100
         spread_warning = "⚠️ HIGH SPREAD" if spread_pct > 0.05 else ""
@@ -982,20 +994,22 @@ async def _fetch_coinapi_orderbook(coinapi_key: str) -> Dict:
             "interpretation": interp,
         }
     except Exception as e:
-        logger.debug("CoinAPI order book failed: %s", e)
-        return {"signal": "NEUTRAL", "interpretation": f"Order book fetch failed: {str(e)[:50]}"}
+        # HTTP 400 commonly indicates the current key's tier doesn't include order book access
+        err_str = str(e)
+        tier_hint = " (likely tier-restricted — CoinAPI order book is Pro+)" if "400" in err_str else ""
+        logger.warning("CoinAPI order book failed: %s%s", err_str[:120], tier_hint)
+        return {"signal": "NEUTRAL", "interpretation": f"Order book fetch failed: {err_str[:50]}"}
 
 
 async def _fetch_coinapi_trades(coinapi_key: str) -> Dict:
+    # /trades/{symbol}/history is intraday-only (time_start/time_end must be same day) and broken
+    # for rolling 60s windows that cross midnight UTC. /latest returns recent ticks with no date contract.
+    # Use BINANCE_SPOT_BTC_USDT for dense taker flow.
     try:
-        import time as time_module
-        time_start = time_module.time() - 60
-        ts_iso = time_module.strftime("%Y-%m-%dT%H:%M:%S", time_module.gmtime(time_start))
-
         data = await _get_coinapi(
-            "https://rest.coinapi.io/v1/trades/COINBASE_SPOT_BTC_USD/history",
+            "https://rest.coinapi.io/v1/trades/BINANCE_SPOT_BTC_USDT/latest",
             coinapi_key,
-            {"time_start": ts_iso, "limit": 200}
+            {"limit": 200}
         )
         trades = data if isinstance(data, list) else data.get("data", [])
         if not trades:
@@ -1032,14 +1046,14 @@ async def _fetch_coinapi_trades(coinapi_key: str) -> Dict:
             "interpretation": interp,
         }
     except Exception as e:
-        logger.debug("CoinAPI trades failed: %s", e)
+        logger.warning("CoinAPI trades failed: %s", str(e)[:120])
         return {"signal": "NEUTRAL", "interpretation": f"Trades fetch failed: {str(e)[:50]}"}
 
 
 async def _fetch_coinapi_quotes(coinapi_key: str) -> Dict:
     try:
         data = await _get_coinapi(
-            "https://rest.coinapi.io/v1/quotes/COINBASE_SPOT_BTC_USD/current",
+            "https://rest.coinapi.io/v1/quotes/BINANCE_SPOT_BTC_USDT/current",
             coinapi_key,
         )
         bid = float(data.get("bid_price", 0))
@@ -1065,14 +1079,15 @@ async def _fetch_coinapi_quotes(coinapi_key: str) -> Dict:
             "interpretation": interp,
         }
     except Exception as e:
-        logger.debug("CoinAPI quotes failed: %s", e)
+        logger.warning("CoinAPI quotes failed: %s", str(e)[:120])
         return {"signal": "NEUTRAL", "interpretation": f"Quotes fetch failed: {str(e)[:50]}"}
 
 
 async def _fetch_coinapi_ohlcv_1s(coinapi_key: str) -> Dict:
+    # Binance BTC/USDT has dense per-second trade activity → fewer 1SEC gaps than Coinbase BTC/USD.
     try:
         data = await _get_coinapi(
-            "https://rest.coinapi.io/v1/ohlcv/COINBASE_SPOT_BTC_USD/latest",
+            "https://rest.coinapi.io/v1/ohlcv/BINANCE_SPOT_BTC_USDT/latest",
             coinapi_key,
             {"period_id": "1SEC", "limit": 60}
         )
@@ -1122,40 +1137,58 @@ async def _fetch_coinapi_ohlcv_1s(coinapi_key: str) -> Dict:
             "interpretation": interp,
         }
     except Exception as e:
-        logger.debug("CoinAPI OHLCV 1s failed: %s", e)
+        logger.warning("CoinAPI OHLCV 1s failed: %s", str(e)[:120])
         return {"signal": "NEUTRAL", "interpretation": f"OHLCV fetch failed: {str(e)[:50]}"}
 
 
 async def _fetch_coinapi_vwap(coinapi_key: str) -> Dict:
+    # CoinAPI's /exchangerate returns ONLY {time, asset_id_base, asset_id_quote, rate}.
+    # `rate` IS the VWAP24 benchmark (CoinAPI publishes rate-as-VWAP24, refreshed every 1s).
+    # There is no separate `vwap_24h` field — earlier code was reading a phantom key and always fell through.
+    # We compute deviation by comparing the VWAP24 rate against current spot from Binance quotes.
     try:
         data = await _get_coinapi(
-            "https://rest.coinapi.io/v1/exchangerate/BTC/USD",
+            "https://rest.coinapi.io/v1/exchangerate/BTC/USDT",
             coinapi_key,
         )
-        rate = float(data.get("rate", 0))
-        vwap = data.get("vwap_24h")
+        vwap = float(data.get("rate", 0) or 0)
+        if vwap <= 0:
+            return {"signal": "NEUTRAL", "interpretation": "VWAP-24H rate unavailable"}
 
-        if not vwap:
+        # Pull current spot from Binance quotes endpoint to compute deviation
+        spot = 0.0
+        try:
+            quote = await _get_coinapi(
+                "https://rest.coinapi.io/v1/quotes/BINANCE_SPOT_BTC_USDT/current",
+                coinapi_key,
+            )
+            bid = float(quote.get("bid_price", 0) or 0)
+            ask = float(quote.get("ask_price", 0) or 0)
+            if bid > 0 and ask > 0:
+                spot = (bid + ask) / 2.0
+        except Exception:
+            spot = 0.0
+
+        if spot <= 0:
+            interp = f"VWAP-24H: ${vwap:,.0f}. Current spot unavailable — no deviation comparison."
             return {
-                "current_rate": round(rate, 2),
+                "vwap_24h": round(vwap, 2),
                 "signal": "NEUTRAL",
-                "interpretation": "VWAP-24H not available from CoinAPI"
+                "interpretation": interp,
             }
 
-        vwap = float(vwap)
-        deviation_pct = (rate - vwap) / vwap * 100
+        deviation_pct = (spot - vwap) / vwap * 100
         sig = "BEARISH" if deviation_pct > 2.0 else "BULLISH" if deviation_pct < -2.0 else "NEUTRAL"
-
-        interp = f"VWAP-24H: ${vwap:,.0f}. Deviation: {deviation_pct:+.2f}%. Signal: {sig}."
+        interp = f"VWAP-24H: ${vwap:,.0f}. Current: ${spot:,.2f}. Deviation: {deviation_pct:+.2f}%. Signal: {sig}."
         return {
             "vwap_24h": round(vwap, 2),
-            "current_rate": round(rate, 2),
+            "current_rate": round(spot, 2),
             "deviation_pct": round(deviation_pct, 2),
             "signal": sig,
             "interpretation": interp,
         }
     except Exception as e:
-        logger.debug("CoinAPI VWAP failed: %s", e)
+        logger.warning("CoinAPI VWAP failed: %s", str(e)[:120])
         return {"signal": "NEUTRAL", "interpretation": f"VWAP fetch failed: {str(e)[:50]}"}
 
 
