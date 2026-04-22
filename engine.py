@@ -1236,6 +1236,12 @@ async def run_collector():
 async def run_prediction_loop():
     """5-minute bar loop: predict → sleep → resolve (background) → repeat."""
     await asyncio.sleep(5)
+    # Track the last bar window we processed. If a crash + 10s recovery puts us back here
+    # during the SAME 5-min window, we skip re-running `_run_full_prediction` — a duplicate
+    # call would reset `current_state["bar_historical_analysis"]` and orphan the in-flight
+    # `_run_deepseek` task (resulting in `did not fire`/`did not complete` sections in the
+    # main prompt even though the specialists actually ran).
+    last_processed_window: Optional[int] = None
     while True:
         try:
             prices = collector.get_prices(400)
@@ -1246,6 +1252,22 @@ async def run_prediction_loop():
                 await asyncio.sleep(15)
                 continue
 
+            now_ts = time.time()
+            current_window = int(now_ts - (now_ts % 300))
+            if current_window == last_processed_window:
+                # Same 5-min window as our last attempt — prior run is still in flight (or crashed).
+                # Sleep until bar close so we don't wipe bar_historical_analysis / bar_binance_expert.
+                bar_close = current_window + config.window_duration_seconds
+                wait = max(1, bar_close - time.time())
+                logger.warning(
+                    "Prediction loop SKIPPING duplicate start of bar %s — sleeping %.1fs until close "
+                    "(prior run still in flight; would wipe bar state)",
+                    time.strftime("%H:%M:%S UTC", time.gmtime(current_window)), wait,
+                )
+                await asyncio.sleep(wait)
+                continue
+
+            last_processed_window = current_window
             pred, strategy_preds, pm_odds_open, pm_ev_open, window_start_time, window_start_price = \
                 await _run_full_prediction(prices)
 
