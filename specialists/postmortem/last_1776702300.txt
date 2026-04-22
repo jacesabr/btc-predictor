@@ -1,0 +1,95 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 16:25 UTC) ══════════════════════════════
+Signal     : NEUTRAL  (62%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book is ask-heavy (-29.5% imbalance) with a sell-side wall, and taker flow is neutral-to-bearish (BSR 0.907). Spot whale flow is neutral, offering no counter-buying pressure.]
+[FUNDING + POSITIONING: While cross-exchange funding is negative (bullish bias), the immediate positioning shows smart money and retail aligned at only ~46% long, indicating a lack of high-conviction buying. OI is stable, not supporting a new bullish leg.]
+[TECHNICAL + CROSS-EXCHANGE: Price is in a bearish Alligator setup (Lips<Teeth<Jaw) and failed at the 38.2% Fib retracement ($75,578). The ensemble vote is bullish (72.5%), but its track record is only 50%, and high-trust technicals like VWAP show price is only marginally above its level, offering weak support.]
+[SYNTHESIS: The dominant bias is short-term bearish. The single most decisive factor is the weak price action following the 16:16 low, failing to sustain a rally in the face of clear seller dominance in the order book. The biggest risk is a squeeze from deeply negative funding rates. Final conviction is for a retest of the $75,362 support, likely breaking it to continue the micro downtrend.]
+Narrative  : From 16:08 to 16:16, price sold off from $75,530 to a low of $75,332.70 on increasing volume, establishing a clear downtrend. The subsequent bounce to $75,485.60 by 16:23 was weak and has since stalled, with the last bar (16:24) coiling tightly between $75,487 and $75,467, indicating a loss of upward momentum. The market is now testing the immediate support at $75,362.30 after failing to reclaim the $75,525 resistance.
+Free obs   : The most significant convergence is the bearish order book imbalance (-29.5%) aligning with a weak, coiling price structure after a failed bounce, suggesting sellers are poised to regain control.
+Data recv  : All signals available except Kraken Premium and Historical Similarity.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $75,360.00
+Move             : +0.00 (+0.0000%)
+VERDICT          : ABSTENTION (NEUTRAL)
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+16:00,75714.60,75727.20,75600.10,75600.80,8.9479
+16:01,75600.80,75639.70,75558.50,75639.70,9.5467
+16:02,75639.70,75664.40,75628.00,75658.10,6.6565
+16:03,75658.10,75658.10,75580.30,75588.10,6.0627
+16:04,75588.10,75612.00,75513.50,75531.70,13.2449
+16:05,75531.70,75557.30,75513.10,75557.30,8.9356
+16:06,75557.30,75566.80,75533.40,75559.00,8.2554
+16:07,75559.00,75559.00,75513.80,75530.70,12.8792
+16:08,75530.70,75547.00,75421.50,75441.00,15.0037
+16:09,75441.00,75480.10,75424.20,75465.10,18.4920
+16:10,75465.10,75506.00,75447.10,75451.80,8.0802
+16:11,75451.80,75474.40,75451.80,75463.50,6.1342
+16:12,75463.50,75466.70,75443.30,75457.50,5.1884
+16:13,75457.50,75476.20,75409.50,75410.70,6.9178
+16:14,75410.70,75425.10,75408.70,75418.30,5.6788
+16:15,75418.30,75419.70,75348.10,75365.80,9.8809
+16:16,75365.80,75415.10,75332.70,75333.70,14.4889
+16:17,75333.70,75428.10,75332.70,75428.10,11.6519
+16:18,75428.10,75448.60,75415.40,75427.70,6.3327
+16:19,75427.70,75430.10,75382.70,75423.60,8.7327
+16:20,75423.60,75525.00,75422.10,75440.30,17.2737
+16:21,75440.30,75511.80,75432.80,75432.80,10.4770
+16:22,75432.80,75432.80,75347.70,75382.10,11.3876
+16:23,75382.10,75491.50,75368.80,75485.60,10.7429
+16:24,75485.60,75487.80,75434.80,75434.80,4.6775
+16:25,75434.80,75434.90,75355.80,75355.90,4.9660
+16:26,75355.90,75361.80,75322.80,75322.90,9.7953
+16:27,75322.90,75367.60,75322.90,75350.10,8.4538
+16:28,75350.10,75407.20,75350.10,75392.80,8.0776
+16:29,75392.80,75392.80,75374.80,75374.80,1.5780
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: -4.7309
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BEARISH  — Ask-heavy book — sellers in control. -29.5% ask dominant. Sell-side wall capping
+  taker_flow: NEUTRAL  — Balanced aggressor flow (BSR=0.907). Neither side willing to pay spread. Chop or
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  mempool: BULLISH  — Very low fees (3 sat/vB) — calm network, no on-chain panic. Slightly positive ba
+  oi_velocity: NEUTRAL  — OI stable (+0.10% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Kraken spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dire
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  okx_funding: BULLISH  — OKX funding NEGATIVE (-0.0047%) — shorts paying longs. OKX structural long bias;
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.784). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0027%, trend +0.0056%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.1% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-3.3% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.2745%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was abstention]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: The prediction correctly identified the dominant bearish structure but assigned a neutral signal (62%) due to over-caution regarding a potential squeeze from negative funding, which never materialized.
+MISLEADING_SIGNALS: The "biggest risk" of a funding squeeze was over-weighted; the negative funding and "bullish contrarian" fear/greed index created hesitation, but the market's momentum completely ignored this contrarian potential.
+RELIABLE_SIGNALS: The bearish order book imbalance (-29.5%), weak price action after the failed bounce, and bearish Alligator technical setup were correct and should have been given even more decisive weight.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a clear, uninterrupted micro-downtrend. The weak bounce was not consolidation before a reversal but merely a pause before sellers resumed full control, driving price to new session lows.
+LESSON: When high-confidence microstructure (order book) and momentum signals align bearishly in a clear downtrend, treat deeply negative funding as a secondary, non-timing indicator and do not let it dilute a high-conviction directional call.

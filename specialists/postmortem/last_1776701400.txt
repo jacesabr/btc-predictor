@@ -1,0 +1,96 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 16:10 UTC) ══════════════════════════════
+Signal     : NEUTRAL  (62%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book is ask-heavy (-47.3% imbalance) and taker flow is bearish (BSR 0.815), indicating immediate selling pressure. However, spot whale flow is neutral and there are no liquidations, suggesting the selling is not panic-driven.]
+[FUNDING + POSITIONING: Deeply negative funding rates on Binance (-0.00278%) and especially on aggregate cross-exchange (-0.47780%) and OKX (-0.0039%) create a strong structural incentive for shorts to cover. OI velocity is slightly bullish, and the L/S ratio shows both retail and smart money are net short, aligning with the contrarian long signal.]
+[TECHNICAL + CROSS-EXCHANGE: Price is perched precisely at the 61.8% Fib support ($75,586.76). The Williams Alligator remains in a bullish alignment (Lips > Teeth > Jaw). The ensemble weighted vote is strongly UP (74.2% confidence, 18↑ vs 7↓).]
+[SYNTHESIS: The dominant bias is a contrarian long, fueled by extreme fear and negative funding pressuring shorts. The single most decisive factor is the convergence of reliable bullish signals from cross-exchange funding and the Fear & Greed Index. The biggest risk is the immediate bearish microstructure (order book/taker flow) capping rallies. Final conviction is for a bounce above the Fib level into the close, targeting the nearest resistance at $75,739.]
+Narrative  : From 15:55 to 15:55 UTC, price consolidated between $75,576.10 and $75,609.30, holding just above the critical 61.8% Fibonacci retracement level at $75,586.76. The market is in a weak micro downtrend within a larger macro uptrend, showing a pullback from the 15:29 high of $75,785.20. The current price action is a tight compression above key support, suggesting a potential bounce.
+Free obs   : The most significant convergence is between the strongly negative cross-exchange funding rates (Bullish signal) and the Fear & Greed Index at 29 (Extreme Fear), providing a powerful contrarian long setup against the short-term bearish order book and taker flow.
+Data recv  : All signals available (Price Structure, Key Levels, Fib, Alligator, Oscillators, Full Market Microstructure, Ensemble, Strategy Signals, Last 50 Bars)
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $75,422.30
+Move             : +0.00 (+0.0000%)
+VERDICT          : ABSTENTION (NEUTRAL)
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+15:45,75590.20,75606.50,75550.10,75583.90,10.5317
+15:46,75583.90,75617.60,75550.10,75600.60,9.5733
+15:47,75600.60,75676.50,75600.60,75649.00,10.6724
+15:48,75649.00,75687.60,75626.70,75668.30,8.2393
+15:49,75668.30,75668.30,75543.80,75543.80,9.0679
+15:50,75543.80,75608.10,75542.40,75578.20,12.9439
+15:51,75578.20,75610.20,75540.20,75569.10,11.3254
+15:52,75569.10,75606.10,75567.90,75606.10,8.1321
+15:53,75606.10,75617.80,75568.20,75568.20,6.6492
+15:54,75568.20,75629.20,75568.20,75580.70,8.3273
+15:55,75580.70,75638.20,75576.10,75630.60,8.4462
+15:56,75630.60,75665.00,75608.10,75616.50,11.8722
+15:57,75616.50,75648.40,75616.50,75645.40,9.1191
+15:58,75645.40,75686.50,75639.90,75686.50,9.1943
+15:59,75686.50,75729.90,75686.40,75714.60,11.5810
+16:00,75714.60,75727.20,75600.10,75600.80,8.9479
+16:01,75600.80,75639.70,75558.50,75639.70,9.5467
+16:02,75639.70,75664.40,75628.00,75658.10,6.6565
+16:03,75658.10,75658.10,75580.30,75588.10,6.0627
+16:04,75588.10,75612.00,75513.50,75531.70,13.2449
+16:05,75531.70,75557.30,75513.10,75557.30,8.9356
+16:06,75557.30,75566.80,75533.40,75559.00,8.2554
+16:07,75559.00,75559.00,75513.80,75530.70,12.8792
+16:08,75530.70,75547.00,75421.50,75441.00,15.0037
+16:09,75441.00,75480.10,75424.20,75465.10,18.4920
+16:10,75465.10,75506.00,75447.10,75451.80,8.0802
+16:11,75451.80,75474.40,75451.80,75463.50,6.1342
+16:12,75463.50,75466.70,75443.30,75457.50,5.1884
+16:13,75457.50,75476.20,75409.50,75410.70,6.9178
+16:14,75410.70,75425.10,75408.70,75420.20,4.1681
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: -5.4205
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +9.4% bid-heavy. Immediate upward 
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.647). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  mempool: BULLISH  — Very low fees (3 sat/vB) — calm network, no on-chain panic. Slightly positive ba
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (+0.039%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: BULLISH  — OI rising +0.31% over 30min (last bar: +0.12%). New positions being opened — con
+  spot_whale_flow: NEUTRAL  — Kraken spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dire
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  okx_funding: BULLISH  — OKX funding NEGATIVE (-0.0043%) — shorts paying longs. OKX structural long bias;
+  btc_dominance: BULLISH  — BTC dominance 57.6% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.783). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0027%, trend +0.0056%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.2% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-3.3% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.2745%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was abstention]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: The prediction correctly identified a strong contrarian long setup (negative funding, extreme fear) but failed to recognize that the immediate bearish microstructure (order book/taker flow) was the dominant force on a 5-minute scale, completely overwhelming the slower structural signals.
+MISLEADING_SIGNALS: Over-weighted the ensemble "UP" vote (74.2%) and the bullish technical alignment (Williams Alligator, Fib support). The "strongly negative cross-exchange funding" was a correct structural signal but operates on a longer timeframe than the prediction window.
+RELIABLE_SIGNALS: The immediate microstructure signals (bearish taker flow BSR=0.815, ask-heavy order book) were correct and should have been the primary guide. The "NEUTRAL" spot whale flow and lack of liquidations correctly indicated the selling was steady, not exhausted.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a sustained, orderly downtrend (trend_slope: -5.42). The "bounce" setup failed because the selling pressure from taker flow was persistent and met no significant aggressive bid, allowing price to grind down through the Fib support.
+LESSON: In a 5-minute prediction, when high-timeframe structural signals (funding, F&G) conflict with immediate microstructure (order book, taker flow), default to the microstructure as the dominant driver unless there is a clear, concurrent reversal in the micro flow (e.g., BSR flipping >1.2 with bid walls).

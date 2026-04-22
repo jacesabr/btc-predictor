@@ -1,0 +1,95 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 15:45 UTC) ══════════════════════════════
+Signal     : NEUTRAL  (62%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Taker aggressor flow is bearish (BSR 0.728), showing aggressive sellers hitting bids. Order book bid-heavy imbalance is a marginal bullish counter, but likely represents passive buy walls being tested.]
+[FUNDING + POSITIONING: Cross-exchange funding is deeply negative (-0.4778%), a structurally bullish signal, but this is a longer-term incentive; the immediate 5-min taker flow and distribution dominate the short-term momentum.]
+[TECHNICAL + CROSS-EXCHANGE: Price is in a contracting range (LH+HL) at the upper third. Stoch is oversold (1.5), but MACD histogram is bearish and contracting. The ensemble weighted vote is UP (72.8%), but this is heavily contradicted by the live taker flow and the specialist's note on the bearish A/D divergence within the compression coil.]
+[SYNTHESIS: Dominant bias is short-term bearish due to aggressive selling pressure at a technical resistance coil. The single most decisive factor is the bearish taker flow confirming the distribution signal within the compression. The biggest risk is the strong negative funding rate sparking a short squeeze, but the immediate microstructure suggests selling pressure will win the next 5-min bar. Final conviction is for a break below entry.]
+Narrative  : Price rallied from 15:21 to 15:29, peaking at $75,785.20, but has since compressed into a tight 5-bar coil from 15:40 to 15:44, failing to reclaim the high. The current bar (15:44) closed at $75,575.30, just above the entry price, but the coil is forming directly under the 15:29-15:30 swing high resistance ($75,753.50-$75,785.20), suggesting exhaustion. The immediate move from 15:43 to 15:44 was a drop from $75,647.50 to $75,575.30, showing sellers stepping in.
+Free obs   : The most significant convergence is between the bearish taker aggressor flow (BSR 0.728), the distribution signal in A/D, and the price action coil at resistance, all pointing to an imminent downward expansion.
+Data recv  : Full microstructure suite, technicals, ensemble, last 50 bars.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $75,549.20
+Move             : +0.00 (+0.0000%)
+VERDICT          : ABSTENTION (NEUTRAL)
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+15:20,75182.60,75182.60,75141.70,75143.20,8.7684
+15:21,75143.20,75404.30,75133.50,75324.40,54.4127
+15:22,75324.40,75525.70,75317.90,75456.20,32.4742
+15:23,75456.20,75483.60,75388.50,75433.20,17.2702
+15:24,75433.20,75512.80,75429.40,75429.40,16.0983
+15:25,75429.40,75486.00,75428.20,75464.10,13.6134
+15:26,75464.10,75573.10,75464.10,75536.40,25.4396
+15:27,75536.40,75701.90,75499.90,75617.90,36.2562
+15:28,75617.90,75663.60,75588.30,75640.60,16.9890
+15:29,75640.60,75785.20,75594.70,75753.50,23.2701
+15:30,75753.50,75753.50,75567.90,75571.60,35.5465
+15:31,75571.60,75686.30,75566.90,75632.90,12.5375
+15:32,75632.90,75650.30,75566.30,75574.60,11.4189
+15:33,75574.60,75605.60,75565.00,75600.10,10.5925
+15:34,75600.10,75601.70,75521.00,75571.10,21.5696
+15:35,75571.10,75658.10,75553.50,75658.10,17.3309
+15:36,75658.10,75658.20,75538.40,75547.20,12.2146
+15:37,75547.20,75609.70,75536.90,75597.20,9.4128
+15:38,75597.20,75665.00,75597.20,75634.90,12.1974
+15:39,75634.90,75634.90,75560.20,75582.40,17.1442
+15:40,75582.40,75697.50,75580.90,75683.40,9.1088
+15:41,75683.40,75715.20,75662.10,75669.70,11.6008
+15:42,75669.70,75669.70,75600.60,75649.00,7.5677
+15:43,75649.00,75649.10,75609.10,75647.50,8.8043
+15:44,75647.50,75647.50,75573.00,75590.20,7.8928
+15:45,75590.20,75606.50,75550.10,75583.90,10.5317
+15:46,75583.90,75617.60,75550.10,75600.60,9.5733
+15:47,75600.60,75676.50,75600.60,75649.00,10.6724
+15:48,75649.00,75687.60,75626.70,75668.30,8.2393
+15:49,75668.30,75668.30,75547.70,75549.20,7.5098
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 3.1787
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +33.4% bid-heavy. Immediate upward
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.728). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  mempool: BULLISH  — Very low fees (3 sat/vB) — calm network, no on-chain panic. Slightly positive ba
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (+0.037%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (+0.07% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Kraken spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dire
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  btc_dominance: BULLISH  — BTC dominance 57.6% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.788). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.5% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-3.4% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was abstention]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: The prediction correctly identified short-term bearish pressure but failed to account for the market's immediate transition into a tight, low-volatility consolidation range, resulting in a move too small to trigger a directional call.
+MISLEADING_SIGNALS: The "bearish taker flow" and "distribution signal" suggested imminent downward expansion, but they merely reflected the fading of the prior rally, not the initiation of a new trend. The "coil at resistance" narrative overestimated the probability of a breakout/breakdown.
+RELIABLE_SIGNALS: The "negative funding rate" as a structural bullish counter and the "order book bid-heavy imbalance" were correct in providing underlying support, preventing a larger drop and containing price action.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a post-rally digestion phase. Aggressive selling (taker flow) was being absorbed by passive bids (order book), creating equilibrium. The dominant force was not directional momentum but range contraction between residual sellers and supportive liquidity.
+LESSON: In a compression coil following a sharp move, prioritize range-bound (NEUTRAL) signals over breakout predictions unless a clear volume/microstructure catalyst emerges to break the equilibrium.

@@ -1,0 +1,96 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 16:55 UTC) ══════════════════════════════
+Signal     : NEUTRAL  (62%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Taker aggressor flow is bearish (BSR 0.8607), showing sellers hitting bids. Order book shows a bid wall but price is unable to rally against it, suggesting absorption before a drop.]
+[FUNDING + POSITIONING: Funding is negative across exchanges (Bullish signal), but this is a contrarian indicator; price is not responding to the incentive to go up, indicating underlying weakness. Smart money and retail are both net short (53.6% and 53.0%), showing high-conviction bearish positioning.]
+[TECHNICAL + CROSS-EXCHANGE: MACD is bearish and contracting. Williams Alligator is in a bearish alignment (Lips<Teeth<Jaw). Price is below key EMAs and has been rejected from the 80.3% Fib level. The ensemble vote is neutral but weighted slightly bearish.]
+[SYNTHESIS: Dominant bias is bearish due to aligned downtrends and aggressive selling pressure. The single most decisive factor is the failed breakout above $75,559.40 at 16:45, followed by compression and declining volume—a classic breakdown setup. The biggest risk is the strong bid wall providing immediate support, but the momentum favors a test lower. Final conviction is for a move BELOW entry.]
+Narrative  : From 16:45, price spiked to $75,559.40 but was immediately rejected, forming a lower high. It then entered a tight compression coil between $75,325 and $75,370 from 16:50 to 16:55, with the 16:55 bar showing minimal range ($8.90) and volume (1.6 BTC), indicating exhaustion and a pending breakdown. The market structure shows a clear sequence of lower highs and lower lows, with the latest move failing to reclaim the $75,400 level.
+Free obs   : The strongest convergence is between bearish taker aggressor flow (BSR 0.86), a contracting bearish MACD, and price failing at the 80.3% Fibonacci retracement level, all occurring within a dominant downtrend on both macro and micro timeframes.
+Data recv  : All signals available including microstructure, funding, technicals, and full 50-bar price history.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $75,315.30
+Move             : +0.00 (+0.0000%)
+VERDICT          : ABSTENTION (NEUTRAL)
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+16:30,75360.00,75407.20,75352.30,75358.80,7.0408
+16:31,75358.80,75407.20,75326.20,75407.10,7.4780
+16:32,75407.10,75420.30,75374.10,75417.00,5.1143
+16:33,75417.00,75450.20,75412.50,75420.90,6.4924
+16:34,75420.90,75429.50,75394.70,75397.50,6.3311
+16:35,75397.50,75397.50,75311.40,75316.30,9.3815
+16:36,75316.30,75387.10,75312.90,75387.00,5.9907
+16:37,75387.00,75387.00,75344.10,75347.50,6.2024
+16:38,75347.50,75399.00,75347.50,75389.70,4.4639
+16:39,75389.70,75424.70,75383.00,75424.70,5.7950
+16:40,75424.70,75424.70,75367.30,75412.80,7.1750
+16:41,75412.80,75573.10,75412.70,75540.10,11.8427
+16:42,75540.10,75540.10,75486.30,75508.30,7.7534
+16:43,75508.30,75514.40,75475.30,75493.00,6.1171
+16:44,75493.00,75496.30,75475.20,75484.80,5.6569
+16:45,75484.80,75559.40,75479.30,75559.30,6.8240
+16:46,75559.30,75565.60,75481.40,75497.10,11.0721
+16:47,75497.10,75497.10,75456.20,75468.60,3.9336
+16:48,75468.60,75480.30,75439.30,75442.90,4.5479
+16:49,75442.90,75443.00,75328.00,75340.80,6.4192
+16:50,75340.80,75365.70,75324.50,75329.00,7.3133
+16:51,75329.00,75369.70,75325.80,75364.30,7.8352
+16:52,75364.30,75388.60,75331.80,75386.10,8.1228
+16:53,75386.10,75401.10,75334.30,75334.40,4.4386
+16:54,75334.40,75363.00,75334.30,75360.70,5.2102
+16:55,75360.70,75366.70,75330.60,75330.60,3.1382
+16:56,75330.60,75357.20,75316.20,75347.90,7.6915
+16:57,75347.90,75362.50,75335.30,75335.70,5.7934
+16:58,75335.70,75335.70,75296.30,75324.50,7.4573
+16:59,75324.50,75324.50,75319.40,75319.40,1.0116
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: -1.9567
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +54.7% bid-heavy. Immediate upward
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.861). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  mempool: BULLISH  — Very low fees (2 sat/vB) — calm network, no on-chain panic. Slightly positive ba
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (+0.045%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (-0.06% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Kraken spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dire
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  okx_funding: BULLISH  — OKX funding NEGATIVE (-0.0052%) — shorts paying longs. OKX structural long bias;
+  btc_dominance: BULLISH  — BTC dominance 57.6% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.787). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0027%, trend +0.0056%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.1% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-3.2% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.2745%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was abstention]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: The prediction correctly identified bearish momentum and a breakdown setup, but the market moved sideways within a tight range ($75,315 to $75,360) for the entire 5-minute window, resulting in no decisive directional move.
+MISLEADING_SIGNALS: Over-weighted the "pending breakdown" narrative from the compression coil; the coil resolved into further consolidation, not a directional break. The "bearish taker flow" signal was correct in direction but overstated in its immediate impact.
+RELIABLE_SIGNALS: The bearish technical alignment (MACD, Alligator, rejection at Fib) and negative funding as a contrarian indicator were correct in framing a weak market unable to rally, which matched the eventual sideways/grinding price action.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a state of equilibrium after the earlier rejection. Sellers were aggressive (bearish taker flow) but were being fully absorbed by the bid wall, creating a stalemate. The dominant dynamic was absorption, not trending momentum.
+LESSON: In a tight compression coil following a rejection, wait for a confirmed break of the coil's range (high or low) with accompanying volume before committing to a directional prediction, even if all momentum signals point one way.

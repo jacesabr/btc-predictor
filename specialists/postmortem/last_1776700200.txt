@@ -1,0 +1,96 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 15:50 UTC) ══════════════════════════════
+Signal     : NEUTRAL  (62%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book is heavily ask-dominated (-73.8% imbalance), and taker aggressor flow is bearish (BSR 0.724), showing sellers are hitting bids. The specialist note confirms a false breakout and bearish engulfing candle at 15:49.]
+[FUNDING + POSITIONING: While funding is negative (bullish contrarian), smart money and retail L/S ratios are aligned near 47% long, showing no strong contrarian positioning. OI is stable, suggesting no new longs are entering to support price.]
+[TECHNICAL + CROSS-EXCHANGE: Price is at the upper third of the 100-bar range, near resistance at $75,567.40. Stoch is oversold, but MACD histogram is bearish and contracting. The ensemble vote is neutral with low confidence (63.9%).]
+[SYNTHESIS: The dominant bias is short-term bearish due to the failed breakout and immediate selling pressure. The most decisive factor is the microstructure confirmation of aggressive selling hitting bids after a rejection. The biggest risk is a bounce from oversold Stoch or the bullish funding signal. Final conviction leans BELOW due to the high-probability failed breakout setup.]
+Narrative  : From 15:47 to 15:48, price attempted a breakout from a compression coil, reaching $75,687.60. This move was immediately rejected, leading to a sharp bearish engulfing candle at 15:49 that dropped from $75,668.30 to $75,549.20 on increased volume, trapping longs. The market is now retesting the immediate support at the 38.2% Fib level ($75,536.25) and the entry price, with bearish momentum from the failed breakout attempt.
+Free obs   : The most significant convergence is between the bearish order book imbalance (-73.8%), the aggressive taker sell flow (BSR 0.724), and the price action rejection at the recent high, all confirming immediate selling pressure.
+Data recv  : All signals available including microstructure, funding, technicals, and last 50 bars.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : UP
+End price        : $75,593.30
+Move             : +0.00 (+0.0000%)
+VERDICT          : ABSTENTION (NEUTRAL)
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+15:25,75429.40,75486.00,75428.20,75464.10,13.6134
+15:26,75464.10,75573.10,75464.10,75536.40,25.4396
+15:27,75536.40,75701.90,75499.90,75617.90,36.2562
+15:28,75617.90,75663.60,75588.30,75640.60,16.9890
+15:29,75640.60,75785.20,75594.70,75753.50,23.2701
+15:30,75753.50,75753.50,75567.90,75571.60,35.5465
+15:31,75571.60,75686.30,75566.90,75632.90,12.5375
+15:32,75632.90,75650.30,75566.30,75574.60,11.4189
+15:33,75574.60,75605.60,75565.00,75600.10,10.5925
+15:34,75600.10,75601.70,75521.00,75571.10,21.5696
+15:35,75571.10,75658.10,75553.50,75658.10,17.3309
+15:36,75658.10,75658.20,75538.40,75547.20,12.2146
+15:37,75547.20,75609.70,75536.90,75597.20,9.4128
+15:38,75597.20,75665.00,75597.20,75634.90,12.1974
+15:39,75634.90,75634.90,75560.20,75582.40,17.1442
+15:40,75582.40,75697.50,75580.90,75683.40,9.1088
+15:41,75683.40,75715.20,75662.10,75669.70,11.6008
+15:42,75669.70,75669.70,75600.60,75649.00,7.5677
+15:43,75649.00,75649.10,75609.10,75647.50,8.8043
+15:44,75647.50,75647.50,75573.00,75590.20,7.8928
+15:45,75590.20,75606.50,75550.10,75583.90,10.5317
+15:46,75583.90,75617.60,75550.10,75600.60,9.5733
+15:47,75600.60,75676.50,75600.60,75649.00,10.6724
+15:48,75649.00,75687.60,75626.70,75668.30,8.2393
+15:49,75668.30,75668.30,75543.80,75543.80,9.0679
+15:50,75543.80,75608.10,75542.40,75578.20,12.9439
+15:51,75578.20,75610.20,75540.20,75569.10,11.3254
+15:52,75569.10,75606.10,75567.90,75606.10,8.1321
+15:53,75606.10,75617.80,75568.20,75568.20,6.6492
+15:54,75568.20,75575.90,75568.20,75575.90,0.5809
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 1.4999
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BEARISH  — Ask-heavy book — sellers in control. -73.8% ask dominant. Sell-side wall capping
+  taker_flow: BEARISH  — Aggressive sellers hitting the bid (BSR=0.724). Bearish momentum confirmed by ac
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  mempool: BULLISH  — Very low fees (4 sat/vB) — calm network, no on-chain panic. Slightly positive ba
+  kraken_premium: NEUTRAL  — Kraken/OKX near-parity (-0.007%). No cross-exchange arbitrage pressure — neutral
+  oi_velocity: NEUTRAL  — OI stable (+0.09% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: NEUTRAL  — Binance spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dir
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  okx_funding: BULLISH  — OKX funding NEGATIVE (-0.0039%) — shorts paying longs. OKX structural long bias;
+  btc_dominance: BULLISH  — BTC dominance 57.6% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.788). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.5% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-3.4% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was abstention]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: The prediction correctly identified a failed breakout and immediate selling pressure, but the market context was a shallow, range-bound consolidation where the bearish momentum was insufficient to drive a directional move.
+MISLEADING_SIGNALS: Over-weighted the bearish microstructure (order book imbalance, taker flow) as a catalyst for a new down move, when it merely reflected the aftermath of a failed breakout within a tight range.
+RELIABLE_SIGNALS: The neutral ensemble vote (63.9% confidence) and stable OI were correct in signaling a lack of conviction; the negative funding was a correct contrarian buffer against further downside.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a low-volatility equilibrium after the failed breakout. The aggressive selling was absorbed by responsive buyers at a slightly higher low, resulting in a choppy, sideways resolution rather than a continuation.
+LESSON: In a tight range after a failed breakout, prioritize the lack of follow-through in OI and volume over high-frequency microstructure signals; a neutral abstention is the correct call unless a clear break of the range's support/resistance occurs.

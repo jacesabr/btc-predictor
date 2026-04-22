@@ -1,0 +1,95 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 15:15 UTC) ══════════════════════════════
+Signal     : NEUTRAL  (62%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book is ask-heavy (-25.2% imbalance) with sellers in control, and spot whale flow, while bullish, is a weak-signal outlier against the dominant taker sell flow and lack of buy aggression.]
+[FUNDING + POSITIONING: Cross-exchange funding is negative (Coinalyze: -0.47780%, OKX: -0.0036%), creating a structural long bias, but this is a slow-burn incentive; current positioning shows smart money and retail both net-short (52.8% and 52.1% short), indicating high-conviction bearish bias that is hard to fade immediately.]
+[TECHNICAL + CROSS-EXCHANGE: Price is at a 50.7% Fibonacci pullback resistance in a downtrend, with weak micro uptrend (R²=0.00). The Alligator is sleeping, and key oscillators (RSI 57.8, Stoch bearish cross) show no strong bullish momentum. The ensemble vote is neutral but leans UP 62.6%, which is contra-trend.]
+[SYNTHESIS: Dominant bias is bearish continuation. The single most decisive factor is the failed reclaim of the 14:51 high-volume breakdown level, confirming supply overhead. The biggest risk is the negative funding rate sparking a short squeeze, but current order book pressure and weak bounce structure favor a retest of supports near $74,994.60 and $74,670.50 first. Final conviction is for a move BELOW entry.]
+Narrative  : The story is one of a failed bounce within a clear downtrend. A massive sell-off candle at 14:51 (high $75,352.70 to low $74,984.90, 82.6 BTC volume) established a strong supply zone that has not been reclaimed. The subsequent price action from 15:10 to 15:15 shows weak, low-volume bounces (e.g., 15:14 high $75,071.70) failing to sustain, indicating buyer exhaustion just below the immediate resistance at $75,086.20.
+Free obs   : The most significant convergence is between the bearish order book imbalance (-25.2%), the failed technical bounce from the 14:51 absorption level, and the negative but bullish-contrarian Fear & Greed Index (29), which suggests the downtrend may be nearing a capitulation point but has not yet reversed.
+Data recv  : All signals available including full microstructure, order book, funding, whale flow, and 50-bar price history.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : UP
+End price        : $75,194.60
+Move             : +0.00 (+0.0000%)
+VERDICT          : ABSTENTION (NEUTRAL)
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+14:50,75402.80,75440.30,75338.80,75352.70,13.6568
+14:51,75352.70,75352.70,74984.90,75137.50,82.5974
+14:52,75137.50,75162.60,75057.40,75127.20,23.4930
+14:53,75127.20,75184.10,75094.40,75108.90,14.8797
+14:54,75108.90,75114.50,74982.20,75023.10,22.5095
+14:55,75023.10,75023.10,74919.90,75005.10,22.8496
+14:56,75005.10,75035.90,74918.70,74936.10,19.5059
+14:57,74936.10,75023.30,74936.10,75000.50,16.3475
+14:58,75000.50,75001.20,74920.60,74989.30,20.8292
+14:59,74989.30,75038.60,74972.20,75038.60,20.4813
+15:00,75038.60,75086.20,75017.00,75017.00,21.3996
+15:01,75017.00,75041.00,74936.40,74936.60,13.0532
+15:02,74936.60,74963.90,74914.20,74956.20,18.5179
+15:03,74956.20,74959.00,74771.00,74828.90,50.9204
+15:04,74828.90,74878.20,74711.10,74798.30,27.7179
+15:05,74798.30,74889.20,74793.50,74816.90,36.2211
+15:06,74816.90,74856.70,74785.70,74856.60,15.7835
+15:07,74856.60,74857.90,74670.50,74763.50,34.9558
+15:08,74763.50,74855.80,74762.90,74836.00,23.8078
+15:09,74836.00,74839.10,74796.00,74809.80,12.3559
+15:10,74809.80,74950.80,74801.10,74934.80,17.8073
+15:11,74934.80,75036.70,74934.80,75021.50,22.3793
+15:12,75021.50,75030.10,74936.50,74988.90,25.9231
+15:13,74988.90,74994.40,74883.00,74939.00,7.1629
+15:14,74939.00,75071.70,74937.30,75064.30,9.3381
+15:15,75064.30,75126.30,75059.30,75067.40,14.7755
+15:16,75067.40,75110.70,75037.80,75107.00,14.8626
+15:17,75107.00,75197.90,75107.00,75154.60,17.0295
+15:18,75154.60,75206.80,75140.90,75168.00,17.1041
+15:19,75168.00,75208.50,75164.10,75196.20,10.4912
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: -3.8685
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BEARISH  — Ask-heavy book — sellers in control. -25.2% ask dominant. Sell-side wall capping
+  taker_flow: NEUTRAL  — Balanced aggressor flow (BSR=0.929). Neither side willing to pay spread. Chop or
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  mempool: BULLISH  — Very low fees (6 sat/vB) — calm network, no on-chain panic. Slightly positive ba
+  oi_velocity: NEUTRAL  — OI stable (-0.14% over 30min). No significant position accumulation or exit. Fol
+  spot_whale_flow: BULLISH  — Kraken spot whale buyers dominate: 100.0% (13.0 BTC) of large spot trades are bu
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  okx_funding: BULLISH  — OKX funding NEGATIVE (-0.0036%) — shorts paying longs. OKX structural long bias;
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.782). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.8% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.698 — balanced options positioning. Max pain $73,000 (-2.8% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was abstention]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: ABSTENTION (NEUTRAL)
+ROOT_CAUSE: The prediction correctly identified a bearish microstructure and failed bounce, but failed to anticipate the immediate counter-squeeze from deeply negative funding rates and extreme fear, which triggered a reversal before the expected retest of lower supports.
+MISLEADING_SIGNALS: Over-weighted the bearish order book imbalance (-25.2%) and the failed reclaim of the 14:51 breakdown level as immediate continuation signals, while under-weighting the combined explosive potential of extreme Fear & Greed (29) and strongly negative cross-exchange funding.
+RELIABLE_SIGNALS: The negative funding rates (Coinalyze: -0.47780%, OKX) and the Fear & Greed Index (29) were correct in signaling a structural long bias and contrarian bullish setup; the spot whale flow (100% buys) was a valid leading indicator.
+DATA_GAPS: NONE
+UPDATED_READING: The market was in a bear trap/capitulation phase. The intense selling at 14:51 flushed weak longs, creating a local bottom. The subsequent consolidation (14:52-15:10) was accumulation, not exhaustion, with negative funding and extreme fear creating a tinderbox for a short squeeze that ignited from 15:10 onward.
+LESSON: When negative funding is extreme and coincides with Extreme Fear readings, prioritize the contrarian squeeze potential over near-term order book pressure; the order book reflects immediate liquidity, not the latent pressure from crowded shorts.

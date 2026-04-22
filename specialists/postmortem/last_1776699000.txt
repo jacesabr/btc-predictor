@@ -1,0 +1,95 @@
+=== PROMPT ===
+You are reviewing your own 5-minute BTC/USDT prediction after it resolved.
+Be ruthlessly honest. Identify exactly what went wrong or right and how to improve.
+
+══ ORIGINAL PREDICTION (bar 2026-04-20 15:30 UTC) ══════════════════════════════
+Signal     : UP  (65%)
+Start price: $0.00
+Reasoning  : [MICROSTRUCTURE: Order book shows a strong +38.3% bid imbalance, and taker buy/sell ratio of 1.305 indicates aggressive buyers are paying the ask, providing immediate directional conviction.]
+[FUNDING + POSITIONING: Both Binance and aggregate cross-exchange funding rates are negative (Coinalyze: -0.4778%, OKX: -0.0032%), a reliable bullish signal as shorts pay longs, incentivizing covering. OI velocity is slightly bearish but weak.]
+[TECHNICAL + CROSS-EXCHANGE: Micro trend is strongly up (R²=0.94), Alligator is bullish, and the ensemble weighted vote is 90.9% UP. Overbought RSI/MFI are a near-term risk, but MACD histogram is bullish and expanding.]
+[SYNTHESIS: Dominant bias is UP, driven by aggressive spot buying and negative funding pressuring shorts. The single most decisive factor is the combination of strong taker buy flow and negative funding. Biggest risk is overbought conditions on a 1m chart leading to a pullback. Final conviction is for a test above the entry price ($75,686.40) within the 5-minute window, targeting the $75,768 resistance.]
+Narrative  : From 15:21 to 15:29 UTC, price surged from $75,143.20 to a high of $75,785.20, establishing a strong micro uptrend. The current 15:30 candle pulled back from that high to trade around $75,595.80, but the market is holding well above the key support at $75,437.10 and is testing the immediate resistance at $75,768.30. The 5-minute window opens with price consolidating just below the session high after a powerful rally.
+Free obs   : The most significant convergence is between strongly bullish microstructure (aggressive taker buys, bid-heavy order book) and deeply negative cross-exchange funding rates, which creates a structural incentive for shorts to cover and supports further upside.
+Data recv  : All signals available except Kraken Premium and Deribit DVOL details.
+Data req   : NONE
+
+══ ACTUAL OUTCOME ══════════════════════════════════════════════════
+Actual direction : DOWN
+End price        : $75,565.00
+Move             : +0.00 (+0.0000%)
+VERDICT          : WRONG
+
+══ UPDATED MARKET DATA (post-close, last 30 bars) ══════════════════
+Time(UTC),Open,High,Low,Close,Volume
+15:05,74798.30,74889.20,74793.50,74816.90,36.2211
+15:06,74816.90,74856.70,74785.70,74856.60,15.7835
+15:07,74856.60,74857.90,74670.50,74763.50,34.9558
+15:08,74763.50,74855.80,74762.90,74836.00,23.8078
+15:09,74836.00,74839.10,74796.00,74809.80,12.3559
+15:10,74809.80,74950.80,74801.10,74934.80,17.8073
+15:11,74934.80,75036.70,74934.80,75021.50,22.3793
+15:12,75021.50,75030.10,74936.50,74988.90,25.9231
+15:13,74988.90,74994.40,74883.00,74939.00,7.1629
+15:14,74939.00,75071.70,74937.30,75064.30,9.3381
+15:15,75064.30,75126.30,75059.30,75067.40,14.7755
+15:16,75067.40,75110.70,75037.80,75107.00,14.8626
+15:17,75107.00,75197.90,75107.00,75154.60,17.0295
+15:18,75154.60,75206.80,75140.90,75168.00,17.1041
+15:19,75168.00,75208.50,75154.70,75182.60,27.8896
+15:20,75182.60,75182.60,75141.70,75143.20,8.7684
+15:21,75143.20,75404.30,75133.50,75324.40,54.4127
+15:22,75324.40,75525.70,75317.90,75456.20,32.4742
+15:23,75456.20,75483.60,75388.50,75433.20,17.2702
+15:24,75433.20,75512.80,75429.40,75429.40,16.0983
+15:25,75429.40,75486.00,75428.20,75464.10,13.6134
+15:26,75464.10,75573.10,75464.10,75536.40,25.4396
+15:27,75536.40,75701.90,75499.90,75617.90,36.2562
+15:28,75617.90,75663.60,75588.30,75640.60,16.9890
+15:29,75640.60,75785.20,75594.70,75753.50,23.2701
+15:30,75753.50,75753.50,75567.90,75571.60,35.5465
+15:31,75571.60,75686.30,75566.90,75632.90,12.5375
+15:32,75632.90,75650.30,75566.30,75574.60,11.4189
+15:33,75574.60,75605.60,75565.00,75600.10,10.5925
+15:34,75600.10,75601.70,75521.00,75542.20,12.1374
+
+══ UPDATED FEATURES ════════════════════════════════════════════════
+  trend_slope: 39.7066
+
+══ UPDATED MICROSTRUCTURE SIGNALS ══════════════════════════════════
+  order_book: BULLISH  — Strong bid wall — buyers defending at market. +38.3% bid-heavy. Immediate upward
+  taker_flow: BULLISH  — Aggressive buyers crossing the ask (BSR=1.305). Real directional conviction — pa
+  liquidations: NEUTRAL  — No recent liquidations — stable market, no cascades detected.
+  fear_greed: BULLISH_CONTRARIAN  — Extreme Fear (29). Historically precedes sharp bounces. Retail capitulation = sm
+  mempool: BULLISH  — Very low fees (5 sat/vB) — calm network, no on-chain panic. Slightly positive ba
+  oi_velocity: BEARISH  — OI falling -0.41% over 30min (last bar: -0.27%). Position liquidation / de-lever
+  spot_whale_flow: NEUTRAL  — Kraken spot whales balanced (50.0% buys, 0.0 BTC in large trades). No clear dire
+  bybit_liquidations: NEUTRAL  — No isolated-margin liquidations in recent window.
+  okx_funding: BULLISH  — OKX funding NEGATIVE (-0.0032%) — shorts paying longs. OKX structural long bias;
+  btc_dominance: BULLISH  — BTC dominance 57.5% — above 54% signals strong BTC preference, alt capital rotat
+  top_position_ratio: NEUTRAL  — Top traders 44% long by notional (ratio 0.784). No extreme positioning by large 
+  funding_trend: BULLISH  — Funding rate FALLING/NEGATIVE (current -0.0048%, trend -0.0002%). De-levering or
+  deribit_dvol: NEUTRAL  — DVOL 42.5% — normal volatility regime. No extreme option pricing in either direc
+  deribit_options: NEUTRAL  — Put/Call OI ratio 0.699 — balanced options positioning. Max pain $73,000 (-3.7% 
+  btc_onchain: NEUTRAL  — SOPR 0.9973 near 1.0 — breakeven spending. No strong on-chain directional bias.
+  coinalyze: BULLISH  — Cross-exchange funding NEGATIVE (-0.4778%) — shorts paying longs. Structural upw
+
+══ YOUR TASK ════════════════════════════════════════════════════════
+Analyze this prediction. Respond EXACTLY in this format:
+
+VERDICT: WRONG
+ROOT_CAUSE: [1-2 sentences — the single most important reason the prediction was wrong]
+MISLEADING_SIGNALS: [which signals/indicators pointed the wrong way, or which ones you over-weighted]
+RELIABLE_SIGNALS: [which signals were actually correct / worth trusting more]
+DATA_GAPS: [specific data you wish you had — or NONE if data was sufficient]
+UPDATED_READING: [given the actual move, what was really happening in the market at that moment]
+LESSON: [one concrete rule to apply next time in a similar setup]
+
+=== RESPONSE ===
+VERDICT: WRONG
+ROOT_CAUSE: The prediction was a classic "buy the rumor, sell the news" trap; the aggressive taker buy flow and negative funding had already fueled a massive, overextended rally in the minutes *before* the prediction window, leaving price exhausted and vulnerable to profit-taking at the exact moment of entry.
+MISLEADING_SIGNALS: Over-reliance on the **taker buy/sell ratio (1.305)** and **negative funding** as signals for *immediate* continuation, ignoring that they were likely lagging indicators of the just-completed surge. The **strong micro uptrend (R²=0.94)** was a rear-view mirror metric that failed to account for imminent mean reversion.
+RELIABLE_SIGNALS: The **overbought RSI/MFI risk warning** embedded in the reasoning was correct but was dismissed. The **OI velocity (bearish, -0.41%)** correctly signaled that leverage was being reduced, not added, which is a headwind for continuation.
+DATA_GAPS: NONE. The data was sufficient; the error was in interpretation, not data availability.
+UPDATED_READING: At 15:30 UTC, the market was in a state of short-term exhaustion. The explosive move from $75,143 to $75,785 had fully priced in the aggressive buying and funding squeeze. The subsequent consolidation and slight downtick represented profit-taking by the very buyers whose activity I used as a bullish signal, not the start of a new leg up.
+LESSON: After a vertical 1-2 minute bar surge (>1% move), disregard bullish microstructure signals (taker flow, order book) for at least the next 5-minute bar, as the immediate risk is profit-taking, not continuation. Wait for price to consolidate and absorb the move before entering.
