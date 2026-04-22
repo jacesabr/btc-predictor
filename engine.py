@@ -1020,13 +1020,23 @@ async def run_binance_feed():
                                     ts_ms = int(datetime.fromisoformat(ts_iso.replace("Z", "+00:00")).timestamp() * 1000)
                                 except Exception:
                                     continue
+                                pc = float(b.get("price_close", 0) or 0)
+                                vol = float(b.get("volume_traded", 0) or 0)
+                                quote_approx = pc * vol  # CoinAPI does not expose quote volume directly
+                                trades_count = b.get("trades_count")  # may be None
+                                # Binance-layout 10-element kline:
+                                # [open_time, o, h, l, c, volume, close_time, quote_vol, trades, taker_buy_base_vol]
                                 klines.append([
                                     ts_ms,
                                     str(b.get("price_open", 0)),
                                     str(b.get("price_high", 0)),
                                     str(b.get("price_low", 0)),
                                     str(b.get("price_close", 0)),
-                                    str(b.get("volume_traded", 0)),
+                                    str(vol),
+                                    None,                              # close_time
+                                    str(quote_approx) if vol > 0 else None,
+                                    str(trades_count) if trades_count is not None else None,
+                                    None,                              # taker_buy_base_vol unavailable on Coinbase via CoinAPI OHLCV
                                 ])
                             if len(klines) >= 30:
                                 binance_klines.clear()
@@ -1056,8 +1066,16 @@ async def run_binance_feed():
                         if resp.status == 200:
                             data = await resp.json()
                             # Bybit returns newest-first; reverse so oldest-first like Binance
+                            # Bybit spot v5 response per bar: [startTime, open, high, low, close, volume, turnover]
                             bars = list(reversed(data["result"]["list"]))
-                            klines = [[int(b[0]), b[1], b[2], b[3], b[4], b[5]] for b in bars]
+                            klines = [
+                                [int(b[0]), b[1], b[2], b[3], b[4], b[5],
+                                 None,                       # close_time
+                                 b[6] if len(b) > 6 else None,   # turnover = quote vol
+                                 None,                       # trades count unavailable
+                                 None]                       # taker_buy_base_vol unavailable
+                                for b in bars
+                            ]
                             binance_klines.clear()
                             binance_klines.extend(klines)
                             logger.info("Bybit klines updated: %d candles", len(klines))
@@ -1081,9 +1099,16 @@ async def run_binance_feed():
                         if resp.status == 200:
                             data = await resp.json()
                             # OKX returns newest-first; reverse so oldest-first
+                            # OKX response per bar: [ts, o, h, l, c, vol, volCcy, volCcyQuote, confirm]
                             bars = list(reversed(data["data"]))
-                            # Convert to Binance format: [open_time_ms, o, h, l, close, vol]
-                            klines = [[int(b[0]), b[1], b[2], b[3], b[4], b[5]] for b in bars]
+                            klines = [
+                                [int(b[0]), b[1], b[2], b[3], b[4], b[5],
+                                 None,                       # close_time
+                                 b[7] if len(b) > 7 else None,   # volCcyQuote = quote vol
+                                 None,                       # trades count unavailable
+                                 None]                       # taker_buy_base_vol unavailable
+                                for b in bars
+                            ]
                             binance_klines.clear()
                             binance_klines.extend(klines)
                             logger.info("OKX klines updated: %d candles", len(klines))
@@ -1106,8 +1131,22 @@ async def run_binance_feed():
                         if resp.status == 200:
                             data = await resp.json()
                             bars = list(data["result"].values())[0]
-                            # Convert to Binance format: [open_time_ms, o, h, l, close, vol]
-                            klines = [[int(b[0]) * 1000, b[1], b[2], b[3], b[4], b[6]] for b in bars]
+                            # Kraken OHLC per bar: [time, open, high, low, close, vwap, volume, count]
+                            klines = []
+                            for b in bars:
+                                try:
+                                    vwap_v = float(b[5])
+                                    vol_v  = float(b[6])
+                                    quote_approx = vwap_v * vol_v  # vwap * volume ≈ quote volume
+                                except Exception:
+                                    quote_approx = None
+                                klines.append([
+                                    int(b[0]) * 1000, b[1], b[2], b[3], b[4], b[6],
+                                    None,                                       # close_time
+                                    str(quote_approx) if quote_approx is not None else None,
+                                    b[7] if len(b) > 7 else None,               # trade count
+                                    None,                                       # taker_buy_base_vol unavailable
+                                ])
                             binance_klines.clear()
                             binance_klines.extend(klines)
                             logger.info("Kraken klines updated: %d candles", len(klines))

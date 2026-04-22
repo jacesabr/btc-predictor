@@ -1341,19 +1341,37 @@ _SPEC_SUGGEST  = _SPEC_DIR / "suggestions.txt"
 
 
 def _ohlcv_csv(klines, n=60):
+    # NA emitted when the source API doesn't provide that field — prevents the analyst
+    # from interpreting 0 as "0 trades" or "0% buyers" when the data is simply missing.
+    def _num_or_na(v, fmt="{:.0f}"):
+        if v is None or v == "":
+            return "NA"
+        if isinstance(v, str) and v.upper() in ("NA", "NONE", "NULL"):
+            return "NA"
+        try:
+            return fmt.format(float(v))
+        except (ValueError, TypeError):
+            return "NA"
+
     rows = ["Time(UTC),Open,High,Low,Close,Volume,QuoteVol,Trades,BuyVol%"]
     for k in klines[-n:]:
         try:
-            ts_s    = time.strftime("%m-%d %H:%M", time.gmtime(int(k[0]) / 1000))
-            vol     = float(k[5])
-            quote_v = float(k[7]) if len(k) > 7 else 0.0
-            trades  = int(k[8])   if len(k) > 8 else 0
-            buy_vol = float(k[9]) if len(k) > 9 else 0.0
-            buy_pct = round(buy_vol / vol * 100, 1) if vol > 0 else 0.0
+            ts_s = time.strftime("%m-%d %H:%M", time.gmtime(int(k[0]) / 1000))
+            vol  = float(k[5])
+            quote_str  = _num_or_na(k[7]) if len(k) > 7 else "NA"
+            trades_str = _num_or_na(k[8], "{:.0f}") if len(k) > 8 else "NA"
+            bv_raw = k[9] if len(k) > 9 else None
+            if bv_raw is None or bv_raw == "" or (isinstance(bv_raw, str) and bv_raw.upper() in ("NA", "NONE", "NULL")):
+                buy_pct_str = "NA"
+            else:
+                try:
+                    buy_pct_str = f"{round(float(bv_raw) / vol * 100, 1)}" if vol > 0 else "NA"
+                except (ValueError, TypeError):
+                    buy_pct_str = "NA"
             rows.append(
                 f"{ts_s},{float(k[1]):.2f},{float(k[2]):.2f},"
                 f"{float(k[3]):.2f},{float(k[4]):.2f},{vol:.1f},"
-                f"{quote_v:.0f},{trades},{buy_pct}"
+                f"{quote_str},{trades_str},{buy_pct_str}"
             )
         except Exception:
             pass
