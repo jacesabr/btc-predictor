@@ -2327,7 +2327,7 @@ async def run_binance_expert(
 
     t0 = time.time()
     try:
-        raw = await _api_call(api_key, prompt, max_tokens=2500, timeout_s=35.0, model=DEEPSEEK_FAST_MODEL)
+        raw = await _api_call(api_key, prompt, max_tokens=2500, timeout_s=42.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = time.time() - t0
         ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
         _save(_BNX_RESPONSE,
@@ -2339,7 +2339,7 @@ async def run_binance_expert(
     except asyncio.TimeoutError:
         elapsed = time.time() - t0
         logger.warning(
-            "Binance expert TIMEOUT after %.1fs (inner _api_call timeout=35s) — "
+            "Binance expert TIMEOUT after %.1fs (inner _api_call timeout=42s) — "
             "DeepSeek prompt will be missing binance_expert_analysis block",
             elapsed,
         )
