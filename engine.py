@@ -747,6 +747,12 @@ async def _resolve_window(
     """Persist and resolve a closed window. Runs as a background task."""
     bar_ts = time.strftime("%H:%M:%S UTC", time.gmtime(window_start_time))
 
+    # Safeguard: pred must be a dict with signal/confidence
+    if pred is None or not isinstance(pred, dict):
+        logger.error("SAFEGUARD: _resolve_window called with pred=%s (type=%s), cannot resolve",
+                     pred, type(pred).__name__)
+        return
+
     # Promote pending DeepSeek result → revealed to UI now
     pending = current_state.get("pending_deepseek_prediction")
     if pending and pending.get("signal") not in (None, "ERROR", "UNAVAILABLE"):
