@@ -411,6 +411,7 @@ class PolymarketFeed:
         self.active_slug:   Optional[str] = None
         self._last_update:  float = 0.0
         self._running = False
+        self._warned_window: int = 0  # throttle "no active market" warning per 5m window
 
     @property
     def is_live(self) -> bool:
@@ -465,7 +466,9 @@ class PolymarketFeed:
                             self.market_question, up_price * 100, self.market_odds, self.open_interest,
                         )
                     return
-        logger.warning("Polymarket: no active BTC 5-min market found for window %d", window_start)
+        if self._warned_window != window_start:
+            logger.warning("Polymarket: no active BTC 5-min market found for window %d", window_start)
+            self._warned_window = window_start
 
     async def _fetch_slug(self, session: aiohttp.ClientSession, slug: str) -> Optional[float]:
         url = f"{GAMMA_API}/events"

@@ -850,7 +850,7 @@ async def _resolve_window(
         # Embedding happens INSIDE the postmortem handler once the full record is complete.
         # For bars with no postmortem (None/ERROR/UNAVAILABLE), embed now with what we have.
         if ds_pred_snap.get("signal") not in (None, "ERROR", "UNAVAILABLE"):
-            _pm_record = {**ds_pred_snap, "window_start": window_start_time}
+            _pm_record = {**ds_pred_snap, "window_start": window_start_time, "start_price": window_start_price}
             _pm_klines = list(binance_klines) if binance_klines else []
             _pm_features = dict(current_state.get("backend_snapshot", {}).get("features", {}))
             _pm_dash = current_state.get("backend_snapshot", {}).get("dashboard_signals")
