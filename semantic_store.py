@@ -199,58 +199,39 @@ def compute_all_indicator_accuracy(n: Optional[int] = None) -> Dict[str, Dict]:
         else:
             counts[name]["losses"] += 1
 
+    def _sig_of(val) -> str:
+        if isinstance(val, dict):
+            val = val.get("signal")
+        if isinstance(val, str):
+            return val.upper()
+        return ""
+
     for rec in records:
-        actual = rec.get("actual_direction", "")
-        if actual not in ("UP", "DOWN"):
-            continue
-
-        for strat_name, vote in (rec.get("strategy_votes") or {}).items():
-            if strat_name.startswith("dash:") or strat_name.startswith("spec:"):
+        try:
+            actual = rec.get("actual_direction", "")
+            if actual not in ("UP", "DOWN"):
                 continue
-            sig = ""
-            try:
-                if isinstance(vote, dict):
-                    signal_val = vote.get("signal")
-                    sig = (signal_val.upper() if isinstance(signal_val, str) else "")
-                elif isinstance(vote, str):
-                    sig = vote.upper()
-            except (AttributeError, TypeError):
-                sig = ""
-            _tally(f"strat:{strat_name}", sig, actual)
 
-        for spec_name, spec in (rec.get("specialist_signals") or {}).items():
-            sig = ""
-            try:
-                if isinstance(spec, dict):
-                    signal_val = spec.get("signal")
-                    sig = (signal_val.upper() if isinstance(signal_val, str) else "")
-            except (AttributeError, TypeError):
-                sig = ""
-            _tally(f"spec:{spec_name}", sig, actual)
+            for strat_name, vote in (rec.get("strategy_votes") or {}).items():
+                name_str = str(strat_name)
+                if name_str.startswith("dash:") or name_str.startswith("spec:"):
+                    continue
+                _tally(f"strat:{name_str}", _sig_of(vote), actual)
 
-        for ind_name, ind_sig in (rec.get("dashboard_signals_raw") or {}).items():
-            sig = ""
-            try:
-                if isinstance(ind_sig, dict):
-                    signal_val = ind_sig.get("signal")
-                    sig = (signal_val.upper() if isinstance(signal_val, str) else "")
-                elif isinstance(ind_sig, str):
-                    sig = ind_sig.upper()
-            except (AttributeError, TypeError):
-                sig = ""
-            _tally(f"dash:{ind_name}", sig, actual)
+            for spec_name, spec in (rec.get("specialist_signals") or {}).items():
+                _tally(f"spec:{spec_name}", _sig_of(spec), actual)
 
-        try:
-            ds = rec.get("deepseek_signal")
-            _tally("deepseek", (ds.upper() if isinstance(ds, str) else ""), actual)
-        except (AttributeError, TypeError):
-            _tally("deepseek", "", actual)
+            for ind_name, ind_sig in (rec.get("dashboard_signals_raw") or {}).items():
+                _tally(f"dash:{ind_name}", _sig_of(ind_sig), actual)
 
-        try:
-            es = rec.get("ensemble_signal")
-            _tally("ensemble", (es.upper() if isinstance(es, str) else ""), actual)
-        except (AttributeError, TypeError):
-            _tally("ensemble", "", actual)
+            _tally("deepseek", _sig_of(rec.get("deepseek_signal")), actual)
+            _tally("ensemble", _sig_of(rec.get("ensemble_signal")), actual)
+        except Exception as rec_exc:
+            logger.warning(
+                "compute_all_indicator_accuracy: skipped bar ws=%s — %s: %s",
+                rec.get("window_start"), type(rec_exc).__name__, rec_exc,
+            )
+            continue
 
     result: Dict[str, Dict] = {}
     for name, c in counts.items():

@@ -118,7 +118,7 @@ Conviction tiers (ABSENT trap overrides):
   |composite| < 0.35 → NO_TRADE  (→ NEUTRAL, confidence reported as 50–60%)
 
 MINIMUM-CONVICTION GATE: at least 3 layers from DIFFERENT families must each score |value| ≥ 0.4 in the
-same direction. Families = {flow, positioning, liquidity/book, funding/premium, whale}. If one family
+same direction. Families = [flow, positioning, liquidity/book, funding/premium, whale]. If one family
 produces all the "evidence", it is correlation, not confluence → go NEUTRAL.
 
 HARD VETOES (override composite entirely, go NEUTRAL or flip direction):

@@ -5,7 +5,7 @@ All background tasks and shared state. Imported by server.py for REST endpoints.
 
 Background tasks started at startup:
   run_collector()          — tick feed from Binance REST, stores prices
-  run_binance_feed()       — 1-min OHLCV klines, refreshed every 60s (Bybit→OKX→Kraken→Binance)
+  run_binance_feed()       — 1-min OHLCV klines, refreshed every 60s (CoinAPI→Bybit→OKX→Kraken→Binance)
   run_indicator_refresh()  — strategy signals refreshed every 15s
   run_prediction_loop()    — 5-minute bar loop: predict → wait → resolve
   polymarket_feed.run()    — polls Polymarket Gamma API for BTC Up/Down market
@@ -611,7 +611,7 @@ async def _run_full_prediction(prices, is_force=False):
                     cohere_api_key=config.cohere_api_key,
                     pgvector_search_fn=pgvector_search,
                 ),
-                timeout=55.0,
+                timeout=90.0,
             )
             _hist_elapsed = time.time() - _hist_t0
             if isinstance(hist_result, tuple) and len(hist_result) == 2:
@@ -654,7 +654,7 @@ async def _run_full_prediction(prices, is_force=False):
             binance_expert_task = asyncio.create_task(
                 asyncio.wait_for(
                     run_binance_expert(config.deepseek_api_key, dashboard_signals),
-                    timeout=30.0,
+                    timeout=45.0,
                 )
             )
             logger.info("Binance expert task created — DeepSeek will await it")
@@ -938,7 +938,7 @@ async def _resolve_window(
                 accuracy_snapshot["best_indicator_total"]    = bi["total"]
                 accuracy_snapshot["best_indicator_wins"]     = bi["wins"]
         except Exception as bi_exc:
-            logger.warning("Best-indicator snapshot failed: %s", bi_exc)
+            logger.warning("Best-indicator snapshot failed: %s", bi_exc, exc_info=True)
 
         await _safe_storage_async(storage.store_accuracy_snapshot, window_start_time, accuracy_snapshot)
 
@@ -989,34 +989,83 @@ async def _refresh_indicators():
 
 
 async def run_binance_feed():
-    """Fetch 1m OHLCV every 60s — Bybit primary, OKX fallback, Kraken fallback, Binance last resort."""
+    """Fetch 1m OHLCV every 60s — CoinAPI primary (paid, top-tier), then Bybit → OKX → Kraken → Binance."""
     global binance_klines
+    import os as _os
+    _coinapi_key = _os.environ.get("COINAPI_KEY", "")
     while True:
         fetched = False
 
-        # 1. Bybit klines [ts_ms, open, high, low, close, volume] — same layout as Binance
-        try:
-            connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
-            async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.get(
-                    "https://api.bybit.com/v5/market/kline",
-                    params={"category": "spot", "symbol": "BTCUSDT", "interval": "1", "limit": "500"},
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        # Bybit returns newest-first; reverse so oldest-first like Binance
-                        bars = list(reversed(data["result"]["list"]))
-                        # Convert to Binance kline format: [open_time_ms, o, h, l, close, vol]
-                        klines = [[int(b[0]), b[1], b[2], b[3], b[4], b[5]] for b in bars]
-                        binance_klines.clear()
-                        binance_klines.extend(klines)
-                        logger.info("Bybit klines updated: %d candles", len(klines))
-                        collector.seed_from_klines(binance_klines)
-                        await _refresh_indicators()
-                        fetched = True
-        except Exception as exc:
-            logger.warning("Bybit klines error: %s — trying OKX", exc)
+        # 0. CoinAPI OHLCV (primary — paid, top-tier) — Coinbase is deepest USD book
+        # Response shape per bar: {time_period_start, price_open, price_high, price_low, price_close, volume_traded, ...}
+        if _coinapi_key:
+            try:
+                connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+                async with aiohttp.ClientSession(connector=connector) as session:
+                    async with session.get(
+                        "https://rest.coinapi.io/v1/ohlcv/COINBASE_SPOT_BTC_USD/latest",
+                        headers={"X-CoinAPI-Key": _coinapi_key},
+                        params={"period_id": "1MIN", "limit": 500},
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        if resp.status == 200:
+                            bars = await resp.json(content_type=None)
+                            # CoinAPI returns newest-first; reverse so oldest-first like Binance
+                            bars = list(reversed(bars)) if isinstance(bars, list) else []
+                            klines = []
+                            for b in bars:
+                                # ISO8601 → unix ms
+                                ts_iso = b.get("time_period_start", "")
+                                try:
+                                    ts_ms = int(datetime.fromisoformat(ts_iso.replace("Z", "+00:00")).timestamp() * 1000)
+                                except Exception:
+                                    continue
+                                klines.append([
+                                    ts_ms,
+                                    str(b.get("price_open", 0)),
+                                    str(b.get("price_high", 0)),
+                                    str(b.get("price_low", 0)),
+                                    str(b.get("price_close", 0)),
+                                    str(b.get("volume_traded", 0)),
+                                ])
+                            if len(klines) >= 30:
+                                binance_klines.clear()
+                                binance_klines.extend(klines)
+                                logger.info("CoinAPI klines updated: %d candles", len(klines))
+                                collector.seed_from_klines(binance_klines)
+                                await _refresh_indicators()
+                                fetched = True
+                            else:
+                                raise RuntimeError(f"too few candles: {len(klines)}")
+            except Exception as exc:
+                logger.warning(
+                    "CoinAPI klines failed: %s: %s — trying Bybit",
+                    type(exc).__name__, exc,
+                )
+
+        # 1. Bybit klines fallback [ts_ms, open, high, low, close, volume] — Binance layout
+        if not fetched:
+            try:
+                connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+                async with aiohttp.ClientSession(connector=connector) as session:
+                    async with session.get(
+                        "https://api.bybit.com/v5/market/kline",
+                        params={"category": "spot", "symbol": "BTCUSDT", "interval": "1", "limit": "500"},
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            # Bybit returns newest-first; reverse so oldest-first like Binance
+                            bars = list(reversed(data["result"]["list"]))
+                            klines = [[int(b[0]), b[1], b[2], b[3], b[4], b[5]] for b in bars]
+                            binance_klines.clear()
+                            binance_klines.extend(klines)
+                            logger.info("Bybit klines updated: %d candles", len(klines))
+                            collector.seed_from_klines(binance_klines)
+                            await _refresh_indicators()
+                            fetched = True
+            except Exception as exc:
+                logger.warning("Bybit klines error: %s — trying OKX", exc)
 
         # 2. OKX klines fallback — no API key, India-accessible, returns oldest-first
         # Response: [[ts_ms, open, high, low, close, vol, volCcy, volCcyQuote, confirm], ...]
