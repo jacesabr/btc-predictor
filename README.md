@@ -6,6 +6,21 @@ Uses 19 math-based strategies, 5 parallel DeepSeek specialist calls, 20 live mic
 
 ---
 
+## ⚠️ Deployment Policy — Railway + PostgreSQL Only
+
+**This app runs exclusively on Railway and uses Railway's managed PostgreSQL database.**
+
+- Do **NOT** run the app on `localhost` / `127.0.0.1` — there is no local dev mode.
+- Do **NOT** use any local database (no local Postgres, no MongoDB Atlas, no NDJSON files as primary storage).
+- All persistence (`ticks`, `predictions`, `deepseek_predictions`, `pattern_history`, embeddings) goes to the Railway PostgreSQL instance via `storage_pg.py` / `semantic_store_pg.py`.
+- The canonical entry points are `Procfile` (`web: python -m uvicorn api.server:app --host 0.0.0.0 --port $PORT`) and `railway.toml`.
+- Connection is via `DATABASE_URL` injected by Railway — never commit or hard-code a connection string.
+- All external API keys (`DEEPSEEK_API_KEY`, `COINAPI_KEY`, `COINALYZE_KEY`, `COHERE_API_KEY`, etc.) are set as Railway environment variables on the service.
+
+Any workflow that starts a local uvicorn / starts a local DB / writes to local NDJSON is out of spec and should be removed on sight.
+
+---
+
 ## Project Structure
 
 ```
@@ -16,9 +31,9 @@ btc-predictor/
 │   ├── collector.py           # Polls Binance BTCUSDT REST every 12s for live price ticks
 │   ├── features.py            # 50+ technical indicators from ticks + OHLCV
 │   ├── dashboard_signals.py   # 20 live microstructure feeds (fetched in parallel at each bar open)
-│   ├── storage_mongo.py       # MongoDB Atlas storage (primary)
-│   ├── storage_file.py        # NDJSON file fallback (used when MongoDB is unavailable)
 │   └── pattern_history.py     # Persistent bar history + per-indicator accuracy tracking
+├── storage_pg.py              # Railway PostgreSQL storage (ticks / predictions / deepseek_predictions / pattern_history)
+├── semantic_store_pg.py       # Railway PostgreSQL embeddings store for semantic pattern retrieval
 ├── deepseek/
 │   ├── predictor.py           # Main DeepSeek reasoning call — full context, async, result revealed at bar close
 │   ├── specialists.py         # 5 focused parallel DeepSeek calls (Dow/Fib/Alligator/A-D/Harmonic)
@@ -180,21 +195,19 @@ Pattern history grows indefinitely and is never trimmed.
 
 ## Storage
 
-### Primary: MongoDB Atlas (`data/storage_mongo.py`)
+### Railway PostgreSQL (`storage_pg.py`, `semantic_store_pg.py`)
 
-| Collection | Contents |
-|------------|----------|
+All persistence is a single managed PostgreSQL instance on Railway. Connection via `DATABASE_URL` env var.
+
+| Table | Contents |
+|-------|----------|
 | `ticks` | Every price tick (timestamp, mid, bid, ask, spread) |
 | `predictions` | Ensemble predictions + resolution |
 | `deepseek_predictions` | Full audit log: prompt, response, reasoning, indicators, resolution, latency |
+| `pattern_history` | Full bar record (specialists + indicators + dashboard + ensemble + DeepSeek + resolution) |
+| `embeddings` | Cohere embeddings for semantic pattern retrieval |
 
-### Fallback: NDJSON Files (`data/storage_file.py`)
-
-Identical interface to MongoDB. Used automatically when Atlas is unreachable. Files in `results/`:
-- `ticks.ndjson`
-- `predictions.ndjson`
-- `deepseek_predictions.ndjson`
-- `pattern_history.ndjson`
+No fallbacks, no local NDJSON, no MongoDB. If Postgres is unreachable the service errors out — fix the connection, don't silently degrade.
 
 ### Pattern History (`data/pattern_history.py`)
 
@@ -216,7 +229,7 @@ Per-indicator rolling accuracy drives ensemble weight updates. Accuracy tiers sh
 
 ## Dashboard (`static/`)
 
-React app (Babel standalone, no build step) served at `http://localhost:8000`.
+React app (Babel standalone, no build step) served from the Railway service URL (e.g. `https://<service>.up.railway.app`).
 
 Key endpoints:
 - **WebSocket `/ws`** — live price, prediction state, strategies, specialists (1 Hz)
@@ -242,39 +255,39 @@ min_ev_to_enter: 0.05
 strong_ev_threshold: 0.15
 max_kelly_fraction: 0.25
 
-# API keys (loaded from environment)
-MONGODB_URI, DEEPSEEK_API_KEY, COINAPI_KEY, COINALYZE_KEY
+# API keys (loaded from Railway environment)
+DATABASE_URL, DEEPSEEK_API_KEY, COHERE_API_KEY, COINAPI_KEY, COINALYZE_KEY
 ```
 
 Initial strategy weights set in `config.py` under `initial_weights`.
 
 ---
 
-## Running
+## Running (Railway only)
 
-```bash
-cd btc-predictor
-pip install -r requirements.txt
-uvicorn api.server:app --host 0.0.0.0 --port 8000
+This service is deployed and run **only on Railway**. There is no supported localhost workflow.
+
+```
+# railway.toml
+[build] builder = "nixpacks"
+[deploy] startCommand = "uvicorn server:app --host 0.0.0.0 --port $PORT"
+
+# Procfile
+web: python -m uvicorn api.server:app --host 0.0.0.0 --port $PORT
 ```
 
-Dashboard at `http://localhost:8000`
-
-Required environment variables:
+Required Railway environment variables (set on the service, never committed):
 ```
-MONGODB_URI=<Atlas connection string>
+DATABASE_URL=<Railway PostgreSQL URL — auto-injected when the Postgres plugin is attached>
 DEEPSEEK_API_KEY=<DeepSeek API key>
+COHERE_API_KEY=<Cohere API key>
 COINAPI_KEY=<CoinAPI key>         # optional — feeds 9, 11, 12 degrade gracefully
 COINALYZE_KEY=<Coinalyze key>     # optional — feed 8 degrades gracefully
 ```
 
-**VPN note:** Binance and Chainlink APIs are geo-blocked in India. A VPN is required when running locally. A permanent server-side VPN is the preferred long-term fix.
+The public dashboard is served at the Railway-assigned domain (e.g. `https://<service>.up.railway.app`).
 
-### Heroku / Cloud Deployment
-
-```
-Procfile: web: python -m uvicorn api.server:app --host 0.0.0.0 --port $PORT
-```
+**VPN note:** Binance and Chainlink APIs are geo-blocked in India. Because this runs on Railway (not on the user's machine), the outbound region is Railway's egress — the permanent server-side VPN solution, if needed, must be configured on the Railway service, not locally.
 
 ---
 

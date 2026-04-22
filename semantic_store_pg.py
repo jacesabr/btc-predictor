@@ -286,8 +286,10 @@ def compute_dashboard_accuracy(n: int = 200) -> Dict:
 
 
 def compute_all_indicator_accuracy(n: Optional[int] = None) -> Dict:
+    from storage_pg import get_reset_at
+    cutoff = get_reset_at()
     limit = n if n is not None and n > 0 else 10000
-    records = load_all(limit)
+    records = [r for r in load_all(limit) if r.get("window_start", 0) >= cutoff]
     resolved = [r for r in records if r.get("actual_direction") in ("UP", "DOWN")]
     if not resolved:
         result: Dict = {}

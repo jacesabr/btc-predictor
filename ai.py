@@ -30,12 +30,115 @@ import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import aiohttp
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
+# ── DeepSeek flag callback ────────────────────────────────────────
+# Engine registers a sink here so non-fatal flags raised by ANY DeepSeek
+# call (DATA_REQUESTS, DATA_GAPS, FREE_OBSERVATION, SUGGESTION*) surface
+# in the dashboard Errors tab alongside ERROR/UNAVAILABLE bars.
+_flag_callback: Optional[Callable[[str, str, str, Dict[str, Any]], None]] = None
+
+# kind → leading prefixes that introduce that flag type in the LLM response
+_FLAG_PREFIXES: List[Tuple[str, Tuple[str, ...]]] = [
+    ("DATA_GAP",   ("DATA_REQUESTS:", "DATA REQUESTS:", "DATA_REQUEST:", "DATA REQUEST:",
+                    "DATA_GAPS:",     "DATA GAPS:")),
+    ("FREE_OBS",   ("FREE_OBSERVATION:", "FREE OBSERVATION:")),
+    ("SUGGESTION", ("SUGGESTION:", "SUGGESTION_1:", "SUGGESTION_2:", "SUGGESTION_3:",
+                    "SUGGESTION_4:", "SUGGESTION_5:", "SUGGESTION 1:", "SUGGESTION 2:",
+                    "SUGGESTION 3:", "SUGGESTION 4:", "SUGGESTION 5:")),
+]
+# Lines that always end multi-line capture of the previous flag's body
+_FLAG_TERMINATORS = (
+    "POSITION:", "CONFIDENCE:", "REASONS:", "REASON:", "NARRATIVE:",
+    "PREMORTEM:", "TRAP_CHECK:", "BLIND_BASELINE:", "SPECIALIST_AGREEMENT:",
+    "DATA_RECEIVED:", "DATA RECEIVED:", "VERDICT:", "BLIND_CALL:",
+    "ERROR_CLASS:", "ROOT_CAUSE:", "COUNTERFACTUAL:", "MISLEADING_SIGNAL:",
+    "RELIABLE_SIGNAL:", "HINDSIGHT_CHECK:", "UPDATED_READING:",
+    "LESSON_NAME:", "LESSON_PRECONDITIONS:", "LESSON_RULE:",
+    "LESSON_EFFECT:", "LESSON_FALSIFIER:", "AUDIT_SIGNAL:", "SUMMARY:",
+    "FULL_ANALYSIS:", "ISSUE_", "SUGGESTION_",
+)
+
+
+def set_flag_callback(fn: Optional[Callable[[str, str, str, Dict[str, Any]], None]]) -> None:
+    """Register a sink for non-fatal DeepSeek flags.
+
+    Callback signature: fn(source, kind, message, ctx)
+      source  — which DS call ('main_predictor', 'specialists', 'historical_analyst',
+                'binance_expert', 'postmortem', 'embedding_audit')
+      kind    — 'DATA_GAP' | 'FREE_OBS' | 'SUGGESTION'
+      message — the captured value (may span multiple lines)
+      ctx     — call-site context (window_start_time, window_count, raw_excerpt, …)
+    """
+    global _flag_callback
+    _flag_callback = fn
+
+
+def _emit_flags(source: str, raw_text: str, **ctx: Any) -> None:
+    """Scan a DeepSeek response for flagged content and dispatch to the registered sink.
+
+    Empty values and bare 'NONE' are skipped. Any other value (incl. 'NONE — but ...')
+    is forwarded so it shows up in the Errors tab.
+    """
+    if not _flag_callback or not raw_text:
+        return
+
+    captured: List[Tuple[str, str]] = []
+    current_kind: Optional[str] = None
+    current_buf: List[str] = []
+
+    def _flush():
+        if current_kind and current_buf:
+            msg = " ".join(p.strip() for p in current_buf if p.strip()).strip()
+            if msg and msg.upper() != "NONE":
+                captured.append((current_kind, msg))
+
+    for line in raw_text.splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        u = s.upper()
+
+        matched = False
+        for kind, prefixes in _FLAG_PREFIXES:
+            for p in prefixes:
+                if u.startswith(p):
+                    _flush()
+                    current_kind = kind
+                    current_buf = [s[len(p):].strip()]
+                    matched = True
+                    break
+            if matched:
+                break
+        if matched:
+            continue
+
+        if any(u.startswith(t) for t in _FLAG_TERMINATORS):
+            _flush()
+            current_kind = None
+            current_buf = []
+            continue
+
+        if current_kind:
+            current_buf.append(s)
+
+    _flush()
+
+    if not captured:
+        return
+
+    excerpt = raw_text[:1200]
+    for kind, message in captured:
+        try:
+            _flag_callback(source, kind, message, {**ctx, "raw_excerpt": excerpt})
+        except Exception as exc:  # callback failures must not break the call site
+            logger.debug("flag_callback(%s/%s) raised: %s", source, kind, exc)
 
 DEEPSEEK_API_URL   = "https://api.deepseek.com/v1/chat/completions"
 DEEPSEEK_MODEL     = "deepseek-reasoner"  # chain-of-thought — final prediction only
@@ -1322,6 +1425,7 @@ LESSON_FALSIFIER: [what observation would invalidate the rule]"""
         elapsed = int((time.time() - t0) * 1000)
         logger.info("Postmortem completed for bar %s (%s) in %dms", bar_ts, verdict, elapsed)
         _save(_PM_DIR / f"last_{int(window_start)}.txt", f"=== PROMPT ===\n{prompt}\n\n=== RESPONSE ===\n{raw}")
+        _emit_flags("postmortem", raw, window_start_time=window_start, bar_ts=bar_ts)
         return raw.strip()
     except Exception as exc:
         logger.warning("Postmortem failed for bar %s: %s", bar_ts, _fmt_exc(exc))
@@ -1448,6 +1552,7 @@ async def run_specialists(
         strategies, suggestion = _parse_specialist_response(raw)
         if suggestion:
             _append(_SPEC_SUGGEST, f"[{ts_str}] {suggestion}")
+        _emit_flags("specialists", raw)
         elapsed = time.time() - t0
         logger.info("Unified specialist %.1fs | %s",
                     elapsed, " ".join(f"{k[:3]}={v['signal']}" for k, v in strategies.items()))
@@ -2156,6 +2261,7 @@ async def run_historical_analyst(
                 if suggestion and suggestion.upper() != "NONE":
                     _append(_HIST_SUGGEST, f"[{ts_str}] {suggestion}")
                 break
+        _emit_flags("historical_analyst", raw, window_start_time=window_start_time)
         signal_dict = _parse_historical_signal(raw)
         logger.info("Historical analyst %.1fs | %s %.0f%% | top-%d from %d bars via Cohere",
                     elapsed, signal_dict["signal"], signal_dict["confidence"] * 100, n, total_searched)
@@ -2332,6 +2438,7 @@ async def run_binance_expert(
         ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
         _save(_BNX_RESPONSE,
               f"# {ts_str}  elapsed={elapsed:.1f}s\n\n=== PROMPT ===\n{prompt}\n\n=== RESPONSE ===\n{raw}")
+        _emit_flags("binance_expert", raw)
         result = _parse_binance_expert_response(raw)
         logger.info("Binance expert %.1fs → %s %d%%  analysis_len=%d",
                     elapsed, result["signal"], result["confidence"], len(result["analysis"]))
@@ -2428,6 +2535,12 @@ class DeepSeekPredictor:
                 if suggestion and suggestion.upper() != "NONE":
                     _append(_PRED_SUGGEST, f"[{ts_str}] {suggestion}")
                 break
+
+        _emit_flags(
+            "main_predictor", raw_response,
+            window_start_time=window_start_time,
+            window_count=self.window_count,
+        )
 
         logger.info("DeepSeek #%d → %s  conf=%d%%  latency=%dms",
                     self.window_count, signal, confidence, latency_ms)
@@ -2620,6 +2733,7 @@ FULL_ANALYSIS:
         logger.warning("Embedding audit DeepSeek call failed: %s", exc)
         return None
 
+    _emit_flags("embedding_audit", raw)
     elapsed = time.time() - t0
 
     # ── Parse structured fields ────────────────────────────────────

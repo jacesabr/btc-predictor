@@ -55,6 +55,7 @@ from ai import (
     run_binance_expert, SPECIALIST_KEYS, _build_current_bar, run_postmortem,
     embed_text, _bar_embed_text, CohereUnavailableError,
     run_embedding_audit, load_embedding_audit_log,
+    set_flag_callback,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -98,8 +99,43 @@ deepseek        = (
 ws_clients:    set  = set()
 binance_klines: List = []
 
-# In-memory error log — ERROR/UNAVAILABLE bars logged here, never embedded
+# In-memory error log — ERROR/UNAVAILABLE bars + non-fatal DeepSeek flags
+# (DATA_GAP / FREE_OBS / SUGGESTION) emitted by ai.py via set_flag_callback.
 _error_log: list = []
+_ERROR_LOG_MAX = 500   # bound memory; oldest entries evicted past this
+
+
+def _record_deepseek_flag(source: str, kind: str, message: str, ctx: dict) -> None:
+    """Append a non-fatal DeepSeek flag to the in-memory error log.
+
+    Wired into ai.set_flag_callback at startup. Skips empty/NONE messages
+    (the scanner already filters those, but defend anyway).
+    """
+    msg = (message or "").strip()
+    if not msg or msg.upper() == "NONE":
+        return
+    ws = float(ctx.get("window_start_time") or 0.0)
+    bar_ts = (
+        time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(ws))
+        if ws else (ctx.get("bar_ts") or "")
+    )
+    _error_log.append({
+        "window_start": ws,
+        "bar_time":     bar_ts,
+        "bar_num":      ctx.get("window_count") or "",
+        "signal":       kind,           # "DATA_GAP" | "FREE_OBS" | "SUGGESTION"
+        "source":       source,         # which DeepSeek call raised it
+        "message":      msg,
+        "reasoning":    msg,            # legacy field reused for UI back-compat
+        "raw_response": (ctx.get("raw_excerpt") or "")[:2000],
+        "logged_at":    time.time(),
+    })
+    # Evict oldest entries past cap so long-running processes don't grow unbounded.
+    if len(_error_log) > _ERROR_LOG_MAX:
+        del _error_log[:len(_error_log) - _ERROR_LOG_MAX]
+
+
+set_flag_callback(_record_deepseek_flag)
 
 # Embedding bootstrap state
 _embedding_bootstrap_running: bool = False
