@@ -56,6 +56,13 @@ SPECIALIST_KEYS = {"alligator", "acc_dist", "dow_theory", "fib_pullback", "harmo
 class CohereUnavailableError(RuntimeError):
     """Raised when Cohere API is unreachable or returns an error. No fallback — app pauses."""
 
+
+def _fmt_exc(exc: BaseException) -> str:
+    """Format exceptions so empty-message ones (TimeoutError, ClientError(''), etc.) still show type."""
+    msg = str(exc).strip()
+    return f"{type(exc).__name__}: {msg}" if msg else type(exc).__name__
+
+
 _DAYS     = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 _SESSIONS = [(0, 8, "ASIA"), (8, 13, "LONDON"), (13, 16, "OVERLAP"), (16, 21, "NY"), (21, 24, "LATE")]
 
@@ -1317,7 +1324,7 @@ LESSON_FALSIFIER: [what observation would invalidate the rule]"""
         _save(_PM_DIR / f"last_{int(window_start)}.txt", f"=== PROMPT ===\n{prompt}\n\n=== RESPONSE ===\n{raw}")
         return raw.strip()
     except Exception as exc:
-        logger.warning("Postmortem failed for bar %s: %s", bar_ts, exc)
+        logger.warning("Postmortem failed for bar %s: %s", bar_ts, _fmt_exc(exc))
         return ""
 
 
@@ -2311,8 +2318,17 @@ async def run_binance_expert(
         logger.info("Binance expert %.1fs → %s %d%%  analysis_len=%d",
                     elapsed, result["signal"], result["confidence"], len(result["analysis"]))
         return result
+    except asyncio.TimeoutError:
+        elapsed = time.time() - t0
+        logger.warning(
+            "Binance expert TIMEOUT after %.1fs (inner _api_call timeout=35s) — "
+            "DeepSeek prompt will be missing binance_expert_analysis block",
+            elapsed,
+        )
+        return None
     except Exception as exc:
-        logger.warning("Binance expert failed: %s", exc)
+        elapsed = time.time() - t0
+        logger.warning("Binance expert failed after %.1fs: %s", elapsed, _fmt_exc(exc))
         return None
 
 
