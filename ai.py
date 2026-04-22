@@ -2024,8 +2024,10 @@ async def run_historical_analyst(
                     elapsed, signal_dict["signal"], signal_dict["confidence"] * 100, n, total_searched)
         return signal_dict, raw.strip()
     except Exception as exc:
-        _save(_HIST_RESPONSE, f"# ERROR {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n\n{exc}")
-        logger.warning("Historical analyst DeepSeek call failed: %s — %s", type(exc).__name__, exc)
+        import traceback
+        error_details = f"{type(exc).__name__}: {str(exc)}\n\nTraceback:\n{traceback.format_exc()}"
+        _save(_HIST_RESPONSE, f"# ERROR {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n\n{error_details}")
+        logger.error("Historical analyst DeepSeek call failed after %.1fs: %s", time.time() - t0, error_details)
         return None, None
 
 

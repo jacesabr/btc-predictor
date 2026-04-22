@@ -126,23 +126,18 @@ async def _bootstrap_embeddings_background():
             logger.info("Embedding bootstrap: no bars in history yet")
             return
 
-        # Check coverage via search_similar (0 results = 0 coverage)
-        test_search = pgvector_search(None, 1) if pgvector_search else []
-        current_coverage = len(test_search) if test_search else 0
-        total_bars = len(all_history)
-        coverage_pct = (current_coverage / total_bars * 100) if total_bars > 0 else 0
+        # Count bars with embeddings by checking if 'embedding' key is non-null
+        bars_with_embedding = [r for r in all_history if r.get("embedding")]
+        bars_to_embed = [r for r in all_history if not r.get("embedding")]
+        coverage_pct = (len(bars_with_embedding) / len(all_history) * 100) if all_history else 0
 
         logger.info("Embedding bootstrap: coverage %.0f%% (%d/%d bars embedded)",
-                    coverage_pct, current_coverage, total_bars)
+                    coverage_pct, len(bars_with_embedding), len(all_history))
 
         # Only bootstrap if coverage is below 50%
         if coverage_pct >= 50:
             logger.info("Embedding bootstrap: coverage sufficient (%.0f%% >= 50%%), skipping", coverage_pct)
             return
-
-        # Identify un-embedded bars (those not in pgvector results)
-        embedded_window_starts = set(r.get("window_start") for r in test_search if pgvector_search)
-        bars_to_embed = [r for r in all_history if r.get("window_start") not in embedded_window_starts]
 
         if not bars_to_embed:
             logger.info("Embedding bootstrap: all bars already embedded")

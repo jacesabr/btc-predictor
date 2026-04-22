@@ -192,6 +192,9 @@ def load_all(limit: int = 10000) -> List[Dict]:
 def store_embedding(window_start: float, vector: np.ndarray):
     """Store a Cohere 1024-dim embedding for a resolved bar as a REAL[] array."""
     _init()
+    if vector is None:
+        logger.warning("store_embedding: skipping None vector for window_start=%.0f", window_start)
+        return
     conn = _conn()
     try:
         with conn.cursor() as cur:
@@ -326,7 +329,12 @@ def compute_all_indicator_accuracy(n: Optional[int] = None) -> Dict:
             _tally(f"spec:{spec_name}", sig, actual)
 
         for ind_name, ind_sig in (rec.get("dashboard_signals_raw") or {}).items():
-            _tally(f"dash:{ind_name}", (ind_sig or "").upper(), actual)
+            sig = ""
+            if isinstance(ind_sig, dict):
+                sig = (ind_sig.get("signal") or "").upper()
+            else:
+                sig = (ind_sig or "").upper()
+            _tally(f"dash:{ind_name}", sig, actual)
 
         _tally("deepseek", (rec.get("deepseek_signal") or "").upper(), actual)
         _tally("ensemble", (rec.get("ensemble_signal") or "").upper(), actual)
