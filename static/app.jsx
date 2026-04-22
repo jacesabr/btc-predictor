@@ -1958,42 +1958,150 @@ function HistoricalAnalysisAuditTab({ deepseekLog }) {
 }
 
 // ── Embedding Audit Tab ────────────────────────────────────────
-function EmbeddingAuditTab({ embeddingAuditLog }) {
-  const [expandedAudit, setExpandedAudit] = React.useState(null);
+const INSPECT_FILE_ORDER = [
+  ["main_predictor.last_prompt",       "Main Predictor — Prompt Sent"],
+  ["main_predictor.last_response",     "Main Predictor — DeepSeek Response"],
+  ["historical_analyst.last_sent",     "Historical Analyst — Top-20 Reranked Bars (the 'embed')"],
+  ["historical_analyst.last_prompt",   "Historical Analyst — Prompt Sent"],
+  ["historical_analyst.last_response", "Historical Analyst — DeepSeek Response"],
+  ["unified_analyst.last_sent",        "Unified Analyst — Context Sent"],
+  ["unified_analyst.last_prompt",      "Unified Analyst — Prompt Sent"],
+  ["unified_analyst.last_response",    "Unified Analyst — DeepSeek Response"],
+  ["binance_expert.last_response",     "Binance Expert — DeepSeek Response"],
+  ["embedding_audit.last_raw",         "Embedding Audit — Last Raw Output"],
+];
 
-  if (!embeddingAuditLog || embeddingAuditLog.length === 0) {
-    return (
-      <div style={{ padding:24, textAlign:"center", color:C.muted }}>
-        <div style={{ fontSize:12, marginBottom:16 }}>No embedding audits yet. First audit fires ~4 hours after startup.</div>
-        <button onClick={()=>fetch("/api/embedding-audit/run", {method:"POST"}).then(()=>console.log("Audit triggered"))}
-          style={{ background:C.amberBg, color:C.amber, border:`1px solid ${C.amberBorder}`,
-            padding:"6px 14px", borderRadius:4, cursor:"pointer", fontSize:11, fontFamily:"inherit", fontWeight:600 }}>
-          Run Audit Now
-        </button>
+function InspectFileRow({ fileKey, title, file }) {
+  const [open, setOpen] = React.useState(false);
+  const exists = file && file.exists;
+  const empty  = !exists || !file.content || file.content.trim().length === 0;
+  return (
+    <div style={{ borderBottom:`1px solid ${C.borderSoft}` }}>
+      <div onClick={()=>!empty && setOpen(o=>!o)}
+        style={{ padding:"8px 12px", cursor:empty?"default":"pointer", display:"flex", gap:10, alignItems:"center",
+                 opacity: empty ? 0.5 : 1 }}>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:11, fontWeight:600, color:C.text }}>{title}</div>
+          <div style={{ fontSize:9, color:C.muted, marginTop:2, fontFamily:"monospace" }}>
+            {file?.path || fileKey}
+            {exists ? ` · ${file.size_bytes}B · ${file.mtime_str}` : " · (not written yet)"}
+          </div>
+        </div>
+        <div style={{ color:C.muted, fontSize:12, flexShrink:0 }}>
+          {empty ? "—" : (open ? "▼" : "▶")}
+        </div>
       </div>
-    );
-  }
+      {open && !empty && (
+        <pre style={{ margin:0, padding:"10px 14px", background:C.bg, color:C.text, fontSize:10, lineHeight:1.5,
+                      whiteSpace:"pre-wrap", wordBreak:"break-word", maxHeight:500, overflowY:"auto",
+                      borderTop:`1px solid ${C.borderSoft}` }}>
+          {file.content}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function EmbeddingAuditTab({ embeddingAuditLog, setEmbeddingAuditLog, deepseekInspect, setDeepseekInspect }) {
+  const [expandedAudit, setExpandedAudit] = React.useState(null);
+  const [auditStatus,   setAuditStatus]   = React.useState(null); // "running" | "done" | "timeout" | null
+  const pollRef = React.useRef(null);
+
+  const refreshInspect = React.useCallback(() => {
+    fetch("/api/inspect/last-deepseek").then(r=>r.json()).then(setDeepseekInspect).catch(()=>{});
+  }, [setDeepseekInspect]);
+
+  const startAudit = React.useCallback(() => {
+    if (auditStatus === "running") return;
+    const baselineLen = (embeddingAuditLog || []).length;
+    setAuditStatus("running");
+    fetch("/api/embedding-audit/run", { method:"POST" }).catch(()=>{});
+    const started = Date.now();
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(() => {
+      fetch("/api/embedding-audit").then(r=>r.json()).then(d => {
+        const log = d.audit_log || [];
+        if (log.length > baselineLen) {
+          setEmbeddingAuditLog(log);
+          setAuditStatus("done");
+          clearInterval(pollRef.current); pollRef.current = null;
+        } else if (Date.now() - started > 180000) {
+          setAuditStatus("timeout");
+          clearInterval(pollRef.current); pollRef.current = null;
+        }
+      }).catch(()=>{});
+    }, 5000);
+  }, [auditStatus, embeddingAuditLog, setEmbeddingAuditLog]);
+
+  React.useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  const files = deepseekInspect?.files || {};
+  const anyFilePresent = Object.values(files).some(f => f && f.exists && f.content && f.content.trim().length > 0);
+  const auditPill =
+    auditStatus === "running" ? { label:"AUDIT RUNNING…", bg:C.amberBg, fg:C.amber, br:C.amberBorder } :
+    auditStatus === "done"    ? { label:"AUDIT COMPLETE", bg:C.greenBg, fg:C.green, br:C.greenBorder } :
+    auditStatus === "timeout" ? { label:"AUDIT TIMEOUT (3m) — check logs", bg:C.redBg, fg:C.red, br:C.redBorder } :
+    null;
 
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100%", overflow:"hidden" }}>
       {/* Header */}
-      <div style={{ ...card, flexShrink:0, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-        <div>
-          <div style={label}>Embedding Audit Log</div>
+      <div style={{ ...card, flexShrink:0, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
+        <div style={{ minWidth:0 }}>
+          <div style={label}>Pipeline Inspection + Embedding Audit</div>
           <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>
-            Every 4 hours, DeepSeek reasoner audits the embedding pipeline. Issues, patterns, suggestions below.
+            Inspect the actual prompts/responses DeepSeek sees. Audit runs every 4h via deepseek-reasoner.
           </div>
         </div>
-        <button onClick={()=>fetch("/api/embedding-audit/run", {method:"POST"}).then(()=>console.log("Audit triggered"))}
-          style={{ background:C.amberBg, color:C.amber, border:`1px solid ${C.amberBorder}`,
-            padding:"6px 12px", borderRadius:4, cursor:"pointer", fontSize:10, fontFamily:"inherit", fontWeight:600 }}>
-          Run Now
-        </button>
+        <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
+          {auditPill && (
+            <span style={{ background:auditPill.bg, color:auditPill.fg, border:`1px solid ${auditPill.br}`,
+              padding:"4px 8px", borderRadius:4, fontSize:9, fontWeight:600 }}>{auditPill.label}</span>
+          )}
+          <button onClick={refreshInspect}
+            style={{ background:C.bg, color:C.textSec, border:`1px solid ${C.border}`,
+              padding:"6px 10px", borderRadius:4, cursor:"pointer", fontSize:10, fontFamily:"inherit", fontWeight:600 }}>
+            Refresh Files
+          </button>
+          <button onClick={startAudit} disabled={auditStatus==="running"}
+            style={{ background:C.amberBg, color:C.amber, border:`1px solid ${C.amberBorder}`,
+              padding:"6px 12px", borderRadius:4, cursor:auditStatus==="running"?"default":"pointer",
+              opacity:auditStatus==="running"?0.6:1, fontSize:10, fontFamily:"inherit", fontWeight:600 }}>
+            Run Audit Now
+          </button>
+        </div>
       </div>
 
+      {/* Scroll body */}
+      <div style={{ flex:1, overflowY:"auto" }}>
+        {/* ── Last DeepSeek Input panel (always visible) ── */}
+        <div style={{ ...card, margin:"12px 0 0 0", borderRadius:0, borderLeft:"none", borderRight:"none", padding:0 }}>
+          <div style={{ padding:"10px 16px", borderBottom:`1px solid ${C.border}` }}>
+            <div style={label}>Last DeepSeek Input / Output</div>
+            <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>
+              Raw files from <span style={{ fontFamily:"monospace" }}>specialists/*/last_*.txt</span>. Click a row to expand.
+              {!anyFilePresent && " — None written yet; wait for a bar to close."}
+            </div>
+          </div>
+          {INSPECT_FILE_ORDER.map(([k, title]) => (
+            <InspectFileRow key={k} fileKey={k} title={title} file={files[k]} />
+          ))}
+        </div>
+
+        {/* ── Audit log (may be empty) ── */}
+        {(!embeddingAuditLog || embeddingAuditLog.length === 0) ? (
+          <div style={{ padding:"16px 16px", color:C.muted, fontSize:11 }}>
+            No embedding audits in log yet. First auto-audit fires ~4 hours after startup, or click "Run Audit Now" above.
+          </div>
+        ) : (
+          <div style={{ marginTop:8 }}>
+            <div style={{ ...label, padding:"10px 16px 4px 16px" }}>Embedding Audit Log</div>
+          </div>
+        )}
+
       {/* Audit list */}
-      <div style={{ flex:1, overflowY:"auto", padding:"12px 0" }}>
-        {embeddingAuditLog.map((audit, idx) => {
+      <div style={{ padding:"0" }}>
+        {(embeddingAuditLog || []).map((audit, idx) => {
           const isExpanded = expandedAudit === idx;
           const stats = audit.stats || {};
           return (
@@ -2075,6 +2183,7 @@ function EmbeddingAuditTab({ embeddingAuditLog }) {
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );
@@ -2174,6 +2283,7 @@ function App() {
   const [allAccuracy,    setAllAccuracy]    = useState(null);
   const [allAccuracyErr, setAllAccuracyErr] = useState(false);
   const [embeddingAuditLog, setEmbeddingAuditLog] = useState([]);
+  const [deepseekInspect,   setDeepseekInspect]   = useState(null);
   const wsRef           = useRef(null);
   const reconnectRef    = useRef(null);
   const prevDsWindowRef = useRef(null);
@@ -2332,6 +2442,7 @@ function App() {
   useEffect(() => {
     if (tab !== "embed_audit") return;
     fetch("/api/embedding-audit").then(r=>r.json()).then(d=>setEmbeddingAuditLog(d.audit_log||[])).catch(()=>{});
+    fetch("/api/inspect/last-deepseek").then(r=>r.json()).then(setDeepseekInspect).catch(()=>{});
   }, [tab]);
 
   useEffect(() => {
@@ -3232,7 +3343,12 @@ function App() {
         )}
 
         {tab==="embed_audit" && (
-          <EmbeddingAuditTab embeddingAuditLog={embeddingAuditLog} />
+          <EmbeddingAuditTab
+            embeddingAuditLog={embeddingAuditLog}
+            setEmbeddingAuditLog={setEmbeddingAuditLog}
+            deepseekInspect={deepseekInspect}
+            setDeepseekInspect={setDeepseekInspect}
+          />
         )}
 
         {/* ══ OLD TABS (kept for reference, hidden) ══ */}

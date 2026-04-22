@@ -550,6 +550,46 @@ async def trigger_embedding_audit():
     return {"status": "audit triggered", "will_appear_in_log": True}
 
 
+@app.get("/api/inspect/last-deepseek")
+async def inspect_last_deepseek():
+    """Return raw text of the most recent files sent to / received from DeepSeek.
+
+    Exposes what DeepSeek actually sees so the pipeline can be inspected
+    without waiting for the 4-hour embedding audit.
+    """
+    specialists_root = pathlib.Path(__file__).parent / "specialists"
+    targets = {
+        "historical_analyst.last_sent":     "historical_analyst/last_sent.txt",
+        "historical_analyst.last_prompt":   "historical_analyst/last_prompt.txt",
+        "historical_analyst.last_response": "historical_analyst/last_response.txt",
+        "main_predictor.last_prompt":       "main_predictor/last_prompt.txt",
+        "main_predictor.last_response":     "main_predictor/last_response.txt",
+        "unified_analyst.last_sent":        "unified_analyst/last_sent.txt",
+        "unified_analyst.last_prompt":      "unified_analyst/last_prompt.txt",
+        "unified_analyst.last_response":    "unified_analyst/last_response.txt",
+        "binance_expert.last_response":     "binance_expert/last_response.txt",
+        "embedding_audit.last_raw":         "embedding_audit/last_raw.txt",
+    }
+    files = {}
+    for key, rel in targets.items():
+        p = specialists_root / rel
+        try:
+            st = p.stat()
+            files[key] = {
+                "path": rel,
+                "size_bytes": st.st_size,
+                "mtime": st.st_mtime,
+                "mtime_str": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(st.st_mtime)),
+                "content": p.read_text(encoding="utf-8", errors="replace"),
+                "exists": True,
+            }
+        except FileNotFoundError:
+            files[key] = {"path": rel, "exists": False, "content": "", "size_bytes": 0, "mtime": None, "mtime_str": None}
+        except Exception as exc:
+            files[key] = {"path": rel, "exists": False, "content": f"(read error: {exc})", "size_bytes": 0, "mtime": None, "mtime_str": None}
+    return {"server_time": time.time(), "files": files}
+
+
 @app.get("/accuracy/all")
 async def get_all_accuracy(n: int = 100):
     try:
