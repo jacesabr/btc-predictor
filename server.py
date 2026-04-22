@@ -78,9 +78,8 @@ async def startup():
     asyncio.create_task(run_binance_feed())
     asyncio.create_task(run_indicator_refresh())
     asyncio.create_task(run_embedding_audit_loop())
-    asyncio.create_task(_startup_backfill_and_embed())
-    # Trigger embedding bootstrap: embed any un-embedded bars in pattern_history to pgvector
-    _trigger_embedding_bootstrap()
+    # DISABLED: 312/315 bars (99%) already embedded — bootstrap was exhausting Cohere quota unnecessarily
+    # asyncio.create_task(_startup_backfill_and_embed())
 
 
 async def _startup_backfill_and_embed():
