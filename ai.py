@@ -992,13 +992,17 @@ microstructure expert, historical similarity analyst, unified technical analyst,
 into a single probabilistic call. Each specialist is fallible in predictable ways; your job is
 to know which one's call to trust when they disagree.
 
-ABSTENTION PAYOFF: NEUTRAL = 0 reward. Correct UP/DOWN = +1. Wrong UP/DOWN = −1.
+PAYOFF: Correct UP/DOWN = +1. Wrong UP/DOWN = −1. NEUTRAL = 0, but NEUTRAL IS NOT A FREE WIN —
+it is a deliberate choice to preserve capital when the data genuinely doesn't support a call. Every
+NEUTRAL is a passed opportunity. If after weighing all the data and reasoning you have a genuine
+argument for one side, you must take the call — that is how the system makes money. Abstain only
+when the argument truly does not survive scrutiny, not as a hedge against being wrong.
+
 A directional call should be a committed, defended position — not a guess. Before you commit, steelman
 the opposing direction: what is the strongest case for the other side? If your call survives that
-challenge with a concrete rebuttal grounded in specific fields and numbers, commit with the confidence
-that rebuttal earns. CONFIDENCE should reflect the robustness of your argument *after* weighing the
-opposing case, not raw enthusiasm. Output NEUTRAL only when the two sides genuinely cancel — not as
-a hedge against commitment.
+challenge with a concrete rebuttal grounded in specific fields and numbers, commit. CONFIDENCE should
+reflect the robustness of your argument *after* weighing the opposing case, not raw enthusiasm — but
+there is NO confidence floor. A genuine 55% edge with a clean rebuttal is a call you take.
 
 ══════════════════════════════════════════════
   WINDOW #{window_num}
@@ -1140,9 +1144,11 @@ For each specialist that fired (historical_analyst, binance_expert, unified_anal
 
 STEP C — CONFLICT RESOLUTION
 If specialists split — e.g., historical says UP 70%, binance says DOWN 65%, technical says UP 60% —
-the setup is LOW-EDGE by default. A crisp trade needs ≥2 non-correlated specialists agreeing with your
-blind baseline AND no trap pattern firing in microstructure. If any of those fail, NEUTRAL is the
-mathematically correct call.
+the setup is lower-edge, but not automatically a pass. Identify which specialist's read is most
+trustworthy for THIS specific market context (not in general), explain why the others are likely
+mis-firing, and weight accordingly. A clear edge can survive a split if you can defend why one side
+of the split is the noise. NEUTRAL is correct only when you cannot honestly defend either side after
+that weighing — not whenever specialists disagree.
 
 SPECIAL RULES (lessons from past losses):
   • POST-RALLY DISTRIBUTION TRAP: if prior 5–10 bars delivered ≥0.25% rally AND current bar shows a
@@ -1156,7 +1162,9 @@ SPECIAL RULES (lessons from past losses):
 STEP D — PREMORTEM
 Assume your call is wrong in exactly 5 minutes. Write one specific sentence naming the most likely
 reason, with a cited field and number. If that reason is ALREADY partially visible in the current
-data, DOWNGRADE your confidence by 5–10pp or switch to NEUTRAL.
+data, downgrade your confidence to reflect it — but do not auto-switch to NEUTRAL. A call with a
+known, weighed downside risk is still a call. Only abstain if the premortem reason is so concrete
+and visible that it actually inverts the case.
 
 STEP E — FAITHFULNESS CHECK
 Restate your call while omitting your strongest cited signal. Does the conclusion still follow from
@@ -1165,21 +1173,23 @@ and fragile → cap confidence at 70%.
 
 STEP F — CONFIDENCE CALIBRATION
 Confidence is the strength of your argument *after* steelmanning the opposing side — not raw
-enthusiasm. Commit to a direction only when you can name a concrete rebuttal to the strongest
-counter-case, citing specific fields and numbers.
-  • 85–95%: blind baseline + ≥3 non-correlated specialists all agree AND no trap fires AND premortem
-    reason is weak or not visible in data. Counter-case is thin.
-  • 75–84%: ≥2 non-correlated specialists agree with blind baseline, no trap, minor conflict. You can
-    rebut the opposing case cleanly.
-  • 65–74%: marginal edge — specialists partially agree, premortem has real ammunition, but your
-    rebuttal still holds.
-  • Below 65%: only commit if you have a specific, defensible reason the opposing case is weaker than
-    it looks — not because "something leans that way." If the two sides are genuinely balanced,
-    output NEUTRAL.
+enthusiasm. There is NO confidence floor for committing. If you have a defensible argument with a
+concrete rebuttal to the strongest counter-case, take the call at whatever confidence the argument
+earns. The bands below are descriptive — guides for how to *label* a call, not gates for whether
+to make one.
+  • 85–95%: blind baseline + ≥3 non-correlated specialists agree, no trap fires, premortem reason
+    is weak or not visible. Counter-case is thin.
+  • 70–84%: ≥2 non-correlated specialists agree with blind baseline, no trap, minor conflict, you
+    can rebut the opposing case cleanly.
+  • 55–69%: marginal but real edge — specialists partially agree, premortem has real ammunition,
+    but your rebuttal still holds and one side is honestly stronger than the other. THIS IS A
+    TAKEABLE CALL — these are the bars where the system makes money over time.
+  • Below 55%: the two sides are genuinely balanced and you cannot honestly defend either over the
+    other. Output NEUTRAL — not as a hedge, but because there is no edge to capture.
 
 ASYMMETRIC ERROR CHECK: if your recent track record shows a pattern (e.g., "last 10 bars: 4 FALSE_UP,
-1 FALSE_DOWN"), raise the UP-call threshold by +5pp this bar. The cost of another same-direction
-false positive is higher than normal.
+1 FALSE_DOWN"), let that information sharpen your scrutiny of new same-direction calls — but do not
+apply a blanket confidence penalty. If a new UP call survives stricter scrutiny, take it.
 
 ══════════════════════════════════════════════
 RESPOND EXACTLY IN THIS FORMAT:

@@ -886,8 +886,12 @@ function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, ca, cz,
                 fetch("/reset-scores",{method:"POST"})
                   .then(()=>fetch("/weights/update",{method:"POST"}))
                   .then(()=>Promise.all([
-                    fetch("/weights").then(r=>r.json()).then(setWeights),
-                    fetch("/accuracy/all?n=200").then(r=>r.json()),
+                    fetch("/weights").then(r=>r.json()).then(setWeights).catch(()=>{}),
+                    fetch("/accuracy/all?n=200").then(r=>r.json()).then(d=>{ if(d&&!d.error) setAllAccuracy(d); }).catch(()=>{}),
+                    fetch("/deepseek/accuracy").then(r=>r.json()).then(setDeepseekAcc).catch(()=>{}),
+                    fetch("/accuracy/agree").then(r=>r.json()).then(setAgreeAcc).catch(()=>{}),
+                    fetch("/best-indicator").then(r=>r.json()).then(setBestIndicator).catch(()=>{}),
+                    fetch("/predictions/recent?n=500").then(r=>r.json()).then(setPreds).catch(()=>{}),
                   ]));
               }}
               style={{ fontSize:9, padding:"2px 8px", borderRadius:3,
