@@ -223,7 +223,7 @@ function MicroCard({ title, source, sig, dot, children }) {
 }
 
 // ── Microstructure Summary (dashboard compact view) ──────────
-function MicroSummary({ ob, tk, ls, lq, oif, cz, ca, fg, mp, cg, dots, caDivPct, caSig, collapsed, onToggle, noCard }) {
+function MicroSummary({ ob, tk, ls, lq, oif, cz, fg, mp, cg, dots, collapsed, onToggle, noCard }) {
   var tileBase = { padding:"6px 4px", borderRadius:6, textAlign:"center" };
   function tileStyle(sig) {
     var sc = sig ? sigColors(sig) : null;
@@ -255,7 +255,7 @@ function MicroSummary({ ob, tk, ls, lq, oif, cz, ca, fg, mp, cg, dots, caDivPct,
 
   var inner = (<>
       <div style={{ display:"flex", gap:4, alignItems:"center", marginBottom:6 }}>
-        {[["ob","OB"],["tk","TF"],["ls","LS"],["lq","LQ"],["oif","OI"],["cz","CZ"],["ca","CA"],["fg","FG"],["mp","MP"],["cg","GK"]].map(function(pair){
+        {[["ob","OB"],["tk","TF"],["ls","LS"],["lq","LQ"],["oif","OI"],["cz","CZ"],["fg","FG"],["mp","MP"],["cg","GK"]].map(function(pair){
           var d = dots[pair[0]];
           return React.createElement("span", { key:pair[0], title:pair[1], style:{
             width:6, height:6, borderRadius:"50%", display:"inline-block",
@@ -334,16 +334,6 @@ function MicroSummary({ ob, tk, ls, lq, oif, cz, ca, fg, mp, cg, dots, caDivPct,
           {cz && cz.fr!=null ? (<>
             <div style={{ fontSize:18, fontWeight:800, color:arrowColor(cz.sig), lineHeight:1, marginTop:2 }}>{arrowChar(cz.fr>0.0005?"down":cz.fr<0?"up":"flat")}</div>
             <div style={{ fontSize:11, fontWeight:800, color:arrowColor(cz.sig) }}>{(cz.fr*100).toFixed(4)+"%"}</div>
-          </>) : <div style={{ fontSize:9, color:C.muted, marginTop:4 }}>...</div>}
-        </div>
-
-        {/* CoinAPI Cross-Exchange Price */}
-        <div style={tileStyle(caSig)}>
-          <div style={{ fontSize:9, color:"#1D4ED8", fontWeight:700 }}>X-Price</div>
-          <div style={{ fontSize:8, color:C.muted }}>CoinAPI</div>
-          {ca && ca.rate ? (<>
-            <div style={{ fontSize:10, fontWeight:800, color:C.text }}>{"$"+ca.rate.toLocaleString("en-US",{maximumFractionDigits:0})}</div>
-            {caDivPct!=null ? <div style={{ fontSize:8, color:Math.abs(caDivPct)>0.05?C.amber:C.muted }}>{"Δ"+(caDivPct>=0?"+":"")+caDivPct.toFixed(3)+"%"}</div> : null}
           </>) : <div style={{ fontSize:9, color:C.muted, marginTop:4 }}>...</div>}
         </div>
 
@@ -830,12 +820,7 @@ function AccuracySection({ title, rows, showWeight, emptyMsg }) {
   );
 }
 
-function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, ca, cz, cg, dots, price, allAccuracy, allAccuracyErr, onRefreshAccuracy }) {
-  const caDivPct = (ca?.rate && price) ? ((price - ca.rate) / ca.rate * 100) : null;
-  const caSig = caDivPct != null
-    ? (Math.abs(caDivPct) > 0.05 ? (caDivPct > 0 ? "BEARISH_ARBI" : "BULLISH_ARBI") : "NEUTRAL")
-    : null;
-
+function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, cz, cg, dots, price, allAccuracy, allAccuracyErr, onRefreshAccuracy }) {
   // Build micro accuracy lookup for inline display: dash key → {accuracy, correct, total}
   const microAcc = {};
   (allAccuracy?.microstructure || []).forEach(r => {
@@ -861,8 +846,6 @@ function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, ca, cz,
       kv: mp ? [["Fast",`${mp.fastest} sat/vB`],["Half",`${mp.halfHour} sat/vB`],["Pending",mp.count?.toLocaleString()]] : [] },
     { key:"coinalyze",   uiKey:"cz",  name:"Coinalyze",    dot:dots.cz,  signal:cz?.sig,
       kv: cz ? [["X-ex FR",`${(cz.fr*100)?.toFixed(4)}%`]] : [] },
-    { key:"coinapi",     uiKey:"ca",  name:"CoinAPI",      dot:dots.ca,  signal:caSig,
-      kv: ca?.rate ? [["Agg rate",`$${ca.rate?.toLocaleString()}`],["Div",caDivPct!=null?`${caDivPct>=0?"+":""}${caDivPct.toFixed(3)}%`:"—"]] : [] },
     { key:"coingecko",   uiKey:"cg",  name:"CoinGecko",    dot:dots.cg,  signal:null,
       kv: cg ? [["24h Δ",`${cg.ch>=0?"+":""}${cg.ch?.toFixed(2)}%`],["Vol/MCap",`${cg.vm?.toFixed(2)}%`]] : [] },
   ];
@@ -890,7 +873,6 @@ function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, ca, cz,
                     fetch("/accuracy/all?n=200").then(r=>r.json()).then(d=>{ if(d&&!d.error) setAllAccuracy(d); }).catch(()=>{}),
                     fetch("/deepseek/accuracy").then(r=>r.json()).then(setDeepseekAcc).catch(()=>{}),
                     fetch("/accuracy/agree").then(r=>r.json()).then(setAgreeAcc).catch(()=>{}),
-                    fetch("/best-indicator").then(r=>r.json()).then(setBestIndicator).catch(()=>{}),
                     fetch("/predictions/recent?n=500").then(r=>r.json()).then(setPreds).catch(()=>{}),
                   ]));
               }}
@@ -2006,6 +1988,149 @@ function InspectFileRow({ fileKey, title, file }) {
   );
 }
 
+function TimingTab({ timings }) {
+  const current = timings && timings.current ? timings.current : {};
+  const history = timings && Array.isArray(timings.history) ? timings.history : [];
+  const currentStages = current.stages || {};
+  const stageKeys = React.useMemo(() => {
+    const s = new Set(Object.keys(currentStages));
+    history.forEach(b => Object.keys(b.stages || {}).forEach(k => s.add(k)));
+    // Keep a sensible column order
+    const ordered = [
+      "specialists", "dashboard_signals",
+      "historical_total", "historical_cohere_embed", "historical_pgvector_search",
+      "historical_cohere_rerank", "historical_deepseek_call",
+      "binance_expert", "main_deepseek",
+    ];
+    const rest = [...s].filter(k => !ordered.includes(k));
+    return [...ordered.filter(k => s.has(k)), ...rest];
+  }, [currentStages, history]);
+
+  const fmtSec = (v) => (v == null ? "—" : `${Number(v).toFixed(1)}s`);
+  const cellForStage = (stage) => {
+    if (!stage) return { text: "—", color: C.muted, title: "" };
+    if (!stage.ok) {
+      return {
+        text:  fmtSec(stage.elapsed_s),
+        color: C.red,
+        title: stage.error || "failed",
+      };
+    }
+    const s = Number(stage.elapsed_s || 0);
+    const color = s > 60 ? C.red : s > 30 ? C.amber : C.green;
+    return { text: fmtSec(s), color, title: "ok" };
+  };
+
+  const th = { padding:"6px 8px", textAlign:"left", fontSize:9, fontWeight:700,
+               color:C.muted, letterSpacing:1.2, borderBottom:`1px solid ${C.border}` };
+  const td2 = { padding:"4px 8px", fontSize:10, color:C.textSec,
+                borderBottom:`1px solid ${C.borderSoft}`, whiteSpace:"nowrap" };
+
+  return (
+    <div style={{ padding: "16px 18px" }}>
+      <div style={{ fontSize:11, color:C.textSec, marginBottom:12 }}>
+        Per-stage elapsed time for each bar. Historical analyst no longer expires —
+        if the pipeline runs past the 5-minute bar close, the prediction is
+        discarded but the timings are kept here so you can see which stage blew
+        the budget. Red = stage failed or &gt; 60s. Amber = &gt; 30s.
+      </div>
+
+      {/* Current bar */}
+      <div style={{ ...card, marginBottom:16 }}>
+        <div style={{ ...label, marginBottom:8 }}>CURRENT BAR</div>
+        {Object.keys(currentStages).length === 0 ? (
+          <div style={{ fontSize:11, color:C.muted }}>No timing data yet — waiting for the next bar to start.</div>
+        ) : (
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(180px, 1fr))", gap:8 }}>
+            {stageKeys.map(k => {
+              const s = currentStages[k];
+              const cell = cellForStage(s);
+              return (
+                <div key={k} title={cell.title} style={{
+                  border:`1px solid ${C.border}`, borderRadius:6, padding:"6px 8px",
+                  background: s && !s.ok ? C.redBg : C.bg }}>
+                  <div style={{ fontSize:9, color:C.muted, letterSpacing:1 }}>{k}</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:cell.color }}>{cell.text}</div>
+                  {s && !s.ok && s.error ? (
+                    <div style={{ fontSize:9, color:C.red, marginTop:2,
+                                  overflow:"hidden", textOverflow:"ellipsis" }}>{s.error}</div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {current.overran_bar_close ? (
+          <div style={{ marginTop:8, padding:"6px 8px", background:C.redBg,
+                         border:`1px solid ${C.redBorder}`, borderRadius:4,
+                         fontSize:10, color:C.red, fontWeight:700 }}>
+            ⚠ Pipeline overran bar close by {current.overran_by_s}s — prediction was discarded.
+          </div>
+        ) : null}
+        {current.pipeline_error ? (
+          <div style={{ marginTop:8, padding:"6px 8px", background:C.redBg,
+                         border:`1px solid ${C.redBorder}`, borderRadius:4,
+                         fontSize:10, color:C.red }}>
+            pipeline error: {current.pipeline_error}
+          </div>
+        ) : null}
+      </div>
+
+      {/* History table */}
+      <div style={card}>
+        <div style={{ ...label, marginBottom:8 }}>
+          LAST {history.length} BARS {timings && timings.history_total ? `(of ${timings.history_total} total)` : ""}
+        </div>
+        {history.length === 0 ? (
+          <div style={{ fontSize:11, color:C.muted }}>No history yet.</div>
+        ) : (
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontFamily:"inherit" }}>
+              <thead>
+                <tr>
+                  <th style={th}>Bar</th>
+                  <th style={th}>Total</th>
+                  <th style={th}>Overran</th>
+                  {stageKeys.map(k => <th key={k} style={th}>{k}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((b, i) => {
+                  const stages = b.stages || {};
+                  return (
+                    <tr key={i}>
+                      <td style={td2}>{b.bar || "—"}</td>
+                      <td style={{ ...td2,
+                                   color: (b.total_elapsed_s > 300) ? C.red : (b.total_elapsed_s > 240 ? C.amber : C.textSec),
+                                   fontWeight:700 }}>
+                        {fmtSec(b.total_elapsed_s)}
+                      </td>
+                      <td style={td2}>
+                        {b.overran_bar_close
+                          ? <span style={{ color:C.red, fontWeight:700 }}>+{b.overran_by_s}s</span>
+                          : <span style={{ color:C.green }}>✓</span>}
+                      </td>
+                      {stageKeys.map(k => {
+                        const cell = cellForStage(stages[k]);
+                        return (
+                          <td key={k} title={cell.title} style={{ ...td2, color:cell.color,
+                                                                   fontWeight: stages[k] ? 600 : 400 }}>
+                            {cell.text}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function EmbeddingAuditTab({ embeddingAuditLog, setEmbeddingAuditLog, deepseekInspect, setDeepseekInspect }) {
   const [expandedAudit, setExpandedAudit] = React.useState(null);
   const [auditStatus,   setAuditStatus]   = React.useState(null); // "running" | "done" | "timeout" | null
@@ -2307,7 +2432,6 @@ function App() {
   const [backtest,       setBacktest]       = useState(null);
   const [preds,          setPreds]          = useState([]);
   const [weights,        setWeights]        = useState({});
-  const [bestIndicator,  setBestIndicator]  = useState(null);
   const [microOpen,      setMicroOpen]      = useState(false);
   const [indicatorsOpen, setIndicatorsOpen] = useState(false);
 
@@ -2329,6 +2453,7 @@ function App() {
   const [allAccuracyErr, setAllAccuracyErr] = useState(false);
   const [embeddingAuditLog, setEmbeddingAuditLog] = useState([]);
   const [deepseekInspect,   setDeepseekInspect]   = useState(null);
+  const [timings,           setTimings]           = useState({ current: {}, history: [], history_total: 0 });
   const wsRef           = useRef(null);
   const reconnectRef    = useRef(null);
   const prevDsWindowRef = useRef(null);
@@ -2342,7 +2467,6 @@ function App() {
   const [lq,  setLq]  = useState(null);  // liquidations
   const [fg,  setFg]  = useState(null);  // fear & greed
   const [mp,  setMp]  = useState(null);  // mempool
-  const [ca,  setCa]  = useState(null);  // CoinAPI (via proxy)
   const [cz,  setCz]  = useState(null);  // Coinalyze (via proxy)
   const [cg,  setCg]  = useState(null);  // CoinGecko
 
@@ -2434,7 +2558,6 @@ function App() {
       safe("/deepseek/accuracy",       setDeepseekAcc);
       safe("/history/all",             setDeepseekLog);
       safe("/accuracy/agree",          setAgreeAcc);
-      safe("/best-indicator",          setBestIndicator);
     }
     poll();
     const id = setInterval(poll, 30000);
@@ -2488,6 +2611,15 @@ function App() {
     if (tab !== "embed_audit") return;
     fetch("/api/embedding-audit").then(r=>r.json()).then(d=>setEmbeddingAuditLog(d.audit_log||[])).catch(()=>{});
     fetch("/api/inspect/last-deepseek").then(r=>r.json()).then(setDeepseekInspect).catch(()=>{});
+  }, [tab]);
+
+  // ── Timing — fetch on tab switch + poll every 3s while visible ─
+  useEffect(() => {
+    if (tab !== "timing") return;
+    const load = () => fetch("/api/timings").then(r=>r.json()).then(setTimings).catch(()=>{});
+    load();
+    const id = setInterval(load, 3000);
+    return () => clearInterval(id);
   }, [tab]);
 
   useEffect(() => {
@@ -2616,15 +2748,6 @@ function App() {
     } catch { dot("mp","err"); }
   }, []);
 
-  const fetchCA = useCallback(async () => {
-    try {
-      const d = await fetch("/api/proxy/coinapi").then(r=>r.json());
-      if (d.error) throw new Error(d.error);
-      setCa({ rate:d.rate });
-      dot("ca","live");
-    } catch { dot("ca","err"); }
-  }, []);
-
   const fetchCZ = useCallback(async () => {
     try {
       const d = await fetch("/api/proxy/coinalyze").then(r=>r.json());
@@ -2649,7 +2772,7 @@ function App() {
 
   // ── Initial fetch + intervals ─────────────────────────────────
   useEffect(() => {
-    fetchOB(); fetchLS(); fetchTaker(); fetchOIF(); fetchLQ(); fetchFG(); fetchMP(); fetchCA(); fetchCZ(); fetchGecko();
+    fetchOB(); fetchLS(); fetchTaker(); fetchOIF(); fetchLQ(); fetchFG(); fetchMP(); fetchCZ(); fetchGecko();
     const ids = [
       setInterval(fetchOB,    5000),
       setInterval(fetchLS,   15000),
@@ -2658,12 +2781,11 @@ function App() {
       setInterval(fetchLQ,   30000),
       setInterval(fetchFG,  300000),
       setInterval(fetchMP,   60000),
-      setInterval(fetchCA,   60000),
       setInterval(fetchCZ,   60000),
       setInterval(fetchGecko,60000),
     ];
     return () => ids.forEach(clearInterval);
-  }, [fetchOB,fetchLS,fetchTaker,fetchOIF,fetchLQ,fetchFG,fetchMP,fetchCA,fetchCZ,fetchGecko]);
+  }, [fetchOB,fetchLS,fetchTaker,fetchOIF,fetchLQ,fetchFG,fetchMP,fetchCZ,fetchGecko]);
 
   // ── Derived values ────────────────────────────────────────────
   const priceDelta = (price&&winStartPrice) ? price-winStartPrice : 0;
@@ -2686,19 +2808,9 @@ function App() {
       })()
     : "--:-- UTC";
   const activeDeepseekPred = (pendingDeepseekReady && pendingDeepseekPred) ? pendingDeepseekPred : deepseekPred;
-  // Apply 70% threshold: Combined Indicators only trades when ≥70% confident; below = NEUTRAL (no trade)
-  const effectiveEnsSig = ensemblePred
-    ? (ensemblePred.signal !== "NEUTRAL" && ensemblePred.confidence * 100 < 70 ? "NEUTRAL" : ensemblePred.signal)
-    : null;
-  // aiAgree only when we have a live (pending) prediction — stale results must not show as current
-  const aiAgree = (pendingDeepseekReady && activeDeepseekPred && ensemblePred && activeDeepseekPred.signal!=="ERROR")
-                    ? activeDeepseekPred.signal===effectiveEnsSig : null;
   const strats = STRATEGY_META.filter(m=>strategies[m.key]).map(m=>({...m,...strategies[m.key]}));
 
   // Cross-exchange divergence (for microstructure display)
-  const caDivPct = (ca?.rate&&winStartPrice) ? ((winStartPrice-ca.rate)/ca.rate*100) : null;
-  const caSig    = caDivPct!=null ? (Math.abs(caDivPct)>0.05 ? (caDivPct>0?"BEARISH_ARBI":"BULLISH_ARBI") : "NEUTRAL") : null;
-
   if (serviceUnavailable) return (
     <div style={{ fontFamily:"'JetBrains Mono','Fira Code',monospace", background:"#0F0E0D",
       height:"100vh", display:"flex", alignItems:"center", justifyContent:"center", flexDirection:"column", gap:16 }}>
@@ -2751,7 +2863,7 @@ function App() {
             </div>
           )}
         </div>
-        {[["live","LIVE"],["history","HISTORY"],["audit","AUDIT"],["ensemble","ENSEMBLE"],["sources","SOURCES"],["embed_audit","EMBED AUDIT"],["binance_test","BINANCE TEST"],["errors","ERRORS"]].map(([t,label])=>(
+        {[["live","LIVE"],["history","HISTORY"],["audit","AUDIT"],["ensemble","ENSEMBLE"],["sources","SOURCES"],["embed_audit","EMBED AUDIT"],["timing","TIMING"],["binance_test","BINANCE TEST"],["errors","ERRORS"]].map(([t,label])=>(
           <button key={t} onClick={()=>setTab(t)} style={{
             background:"none", border:"none",
             borderBottom:tab===t?`2px solid ${C.amber}`:"2px solid transparent",
@@ -2807,9 +2919,8 @@ function App() {
             {/* RIGHT: Predictions + DeepSeek + EV + Strategies */}
             <div style={{ flex:"0 0 54%", minWidth:0, display:"flex", flexDirection:"column", gap:5, overflowY:"auto", zoom:0.87 }}>
 
-              {/* ① PREDICTION BAR — 4 columns, uniform layout */}
+              {/* ① PREDICTION BAR — DeepSeek only */}
               {(() => {
-                // Shared accuracy footer — identical across all 4 columns
                 function AccuracyRow({ pct, wins, losses, total, label: lbl, noData }) {
                   const neutral = (total != null && total > (wins||0) + (losses||0)) ? total - (wins||0) - (losses||0) : null;
                   const barTotal = (wins||0) + (losses||0) + (neutral||0);
@@ -2838,12 +2949,10 @@ function App() {
                     }
                   </>);
                 }
-                // Shared signal row — identical across all 4 columns
                 function SignalRow({ sig, conf, confStr }) {
                   const up      = sig === "UP";
                   const neutral = sig === "NEUTRAL";
                   const clr     = neutral ? C.amber : up ? C.green : C.red;
-                  // Neutral = no trade, 0 position — show 0% as placeholder
                   const pct     = neutral ? "0%" : (confStr ?? (conf != null ? conf.toFixed(1)+"%" : null));
                   const barW    = neutral ? 0 : (conf ?? (up ? 65 : 35));
                   return (<>
@@ -2858,31 +2967,9 @@ function App() {
                     </div>
                   </>);
                 }
-                const colStyle = (border) => ({ ...(border==="right"?{borderRight:`1px solid ${C.borderSoft}`,paddingRight:12}:{borderLeft:`1px solid ${C.borderSoft}`,paddingLeft:12}) });
                 const colTitle = { fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1.5, textTransform:"uppercase", marginBottom:6 };
+                const metaRow = { height:26, display:"flex", alignItems:"center", gap:6, flexWrap:"nowrap", overflow:"hidden" };
 
-                // Best indicator signal resolver (defined once, shared)
-                const getBestSig = (name) => {
-                  if (!name) return null;
-                  if (name.startsWith("strat:")) return strategies[name.slice(6)]?.signal;
-                  if (name.startsWith("dash:")) {
-                    const key = name.slice(5);
-                    const d = backendSnap?.snapshot?.dashboard_signals?.[key];
-                    const raw = (microSignalKey(key, d) || d?.signal || "").toUpperCase();
-                    return raw.includes("BULLISH") ? "UP" : raw.includes("BEARISH") ? "DOWN" : (raw==="UP"||raw==="DOWN") ? raw : null;
-                  }
-                  if (name === "deepseek") return activeDeepseekPred?.signal;
-                  if (name === "ensemble") return ensemblePred?.signal || ensemble?.signal;
-                  return null;
-                };
-
-                // ── Pre-compute all 4 column values before rendering ──────────────
-                // Col 1 — Ensemble
-                const c1sig  = effectiveEnsSig;
-                const c1conf = c1sig==="NEUTRAL" ? 0 : ensemblePred?.confidence*100;
-                const c1meta = ensemblePred ? { votes:`${ensemblePred.bullish}↑ ${ensemblePred.bearish}↓`, rawConf: effectiveEnsSig==="NEUTRAL"&&ensemblePred.signal!=="NEUTRAL" ? (ensemblePred.confidence*100).toFixed(1) : null } : null;
-
-                // Col 2 — DeepSeek
                 const dsLive = pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR";
                 const dsErr  = pendingDeepseekReady && activeDeepseekPred?.signal==="ERROR";
                 const dsPrev = !dsLive && !dsErr && deepseekPred && deepseekPred.signal!=="ERROR";
@@ -2891,123 +2978,22 @@ function App() {
                 const c2conf = c2src?.confidence ?? 0;
                 const c2meta = c2src ? { label:`#${c2src.window_count} · ${c2src.latency_ms}ms`, prev:dsPrev, aiReq: c2src.data_requests&&c2src.data_requests.toUpperCase()!=="NONE"&&c2src.data_requests.trim()!=="" } : null;
 
-                // Col 3 — Consensus
-                const c3dsSig   = c2sig;
-                const c3ensSig  = effectiveEnsSig;
-                const c3agreed  = aiAgree!==null ? (aiAgree && c3ensSig!=="NEUTRAL") : (dsPrev && deepseekPred?.signal===c3ensSig && c3ensSig!=="NEUTRAL");
-                const c3sig     = c3agreed ? c3ensSig : "NEUTRAL";
-                const c3conf    = c3agreed ? c1conf : 0;
-                const c3hasData = aiAgree!==null || (dsPrev && ensemblePred);
-                const c3isPrev  = aiAgree===null && dsPrev;
-
-                // Col 4 — Best Indicator
-                let c4sig = null, c4conf = 50, c4display = "", c4split = false, c4acc = 0, c4ref = null, c4ready = false;
-                if (bestIndicator) {
-                  const ranked    = bestIndicator.ranked || [];
-                  const qualified = ranked.filter(r => (r.directional ?? r.total) > 0);
-                  if (qualified.length) {
-                    const top = qualified[0];
-                    c4sig     = getBestSig(top.name) || null;
-                    c4conf    = 50;
-                    c4display = top.name.replace(/^strat:|^spec:|^dash:/,"").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
-                    c4acc     = (top.accuracy ?? 0) * 100;
-                    c4ref     = top;
-                    c4ready   = true;
-                  }
-                }
-
-                // ── Shared cell style helpers ─────────────────────────────────────
-                const cR  = { borderRight:`1px solid ${C.borderSoft}`, paddingRight:12 };
-                const cM  = { borderRight:`1px solid ${C.borderSoft}`, padding:"0 12px" };
-                const cL  = { paddingLeft:12 };
-                // Each "row" in the flat grid: title / signal / meta / accuracy
-                // meta row has a fixed minHeight so all columns stay level
-                const metaRow = { height:26, display:"flex", alignItems:"center", gap:6, flexWrap:"nowrap", overflow:"hidden" };
-                const badge = (ok) => ({ fontSize:9, fontWeight:800, padding:"1px 5px", borderRadius:3,
-                  color:ok?C.green:C.amber, background:ok?C.greenBg:C.amberBg,
-                  border:`1px solid ${ok?C.greenBorder:C.amberBorder}` });
-
                 return (
                   <div style={{ ...card, flexShrink:0, padding:"8px 12px" }}>
-                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gridTemplateRows:"auto auto auto auto", gap:0 }}>
-
-                      {/* ══ ROW 1 — Titles ══ */}
-                      <div style={{ ...cR, paddingBottom:4 }}><div style={colTitle}>Combined Indicators</div></div>
-                      <div style={{ ...cM, paddingBottom:4 }}><div style={colTitle}>DeepSeek AI Analysis</div></div>
-                      <div style={{ ...cM, paddingBottom:4 }}><div style={colTitle}>Consensus</div></div>
-                      <div style={{ ...cL, paddingBottom:4 }}><div style={colTitle}>Best Indicator</div></div>
-
-                      {/* ══ ROW 2 — Signals ══ */}
-                      <div style={cR}>
-                        {ensemblePred ? <SignalRow sig={c1sig} conf={c1conf} /> : <div style={{ fontSize:11, color:C.muted }}>Warming up…</div>}
-                      </div>
-                      <div style={cM}>
-                        {dsErr ? <div style={{ fontSize:11, color:C.red }}>{activeDeepseekPred.reasoning||"API error"}</div>
-                          : c2sig ? <SignalRow sig={c2sig} conf={c2conf} />
-                          : <div style={{ fontSize:11, color:C.muted }}>Analyzing…</div>}
-                      </div>
-                      <div style={cM}>
-                        {c3hasData ? <SignalRow sig={c3sig} conf={c3conf} /> : <div style={{ fontSize:11, color:C.muted }}>Waiting…</div>}
-                      </div>
-                      <div style={cL}>
-                        {c4ready ? <SignalRow sig={c4sig||"NEUTRAL"} conf={c4sig&&!c4split?c4conf:0} confStr={c4split?"SPLIT":undefined} />
-                          : <div style={{ fontSize:10, color:C.muted }}>No historical data{bestIndicator && bestIndicator.pattern_record_count >= 0 ? <span style={{marginLeft:4,opacity:0.6}}>[{bestIndicator.pattern_record_count} rec]</span> : null}</div>}
-                      </div>
-
-                      {/* ══ ROW 3 — Metadata (fixed minHeight keeps all cols level) ══ */}
-                      <div style={{ ...cR, ...metaRow }}>
-                        {c1meta && (<>
-                          <span style={{ fontSize:9, color:C.muted }}>{c1meta.votes}</span>
-                          {c1meta.rawConf && <span style={{ fontSize:9, fontWeight:700, color:C.amber }}>({c1meta.rawConf}% raw)</span>}
-                          {aiAgree!==null && <span style={badge(aiAgree)}>{aiAgree?"✓ agree":"⚠ split"}</span>}
-                        </>)}
-                      </div>
-                      <div style={{ ...cM, ...metaRow }}>
-                        {c2meta && (<>
-                          <span style={{ fontSize:9, color:C.muted }}>{c2meta.label}</span>
-                          {c2meta.prev && <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>prev bar</span>}
-                          {c2meta.aiReq && <span style={{ fontSize:9, fontWeight:700, padding:"1px 5px", borderRadius:3, color:C.amber, background:C.amberBg, border:`1px solid ${C.amberBorder}` }}>⚡ AI req</span>}
-                        </>)}
-                      </div>
-                      <div style={{ ...cM, ...metaRow }}>
-                        {c3hasData && (<>
-                          {!c3agreed && c3dsSig && (<>
-                            <span style={{ fontSize:10, fontWeight:900, color:c3ensSig==="UP"?C.green:c3ensSig==="NEUTRAL"?C.amber:C.red }}>{c3ensSig==="UP"?"▲":c3ensSig==="NEUTRAL"?"—":"▼"} Ind</span>
-                            <span style={{ fontSize:10, fontWeight:900, color:c3dsSig==="UP"?C.green:c3dsSig==="NEUTRAL"?C.amber:C.red }}>{c3dsSig==="UP"?"▲":c3dsSig==="NEUTRAL"?"—":"▼"} AI</span>
-                          </>)}
-                          <span style={badge(c3agreed)}>{c3agreed?"✓ agree":"⚠ split"}</span>
-                          {c3isPrev && <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>prev bar</span>}
-                        </>)}
-                      </div>
-                      <div style={{ ...cL, ...metaRow }}>
-                        {c4ready && (<>
-                          <span style={{ fontSize:9, color:C.indigo, fontWeight:700 }}>{c4display}</span>
-                          {c4split && <span style={badge(false)}>⚠ split</span>}
-                        </>)}
-                      </div>
-
-                      {/* ══ ROW 4 — Accuracy ══ */}
-                      <div style={cR}>
-                        <AccuracyRow lbl="All-time accuracy" pct={allTimeAccuracy} wins={allTimeCorrect}
-                          losses={allTimeTotal-allTimeCorrect} total={allTimeTotal+allTimeNeutral} noData={allTimeTotal===0} />
-                      </div>
-                      <div style={cM}>
-                        <AccuracyRow lbl="DeepSeek accuracy" pct={deepseekAcc?.accuracy*100??0} wins={deepseekAcc?.correct??0}
-                          losses={(deepseekAcc?.directional??deepseekAcc?.total??0)-(deepseekAcc?.correct??0)}
-                          total={(deepseekAcc?.directional??0)+(deepseekAcc?.neutrals??0)} noData={!deepseekAcc?.total} />
-                      </div>
-                      <div style={cM}>
-                        <AccuracyRow lbl="When both agreed" pct={agreeAcc?.accuracy_agree*100??0} wins={agreeAcc?.correct_agree??0}
-                          losses={(agreeAcc?.total_agree??0)-(agreeAcc?.correct_agree??0)} noData={!agreeAcc?.total_agree} />
-                      </div>
-                      <div style={cL}>
-                        {c4ready && c4ref
-                          ? <AccuracyRow lbl="Accuracy (all-time)" pct={c4acc} wins={c4ref.wins??c4ref.correct??0}
-                              losses={(c4ref.total??0)-(c4ref.wins??c4ref.correct??0)} total={c4ref.total} noData={false} />
-                          : <div />}
-                      </div>
-
+                    <div style={colTitle}>DeepSeek AI Analysis</div>
+                    {dsErr ? <div style={{ fontSize:11, color:C.red }}>{activeDeepseekPred.reasoning||"API error"}</div>
+                      : c2sig ? <SignalRow sig={c2sig} conf={c2conf} />
+                      : <div style={{ fontSize:11, color:C.muted }}>Analyzing…</div>}
+                    <div style={metaRow}>
+                      {c2meta && (<>
+                        <span style={{ fontSize:9, color:C.muted }}>{c2meta.label}</span>
+                        {c2meta.prev && <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>prev bar</span>}
+                        {c2meta.aiReq && <span style={{ fontSize:9, fontWeight:700, padding:"1px 5px", borderRadius:3, color:C.amber, background:C.amberBg, border:`1px solid ${C.amberBorder}` }}>⚡ AI req</span>}
+                      </>)}
                     </div>
+                    <AccuracyRow lbl="DeepSeek accuracy" pct={deepseekAcc?.accuracy*100??0} wins={deepseekAcc?.correct??0}
+                      losses={(deepseekAcc?.directional??deepseekAcc?.total??0)-(deepseekAcc?.correct??0)}
+                      total={(deepseekAcc?.directional??0)+(deepseekAcc?.neutrals??0)} noData={!deepseekAcc?.total} />
                   </div>
                 );
               })()}
@@ -3173,8 +3159,8 @@ function App() {
                   {/* Market Microstructure */}
                   <div style={{ marginTop:10, paddingTop:10, borderTop:`1px solid ${C.borderSoft}` }}>
                     <div style={{ ...label, marginBottom:6 }}>Market Microstructure · live</div>
-                    <MicroSummary ob={ob} tk={tk} ls={ls} lq={lq} oif={oif} cz={cz} ca={ca} fg={fg} mp={mp} cg={cg}
-                      dots={dots} caDivPct={caDivPct} caSig={caSig}
+                    <MicroSummary ob={ob} tk={tk} ls={ls} lq={lq} oif={oif} cz={cz} fg={fg} mp={mp} cg={cg}
+                      dots={dots}
                       collapsed={false} onToggle={null} noCard={true} />
                   </div>
                   {/* Strategy Indicators */}
@@ -3411,7 +3397,7 @@ function App() {
               </div>
               <div style={{ marginLeft:"auto", display:"flex", gap:10, flexWrap:"wrap" }}>
                 {[["ob","Order Book"],["tk","Taker Flow"],["ls","L/S Ratio"],["lq","Liquidations"],
-                  ["oif","OI/Fund"],["cz","Coinalyze"],["ca","CoinAPI"],["fg","Fear&Greed"],
+                  ["oif","OI/Fund"],["cz","Coinalyze"],["fg","Fear&Greed"],
                   ["mp","Mempool"],["cg","CoinGecko"]].map(([k,n])=>{
                   const d=dots[k];
                   return <span key={k} style={{ display:"flex", alignItems:"center", gap:4, fontSize:9, color:C.muted }}>
@@ -3575,29 +3561,6 @@ function App() {
                 </>) : <div style={{ fontSize:10, color:C.muted }}>Loading via proxy…</div>}
               </MicroCard>
 
-              {/* COINAPI — cross-exchange price */}
-              <MicroCard title="Cross-Exchange Price" source="CoinAPI · 350+ exchanges weighted avg"
-                sig={caSig} dot={dots.ca||"pend"}>
-                {ca ? (<>
-                  <div style={{ fontSize:22, fontWeight:900, color:C.text }}>${ca.rate.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-                  <div style={{ fontSize:9, color:C.muted }}>Weighted average across 350+ exchanges</div>
-                  {caDivPct!=null && (<>
-                    <div style={{ display:"flex", justifyContent:"space-between", marginTop:4, fontSize:9 }}>
-                      <span style={{ color:C.muted }}>Binance: ${(winStartPrice||price||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
-                      <span style={{ color:Math.abs(caDivPct)>0.05?C.amber:C.muted, fontWeight:700 }}>
-                        Δ {caDivPct>=0?"+":""}{caDivPct.toFixed(4)}%
-                      </span>
-                    </div>
-                    <div style={{ fontSize:9, color:C.muted, marginTop:3 }}>
-                      {Math.abs(caDivPct)>0.05
-                        ? caDivPct>0?"Binance at PREMIUM — arbitrage selling into Binance expected."
-                                   :"Binance at DISCOUNT — arbitrage buying into Binance expected."
-                        : "No significant cross-exchange divergence — arb pressure neutral."}
-                    </div>
-                  </>)}
-                </>) : <div style={{ fontSize:10, color:C.muted }}>Loading via proxy…</div>}
-              </MicroCard>
-
               {/* FEAR & GREED */}
               <MicroCard title="Fear &amp; Greed Index" source="Alternative.me · updates daily"
                 sig={fg?.sig} dot={dots.fg||"pend"}>
@@ -3686,7 +3649,7 @@ function App() {
           <EnsembleTab
             weights={weights} setWeights={setWeights}
             ob={ob} ls={ls} tk={tk} oif={oif} lq={lq}
-            fg={fg} mp={mp} ca={ca} cz={cz} cg={cg}
+            fg={fg} mp={mp} cz={cz} cg={cg}
             dots={dots} price={price}
             allAccuracy={allAccuracy}
             allAccuracyErr={allAccuracyErr}
@@ -3775,6 +3738,13 @@ function App() {
           </div>
         )}
 
+        {/* ══ TIMING TAB ══ */}
+        {tab==="timing" && (
+          <ErrorBoundary key="timing-tab">
+            <TimingTab timings={timings} />
+          </ErrorBoundary>
+        )}
+
         {/* ══ BINANCE TEST TAB ══ */}
         {tab==="binance_test" && (
           <ErrorBoundary key="binance-test-tab">
@@ -3829,7 +3799,7 @@ function App() {
                 <div style={{ borderTop:`1px solid ${C.borderSoft}`, margin:"6px 0 4px" }} />
                 <div style={{ ...label, marginBottom:4 }}>Microstructure API status</div>
                 {[["Order book",dots.ob],["Taker flow",dots.tk],["L/S ratio",dots.ls],["Liquidations",dots.lq],
-                  ["OI+Funding",dots.oif],["Coinalyze",dots.cz],["CoinAPI",dots.ca],
+                  ["OI+Funding",dots.oif],["Coinalyze",dots.cz],
                   ["Fear&Greed",dots.fg],["Mempool",dots.mp],["CoinGecko",dots.cg]].map(([n,d])=>(
                   <Row key={n} label={n} val={d==="live"?"●  live":d==="err"?"✕  error":"○  pending"} c={d==="live"?C.green:d==="err"?C.red:C.muted} />
                 ))}

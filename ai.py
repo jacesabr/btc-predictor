@@ -195,7 +195,7 @@ async def _api_call(
     api_key: str,
     prompt: str,
     max_tokens: int = 1000,
-    timeout_s: float = 90.0,
+    timeout_s: Optional[float] = 90.0,
     model: str = DEEPSEEK_FAST_MODEL,
 ) -> str:
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -205,7 +205,7 @@ async def _api_call(
         "max_tokens":  max_tokens,
         "temperature": 0.1,
     }
-    timeout   = aiohttp.ClientTimeout(total=timeout_s)
+    timeout   = aiohttp.ClientTimeout(total=timeout_s)  # timeout_s=None → wait forever
     connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
     async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
         async with session.post(DEEPSEEK_API_URL, headers=headers, json=payload) as resp:
@@ -679,47 +679,6 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
             f"  → {cgl.get('interpretation','')}", "",
         ]
 
-    cab = ds.get("coinapi_orderbook")
-    cat = ds.get("coinapi_trades")
-    caq = ds.get("coinapi_quotes")
-    ca1s = ds.get("coinapi_ohlcv_1s")
-    cav = ds.get("coinapi_vwap")
-
-    if cab or cat or caq or ca1s or cav:
-        lines += [
-            "  [COINAPI EXPERT ANALYSIS — Multi-exchange real-time microstructure]",
-        ]
-        if cab:
-            imb = cab.get("imbalance", 0); bw = cab.get("largest_bid_wall", 0); aw = cab.get("largest_ask_wall", 0); sp = cab.get("spread_pct", 0)
-            lines += [
-                f"  Order Book Imbalance (L2, 50 levels): {imb:.2f}  Signal: {cab.get('signal','NEUTRAL')}{_acc_tag('coinapi_orderbook')}",
-                f"    Bid wall: {bw:.2f} BTC  |  Ask wall: {aw:.2f} BTC  |  Spread: {sp:.4f}%",
-            ]
-        if cat:
-            cvd = cat.get("cvd", 0); ratio = cat.get("buy_sell_ratio", 1); blocks = cat.get("block_trade_count", 0)
-            lines += [
-                f"  Cumulative Volume Delta (60s): {cvd:+.2f} BTC  |  Buy/Sell Ratio: {ratio:.2f}  Signal: {cat.get('signal','NEUTRAL')}{_acc_tag('coinapi_trades')}",
-                f"    Block Trades (>5 BTC): {blocks}",
-            ]
-        if caq:
-            bid = caq.get("bid", 0); ask = caq.get("ask", 0); sp = caq.get("spread_pct", 0)
-            lines += [
-                f"  Quote Spread: {sp:.4f}%  (Bid: ${bid:,.2f}  Ask: ${ask:,.2f}){_acc_tag('coinapi_quotes')}",
-            ]
-        if ca1s:
-            streak = ca1s.get("momentum_streak", 0); chg = ca1s.get("net_change_pct", 0); vol_trend = ca1s.get("volume_trend", ""); absorption = ca1s.get("absorption", False)
-            lines += [
-                f"  Micro-Momentum (1s OHLCV, 60 candles): Streak={streak}  Net Δ={chg:+.3f}%  Volume={vol_trend}  Absorption={'Yes' if absorption else 'No'}",
-                f"  Signal: {ca1s.get('signal','NEUTRAL')}{_acc_tag('coinapi_ohlcv_1s')}",
-            ]
-        if cav:
-            vwap = cav.get("vwap_24h", 0); rate = cav.get("current_rate", 0); dev = cav.get("deviation_pct", 0)
-            lines += [
-                f"  VWAP-24H: ${vwap:,.0f}  |  Current: ${rate:,.2f}  |  Deviation: {dev:+.2f}%",
-                f"  Signal: {cav.get('signal','NEUTRAL')}{_acc_tag('coinapi_vwap')}",
-            ]
-        lines += [""]
-
     return "\n".join(lines).rstrip()
 
 
@@ -737,9 +696,6 @@ def _build_dashboard_accuracy_block(dashboard_accuracy):
         "top_position_ratio": "Top Position Ratio", "funding_trend": "Funding Rate Trend",
         "deribit_options": "Deribit Options P/C", "btc_onchain": "BTC On-Chain SOPR",
         "coinglass_liquidations": "CoinGlass Liquidations",
-        "coinapi_orderbook": "CoinAPI Order Book", "coinapi_trades": "CoinAPI Trades CVD",
-        "coinapi_quotes": "CoinAPI Quotes", "coinapi_ohlcv_1s": "CoinAPI 1s OHLCV",
-        "coinapi_vwap": "CoinAPI VWAP-24H",
     }
     lines = []
     for key in _NAMES:
@@ -785,7 +741,7 @@ def build_prompt(
     polymarket_slug=None, ensemble_result=None, dashboard_signals=None,
     indicator_accuracy=None, ensemble_weights=None, historical_analysis=None,
     dashboard_accuracy=None, neutral_analysis=None,
-    binance_expert_analysis=None,
+    binance_expert_analysis=None, historical_failure_note: str = "",
 ) -> str:
     f  = features
     fv = lambda k, d=0.0: f.get(k, d)
@@ -877,21 +833,34 @@ def build_prompt(
 
     csv_block = "(no kline data)"
     if klines and len(klines) >= 5:
+        # Tolerate missing optional columns — Bybit/OKX/Kraken return None for
+        # trades-count and taker-buy-volume; we still want the OHLCV row.
+        def _fnum(v, default=0.0):
+            try:
+                return float(v) if v is not None else default
+            except (TypeError, ValueError):
+                return default
+        def _inum(v, default=0):
+            try:
+                return int(v) if v is not None else default
+            except (TypeError, ValueError):
+                return default
+
         csv_rows = ["Time(UTC),Open,High,Low,Close,Volume,QuoteVol,Trades,BuyVol%"]
         for k in klines[-50:]:
             try:
                 ts_str  = time.strftime("%m-%d %H:%M", time.gmtime(int(k[0]) / 1000))
-                vol     = float(k[5])
-                quote_v = float(k[7]) if len(k) > 7 else 0.0
-                trades  = int(k[8])   if len(k) > 8 else 0
-                buy_vol = float(k[9]) if len(k) > 9 else 0.0
+                vol     = _fnum(k[5]) if len(k) > 5 else 0.0
+                quote_v = _fnum(k[7]) if len(k) > 7 else 0.0
+                trades  = _inum(k[8]) if len(k) > 8 else 0
+                buy_vol = _fnum(k[9]) if len(k) > 9 else 0.0
                 buy_pct = round(buy_vol / vol * 100, 1) if vol > 0 else 0.0
                 csv_rows.append(
-                    f"{ts_str},{float(k[1]):.2f},{float(k[2]):.2f},"
-                    f"{float(k[3]):.2f},{float(k[4]):.2f},{vol:.1f},{quote_v:.0f},{trades},{buy_pct}"
+                    f"{ts_str},{_fnum(k[1]):.2f},{_fnum(k[2]):.2f},"
+                    f"{_fnum(k[3]):.2f},{_fnum(k[4]):.2f},{vol:.1f},{quote_v:.0f},{trades},{buy_pct}"
                 )
-            except Exception:
-                pass
+            except Exception as row_exc:
+                logger.warning("CSV row build failed for kline=%r: %s", k, row_exc)
         csv_block = "\n".join(csv_rows)
 
     bullish = sum(1 for p in strategy_preds.values() if p.get("signal") == "UP")
@@ -925,8 +894,13 @@ def build_prompt(
     if historical_analysis and historical_analysis.strip():
         historical_block = historical_analysis.strip()
     else:
+        reason_line = (
+            f"  (historical analyst did not produce output — {historical_failure_note.strip()})"
+            if historical_failure_note and historical_failure_note.strip()
+            else "  (historical analyst did not fire this window — no resolved bars yet or cold-start)"
+        )
         historical_block = (
-            "  (historical analyst did not fire this window — no resolved bars yet)\n\n"
+            f"{reason_line}\n\n"
             "  ⚠️  WARNING: You have NO historical similarity data this window.\n"
             "  Do NOT invent or reference specific bar numbers (#001, #002, #014, etc.)\n"
             "  or claim patterns 'resolved X% of the time' — that is hallucination.\n"
@@ -1191,7 +1165,7 @@ FREE_OBSERVATION: [1-2 sentences on anything unusual or most significant converg
 REASONS:
 1. [MICROSTRUCTURE: Order book, taker flow, liquidations, spot whale flow — cite Binance expert's composite score if provided]
 2. [FUNDING + POSITIONING: Funding rates (local AND aggregate if both given), OI velocity, L/S ratio, top position ratio]
-3. [TECHNICAL + CROSS-EXCHANGE: RSI/Stoch/MACD, Alligator, Fib, CoinAPI Expert (OB imbalance, CVD, spread, 1s OHLCV, VWAP), ensemble. Note unified-analyst Wyckoff phase + exhaustion/absorption test results if provided.]
+3. [TECHNICAL: RSI/Stoch/MACD, Alligator, Fib, ensemble. Note unified-analyst Wyckoff phase + exhaustion/absorption test results if provided.]
 4. [SYNTHESIS: Dominant bias. Single most decisive factor. Biggest risk. Final conviction. State which specialists agreed with your blind baseline vs disagreed.]
 BLIND_BASELINE: [direction + confidence your own price-action read gave BEFORE consulting specialists]
 SPECIALIST_AGREEMENT: [how many specialists agreed with your final call / how many fired]
@@ -2171,6 +2145,7 @@ async def run_historical_analyst(
     dashboard_directions: Optional[Dict] = None,
     cohere_api_key: str = "",
     pgvector_search_fn=None,
+    timings_sink: Optional[Dict] = None,
 ) -> Tuple[Optional[Dict], Optional[str]]:
     """
     Fire historical similarity analyst using Cohere embed + pgvector + Cohere rerank.
@@ -2182,7 +2157,26 @@ async def run_historical_analyst(
       4. Fire DeepSeek historical analyst on those 20 bars
 
     Raises CohereUnavailableError if Cohere is down — no fallback, caller handles pause.
+
+    timings_sink (optional): if provided, each sub-stage's elapsed time / ok flag
+    is populated into this dict. The caller uses it to show per-stage durations
+    in the Timing tab and to pinpoint which step stalled on failure. The key
+    "_last_stage" always holds the most recently entered stage name so exception
+    handlers can report where we were when something blew up.
     """
+    def _mark(stage: str) -> None:
+        if timings_sink is not None:
+            timings_sink["_last_stage"] = stage
+
+    def _record(stage: str, started: float, ok: bool = True, error: str = "") -> None:
+        if timings_sink is not None:
+            timings_sink[stage] = {
+                "elapsed_s": round(time.time() - started, 2),
+                "ok":        ok,
+                "error":     error[:300] if error else "",
+            }
+
+    _mark("load_prompt_template")
     try:
         template = _HIST_PROMPT.read_text(encoding="utf-8")
     except Exception as exc:
@@ -2195,6 +2189,11 @@ async def run_historical_analyst(
     _MIN_BARS = 5
     if len(history_records) < _MIN_BARS:
         logger.info("Historical analyst skipped — only %d resolved bars (need %d)", len(history_records), _MIN_BARS)
+        if timings_sink is not None:
+            timings_sink["skipped_cold_start"] = {
+                "elapsed_s": 0.0, "ok": True,
+                "error": f"{len(history_records)}/{_MIN_BARS} resolved bars",
+            }
         return None, None
 
     t0 = time.time()
@@ -2205,10 +2204,15 @@ async def run_historical_analyst(
     )
 
     # ── Step 1: Embed current bar opening conditions via Cohere ──
+    _mark("cohere_embed")
+    _t = time.time()
     current_vec = await embed_text(cohere_api_key, current_bar, input_type="search_query")
+    _record("cohere_embed", _t)
     logger.info("Cohere embed: current bar encoded (%d dims)", len(current_vec))
 
     # ── Step 2: pgvector cosine search → top-50 most similar bars ──
+    _mark("pgvector_search")
+    _t = time.time()
     total_searched = len(history_records)
     pgvector_hit = False
     if pgvector_search_fn is not None:
@@ -2227,8 +2231,11 @@ async def run_historical_analyst(
     pre_texts = [_bar_embed_text(b) for b in pre_bars]
     logger.info("pgvector fallback: %s | %d candidates from %d total bars",
                 ("HIT" if pgvector_hit else "MISS→all_history"), len(pre_bars), total_searched)
+    _record("pgvector_search", _t)
 
     # ── Step 3: Cohere rerank → final top-20 (raises CohereUnavailableError if down) ──
+    _mark("cohere_rerank")
+    _t = time.time()
     if len(pre_bars) > COHERE_FINAL_K:
         ranked_indices = await rerank_bars(
             cohere_api_key, current_bar, pre_texts, top_n=COHERE_FINAL_K,
@@ -2238,6 +2245,7 @@ async def run_historical_analyst(
     else:
         similar_bars = pre_bars
         logger.info("Cohere rerank skipped: only %d candidates (≤%d)", len(pre_bars), COHERE_FINAL_K)
+    _record("cohere_rerank", _t)
 
     history_table_full    = _build_history_table(history_records, compact=False)
     history_table_compact = _build_history_table(similar_bars,    compact=True)
@@ -2254,9 +2262,13 @@ async def run_historical_analyst(
     ))
     _save(_HIST_PROMPT_OUT, f"# {ts_str}\n\n{prompt}")
 
+    _mark("deepseek_call")
+    _t = time.time()
     try:
-        raw     = await _api_call(api_key, prompt, max_tokens=2000, timeout_s=55.0, model=DEEPSEEK_FAST_MODEL)
+        # No timeout: caller waits for the analyst to complete before continuing.
+        raw     = await _api_call(api_key, prompt, max_tokens=2000, timeout_s=None, model=DEEPSEEK_FAST_MODEL)
         elapsed = time.time() - t0
+        _record("deepseek_call", _t)
         _save(_HIST_RESPONSE, f"# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}  elapsed={elapsed:.1f}s\n\n{raw}")
         for line in raw.splitlines():
             if line.strip().upper().startswith("SUGGESTION:"):
@@ -2272,6 +2284,7 @@ async def run_historical_analyst(
     except Exception as exc:
         import traceback
         error_details = f"{type(exc).__name__}: {str(exc)}\n\nTraceback:\n{traceback.format_exc()}"
+        _record("deepseek_call", _t, ok=False, error=f"{type(exc).__name__}: {exc}")
         _save(_HIST_RESPONSE, f"# ERROR {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n\n{error_details}")
         logger.error("Historical analyst DeepSeek call failed after %.1fs: %s", time.time() - t0, error_details)
         return None, None
@@ -2486,6 +2499,7 @@ class DeepSeekPredictor:
         indicator_accuracy=None, ensemble_weights=None,
         historical_analysis=None, dashboard_accuracy=None,
         neutral_analysis=None, binance_expert_analysis=None,
+        historical_failure_note: str = "",
     ) -> Dict:
         self.window_count += 1
         t0 = time.time()
@@ -2504,6 +2518,7 @@ class DeepSeekPredictor:
             ensemble_weights=ensemble_weights, historical_analysis=historical_analysis,
             dashboard_accuracy=dashboard_accuracy,
             neutral_analysis=neutral_analysis, binance_expert_analysis=binance_expert_analysis,
+            historical_failure_note=historical_failure_note,
         )
 
         ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
@@ -2812,10 +2827,14 @@ FULL_ANALYSIS:
 
     _save(_AUDIT_LAST_RAW, f"# {ts_str}  elapsed={elapsed:.1f}s\n\n{raw}")
     try:
+        _AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        line = json.dumps(result, default=str, ensure_ascii=False) + "\n"
         with _AUDIT_LOG.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(result, default=str) + "\n")
-    except Exception as exc:
-        logger.warning("Embedding audit log write failed: %s", exc)
+            f.write(line)
+    except Exception:
+        # Surface the full traceback — this was silently failing and leaving the
+        # NDJSON log at 0 bytes even though last_raw.txt was being updated.
+        logger.exception("Embedding audit log write FAILED — audit_log.ndjson not updated")
 
     logger.info("Embedding audit %.1fs | %s | %d issues | %d suggestions",
                 elapsed, audit_signal, len(issues), len(suggestions))

@@ -35,6 +35,11 @@ weights_snapshot.json
 # Secrets
 .env
 *.env
+.render_db_url
+
+# DB migration dump (large, ephemeral)
+db_backup/
+railway_backup.sql
 
 # OS
 .DS_Store

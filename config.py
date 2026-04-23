@@ -63,7 +63,6 @@ class Config:
     # Dashboard signal API keys (for microstructure data fed into DeepSeek)
     coinalyze_key:  str = os.environ.get("COINALYZE_KEY",  "")
     coinglass_key:  str = os.environ.get("COINGLASS_KEY",  "")
-    coinapi_key:    str = os.environ.get("COINAPI_KEY",    "")
 
     # Feature engineering
     feature_windows: List[int] = field(default_factory=lambda: [5, 10, 15, 30, 60, 120])

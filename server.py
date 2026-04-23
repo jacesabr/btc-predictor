@@ -248,21 +248,6 @@ async def proxy_coinalyze():
         return {"error": str(exc)}
 
 
-@app.get("/api/proxy/coinapi")
-async def proxy_coinapi():
-    import aiohttp
-    try:
-        url = "https://rest.coinapi.io/v1/exchangerate/BTC/USD"
-        headers = {"X-CoinAPI-Key": config.coinapi_key}
-        connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
-        async with aiohttp.ClientSession(connector=connector) as session:
-            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=8)) as resp:
-                data = await resp.json(content_type=None)
-                return {"rate": data.get("rate")}
-    except Exception as exc:
-        return {"error": str(exc)}
-
-
 @app.get("/api/proxy/okx-liquidations")
 async def proxy_okx_liquidations():
     import aiohttp
@@ -528,6 +513,23 @@ async def export_audit(n: int = 500):
         io.BytesIO(body.encode()), media_type="application/json",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@app.get("/api/timings")
+async def get_timings():
+    """Return per-stage pipeline timings for the current bar + recent history.
+
+    Lets the user observe which stage (cohere embed, pgvector, rerank, deepseek
+    calls) is burning time and whether a bar overran the 5-min close.
+    """
+    from engine import current_state
+    bt = current_state.get("bar_timings") or {}
+    hist = current_state.get("timings_history") or []
+    return {
+        "current":  bt,
+        "history":  list(reversed(hist[-30:])),  # newest first, cap to 30
+        "history_total": len(hist),
+    }
 
 
 @app.get("/api/embedding-audit")

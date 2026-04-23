@@ -43,9 +43,8 @@ class Tick:
 
 
 class BinanceCollector:
-    """Fetches BTC/USD — CoinAPI primary (paid, top-tier), Bybit → Kraken fallback."""
+    """Fetches BTC/USD — Bybit primary, Kraken fallback."""
 
-    COINAPI_URL = "https://rest.coinapi.io/v1/exchangerate/BTC/USD"
     BYBIT_URL   = "https://api.bybit.com/v5/market/tickers"
     KRAKEN_URL  = "https://api.kraken.com/0/public/Ticker"
     BINANCE_URL = "https://api.binance.com/api/v3/ticker/price"
@@ -57,9 +56,7 @@ class BinanceCollector:
         self.callbacks: List[Callable] = []
         self._running = False
         self._last_real_price: Optional[float] = None
-        self._coinapi_key = os.environ.get("COINAPI_KEY", "")
-        primary = "CoinAPI" if self._coinapi_key else "Bybit (no COINAPI_KEY set)"
-        logger.info("Collector price feed: %s → Bybit → Kraken", primary)
+        logger.info("Collector price feed: Bybit → Kraken")
 
     def on_tick(self, callback: Callable[[Tick], None]):
         self.callbacks.append(callback)
@@ -104,27 +101,7 @@ class BinanceCollector:
         )
 
     async def _fetch_binance_price(self) -> Optional[Tick]:
-        # 1. CoinAPI (primary — paid, top-tier, no geo-block)
-        if self._coinapi_key:
-            try:
-                connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
-                async with aiohttp.ClientSession(connector=connector) as session:
-                    async with session.get(
-                        self.COINAPI_URL,
-                        headers={"X-CoinAPI-Key": self._coinapi_key},
-                        timeout=aiohttp.ClientTimeout(total=5),
-                    ) as resp:
-                        if resp.status != 200:
-                            raise RuntimeError(f"HTTP {resp.status}")
-                        data = await resp.json(content_type=None)
-                        rate = data.get("rate")
-                        if rate is None:
-                            raise RuntimeError(f"no 'rate' in response: {data}")
-                        return self._make_tick(float(rate), "coinapi_rest")
-            except Exception as exc:
-                logger.warning("CoinAPI price fetch failed: %s — trying Bybit", self._fmt_exc(exc))
-
-        # 2. Bybit fallback (no API key required)
+        # 1. Bybit primary (no API key required)
         try:
             connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
             async with aiohttp.ClientSession(connector=connector) as session:
@@ -141,7 +118,7 @@ class BinanceCollector:
         except Exception as exc:
             logger.warning("Bybit price fetch failed: %s — trying Kraken", self._fmt_exc(exc))
 
-        # 3. Kraken last resort
+        # 2. Kraken last resort
         try:
             connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
             async with aiohttp.ClientSession(connector=connector) as session:

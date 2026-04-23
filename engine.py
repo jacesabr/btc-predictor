@@ -5,7 +5,7 @@ All background tasks and shared state. Imported by server.py for REST endpoints.
 
 Background tasks started at startup:
   run_collector()          — tick feed from Binance REST, stores prices
-  run_binance_feed()       — 1-min OHLCV klines, refreshed every 60s (CoinAPI→Bybit→OKX→Kraken→Binance)
+  run_binance_feed()       — 1-min OHLCV klines, refreshed every 60s (Bybit→OKX→Kraken→Binance)
   run_indicator_refresh()  — strategy signals refreshed every 15s
   run_prediction_loop()    — 5-minute bar loop: predict → wait → resolve
   polymarket_feed.run()    — polls Polymarket Gamma API for BTC Up/Down market
@@ -249,7 +249,23 @@ current_state: Dict = {
     "service_unavailable":        False,
     "service_unavailable_reason": "",
     "embedding_audit_log":        [],
+    "bar_timings":                {},    # live per-stage timings for the bar in progress
+    "timings_history":            [],    # capped list of recent bar timing snapshots
 }
+
+_TIMINGS_HISTORY_MAX = 50
+
+
+def _record_stage(stage: str, elapsed_s: float, ok: bool, error: str = "") -> None:
+    """Record a pipeline stage timing into the live bar_timings dict."""
+    try:
+        current_state.setdefault("bar_timings", {}).setdefault("stages", {})[stage] = {
+            "elapsed_s": round(float(elapsed_s), 2),
+            "ok":        bool(ok),
+            "error":     str(error)[:300] if error else "",
+        }
+    except Exception:
+        pass
 
 
 # ── Utilities ─────────────────────────────────────────────────
@@ -428,6 +444,7 @@ async def _run_deepseek(
         # DeepSeek itself takes 30-50s, so waiting here costs nothing — expert finishes first.
         binance_expert_result = None
         if binance_expert_task is not None:
+            _bx_t0 = time.time()
             try:
                 binance_expert_result = await asyncio.wait_for(
                     asyncio.shield(binance_expert_task), timeout=70.0
@@ -435,12 +452,17 @@ async def _run_deepseek(
                 if binance_expert_result:
                     current_state["bar_binance_expert"] = _json_safe(binance_expert_result)
                     logger.info("Binance expert result received before DeepSeek API call — injected into prompt")
+                _record_stage("binance_expert", time.time() - _bx_t0, ok=bool(binance_expert_result))
             except asyncio.TimeoutError:
                 logger.warning("Binance expert timed out (70s) — DeepSeek fires without it")
+                _record_stage("binance_expert", time.time() - _bx_t0, ok=False, error="timeout 70s")
             except Exception as bx_exc:
                 logger.warning("Binance expert task error: %s — DeepSeek fires without it", bx_exc)
+                _record_stage("binance_expert", time.time() - _bx_t0, ok=False,
+                              error=f"{type(bx_exc).__name__}: {bx_exc}")
 
         neutral_analysis = _safe_storage(storage.get_neutral_analysis, default={})
+        _main_t0 = time.time()
         result = await deepseek.predict(
             prices=prices, klines=klines, features=features,
             strategy_preds=strategy_preds, recent_accuracy=rolling_acc,
@@ -451,9 +473,27 @@ async def _run_deepseek(
             historical_analysis=historical_analysis,
             dashboard_accuracy=dashboard_accuracy, neutral_analysis=neutral_analysis,
             binance_expert_analysis=binance_expert_result or current_state.get("bar_binance_expert") or None,
+            historical_failure_note=current_state.get("bar_historical_failure_note", ""),
         )
+        _record_stage("main_deepseek", time.time() - _main_t0, ok=(result.get("signal") not in ("ERROR", "UNAVAILABLE")),
+                      error=(result.get("reasoning", "") if result.get("signal") in ("ERROR", "UNAVAILABLE") else ""))
 
-        # Stale-window guard
+        # Bar-close overrun check: if the whole pipeline ran past the bar close,
+        # we discard the prediction (too late to be actionable) but keep the
+        # timing breakdown so the user can see WHICH stage blew the budget.
+        bar_close_ts = window_end_time
+        overran = time.time() > bar_close_ts
+        if overran:
+            logger.warning("Pipeline OVERRAN bar close for bar %s by %.1fs — discarding prediction, keeping timings",
+                           bar_ts, time.time() - bar_close_ts)
+            try:
+                current_state.setdefault("bar_timings", {})["overran_bar_close"] = True
+                current_state["bar_timings"]["overran_by_s"] = round(time.time() - bar_close_ts, 1)
+            except Exception:
+                pass
+            return
+
+        # Stale-window guard (separate from overrun: a new bar already started)
         current_bar = current_state.get("window_start_time")
         if current_bar is not None and abs(current_bar - window_start_time) > 30:
             logger.warning("DeepSeek stale result DISCARDED for bar %s", bar_ts)
@@ -496,6 +536,25 @@ async def _run_deepseek(
 
     except Exception as exc:
         logger.error("_run_deepseek FAILED for bar %s: %s", bar_ts, exc)
+        try:
+            current_state.setdefault("bar_timings", {})["pipeline_error"] = f"{type(exc).__name__}: {exc}"[:300]
+        except Exception:
+            pass
+    finally:
+        # Flush the bar's timing breakdown into history so the Timing tab can show it
+        try:
+            bt = dict(current_state.get("bar_timings") or {})
+            if bt and bt.get("stages"):
+                bt["completed_at"]   = time.time()
+                bt["total_elapsed_s"] = round(time.time() - bt.get("started_at", time.time()), 2)
+                bt["bar"]            = bar_ts
+                history = current_state.setdefault("timings_history", [])
+                history.append(bt)
+                # Cap the history so state stays small
+                if len(history) > _TIMINGS_HISTORY_MAX:
+                    del history[:len(history) - _TIMINGS_HISTORY_MAX]
+        except Exception as flush_exc:
+            logger.warning("Failed to flush bar_timings: %s", flush_exc)
 
 
 # ── Core prediction logic ─────────────────────────────────────
@@ -530,6 +589,11 @@ async def _run_full_prediction(prices, is_force=False):
     current_state["bar_historical_context"]      = ""
     current_state["bar_historical_analyst_fired"] = False
     current_state["bar_binance_expert"]          = {}
+    current_state["bar_timings"]                 = {
+        "window_start_time": window_start_time,
+        "started_at":        now,
+        "stages":            {},
+    }
 
     tag = "FORCE" if is_force else "BAR OPEN"
     logger.info("=== %s #%d === %s | price=%.2f ===",
@@ -553,7 +617,6 @@ async def _run_full_prediction(prices, is_force=False):
         fetch_dashboard_signals(
             coinalyze_key=config.coinalyze_key,
             coinglass_key=config.coinglass_key,
-            coinapi_key=config.coinapi_key,
         )
     )
     dashboard_acc = compute_dashboard_accuracy(200)
@@ -578,6 +641,7 @@ async def _run_full_prediction(prices, is_force=False):
     # Step 1 — Unified specialist
     specialist_results = {}
     if deepseek and klines and _features_ok:
+        _spec_t0 = time.time()
         try:
             spec_raw = await asyncio.wait_for(
                 run_specialists(config.deepseek_api_key, klines), timeout=100.0,
@@ -588,22 +652,29 @@ async def _run_full_prediction(prices, is_force=False):
                     if result is not None:
                         strategy_preds[key] = result
                 current_state["bar_specialist_signals"] = _json_safe(specialist_results)
+            _record_stage("specialists", time.time() - _spec_t0, ok=True)
         except asyncio.TimeoutError:
             logger.warning("Unified specialist timed out")
+            _record_stage("specialists", time.time() - _spec_t0, ok=False, error="timeout 100s")
         except Exception as exc:
             logger.warning("Unified specialist error: %s", exc)
+            _record_stage("specialists", time.time() - _spec_t0, ok=False, error=f"{type(exc).__name__}: {exc}")
         current_state["specialist_completed_at"] = time.time()
 
     # Step 2 — Dashboard signals
+    _dash_t0 = time.time()
     try:
         dashboard_signals = await asyncio.wait_for(dashboard_task, timeout=10.0)
         n_ok = sum(1 for k, v in dashboard_signals.items() if v is not None and k != "fetched_at")
         logger.info("Dashboard signals ready: %d sources ok", n_ok)
+        _record_stage("dashboard_signals", time.time() - _dash_t0, ok=True)
     except asyncio.TimeoutError:
         logger.warning("Dashboard signals timed out")
         dashboard_task.cancel()
+        _record_stage("dashboard_signals", time.time() - _dash_t0, ok=False, error="timeout 10s")
     except Exception as exc:
         logger.warning("Dashboard signals error: %s", exc)
+        _record_stage("dashboard_signals", time.time() - _dash_t0, ok=False, error=f"{type(exc).__name__}: {exc}")
 
     # Step 3 — Inject dashboard into ensemble
     binance_expert_task = None
@@ -632,39 +703,61 @@ async def _run_full_prediction(prices, is_force=False):
     historical_analyst_fired = False
     hist_signal = None
     historical_analysis = None
+    hist_failure_note: Optional[str] = None
     if deepseek and _features_ok:
         _hist_t0 = time.time()
+        _hist_sub: Dict = {}   # sub-stage timings populated inside run_historical_analyst
         try:
-            hist_result = await asyncio.wait_for(
-                run_historical_analyst(
-                    config.deepseek_api_key, _all_history, features_dict,
-                    {k: v for k, v in strategy_preds.items()},
-                    window_start_time=window_start_time,
-                    specialist_signals=specialist_results or None,
-                    ensemble_signal=pred["signal"],
-                    ensemble_conf=float(pred.get("confidence", 0.0)),
-                    dashboard_directions=dash_directions or None,
-                    cohere_api_key=config.cohere_api_key,
-                    pgvector_search_fn=pgvector_search,
-                ),
-                timeout=90.0,
+            # No timeout — wait for the analyst to finish. If it runs past the
+            # bar close, the main predictor still uses whatever context arrived
+            # and the failure stage is logged to the Timing tab.
+            hist_result = await run_historical_analyst(
+                config.deepseek_api_key, _all_history, features_dict,
+                {k: v for k, v in strategy_preds.items()},
+                window_start_time=window_start_time,
+                specialist_signals=specialist_results or None,
+                ensemble_signal=pred["signal"],
+                ensemble_conf=float(pred.get("confidence", 0.0)),
+                dashboard_directions=dash_directions or None,
+                cohere_api_key=config.cohere_api_key,
+                pgvector_search_fn=pgvector_search,
+                timings_sink=_hist_sub,
             )
             _hist_elapsed = time.time() - _hist_t0
             if isinstance(hist_result, tuple) and len(hist_result) == 2:
                 hist_signal, historical_analysis = hist_result
             current_state["service_unavailable"]        = False
             current_state["service_unavailable_reason"] = ""
-        except asyncio.TimeoutError:
-            _hist_elapsed = time.time() - _hist_t0
-            logger.warning("Historical analyst TIMEOUT after %.1fs — no similarity context available", _hist_elapsed)
+            _record_stage("historical_total", _hist_elapsed, ok=True)
         except CohereUnavailableError as cohere_exc:
+            _record_stage("historical_total", time.time() - _hist_t0, ok=False,
+                          error=f"CohereUnavailable: {cohere_exc}")
             logger.error("Cohere unavailable — pausing predictions: %s", cohere_exc)
             current_state["service_unavailable"]        = True
             current_state["service_unavailable_reason"] = str(cohere_exc)
             return None, {}, None, None, window_start_time, window_start_price
         except Exception as exc:
             _hist_elapsed = time.time() - _hist_t0
-            logger.warning("Historical analyst ERROR after %.1fs: %s", _hist_elapsed, exc)
+            failed_stage = _hist_sub.get("_last_stage", "unknown")
+            hist_failure_note = (
+                f"historical analyst failed after {_hist_elapsed:.1f}s during stage "
+                f"'{failed_stage}' — {type(exc).__name__}: {exc}"
+            )
+            logger.warning("Historical analyst ERROR after %.1fs at stage=%s: %s",
+                           _hist_elapsed, failed_stage, exc)
+            _record_stage("historical_total", _hist_elapsed, ok=False,
+                          error=f"{type(exc).__name__} at {failed_stage}: {exc}")
+
+        # Flatten sub-stage timings into bar_timings (skip the internal _last_stage key)
+        for _k, _v in _hist_sub.items():
+            if _k.startswith("_") or not isinstance(_v, dict):
+                continue
+            _record_stage(
+                f"historical_{_k}",
+                _v.get("elapsed_s", 0.0),
+                ok=_v.get("ok", True),
+                error=_v.get("error", ""),
+            )
 
         if historical_analysis and hist_signal:
             historical_analyst_fired = True
@@ -682,6 +775,7 @@ async def _run_full_prediction(prices, is_force=False):
 
     # Expose to dashboard/state whether historical analyst actually fired
     current_state["bar_historical_analyst_fired"] = historical_analyst_fired
+    current_state["bar_historical_failure_note"]  = hist_failure_note or ""
 
     # Step 5b — Binance expert (fire as background task, DeepSeek will await it)
     binance_expert_task = None
@@ -1025,71 +1119,12 @@ async def _refresh_indicators():
 
 
 async def run_binance_feed():
-    """Fetch 1m OHLCV every 60s — CoinAPI primary (paid, top-tier), then Bybit → OKX → Kraken → Binance."""
+    """Fetch 1m OHLCV every 60s — Bybit primary, then OKX → Kraken → Binance."""
     global binance_klines
-    import os as _os
-    _coinapi_key = _os.environ.get("COINAPI_KEY", "")
     while True:
         fetched = False
 
-        # 0. CoinAPI OHLCV (primary — paid, top-tier) — Coinbase is deepest USD book
-        # Response shape per bar: {time_period_start, price_open, price_high, price_low, price_close, volume_traded, ...}
-        if _coinapi_key:
-            try:
-                connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
-                async with aiohttp.ClientSession(connector=connector) as session:
-                    async with session.get(
-                        "https://rest.coinapi.io/v1/ohlcv/COINBASE_SPOT_BTC_USD/latest",
-                        headers={"X-CoinAPI-Key": _coinapi_key},
-                        params={"period_id": "1MIN", "limit": 500},
-                        timeout=aiohttp.ClientTimeout(total=10),
-                    ) as resp:
-                        if resp.status == 200:
-                            bars = await resp.json(content_type=None)
-                            # CoinAPI returns newest-first; reverse so oldest-first like Binance
-                            bars = list(reversed(bars)) if isinstance(bars, list) else []
-                            klines = []
-                            for b in bars:
-                                # ISO8601 → unix ms
-                                ts_iso = b.get("time_period_start", "")
-                                try:
-                                    ts_ms = int(datetime.fromisoformat(ts_iso.replace("Z", "+00:00")).timestamp() * 1000)
-                                except Exception:
-                                    continue
-                                pc = float(b.get("price_close", 0) or 0)
-                                vol = float(b.get("volume_traded", 0) or 0)
-                                quote_approx = pc * vol  # CoinAPI does not expose quote volume directly
-                                trades_count = b.get("trades_count")  # may be None
-                                # Binance-layout 10-element kline:
-                                # [open_time, o, h, l, c, volume, close_time, quote_vol, trades, taker_buy_base_vol]
-                                klines.append([
-                                    ts_ms,
-                                    str(b.get("price_open", 0)),
-                                    str(b.get("price_high", 0)),
-                                    str(b.get("price_low", 0)),
-                                    str(b.get("price_close", 0)),
-                                    str(vol),
-                                    None,                              # close_time
-                                    str(quote_approx) if vol > 0 else None,
-                                    str(trades_count) if trades_count is not None else None,
-                                    None,                              # taker_buy_base_vol unavailable on Coinbase via CoinAPI OHLCV
-                                ])
-                            if len(klines) >= 30:
-                                binance_klines.clear()
-                                binance_klines.extend(klines)
-                                logger.info("CoinAPI klines updated: %d candles", len(klines))
-                                collector.seed_from_klines(binance_klines)
-                                await _refresh_indicators()
-                                fetched = True
-                            else:
-                                raise RuntimeError(f"too few candles: {len(klines)}")
-            except Exception as exc:
-                logger.warning(
-                    "CoinAPI klines failed: %s: %s — trying Bybit",
-                    type(exc).__name__, exc,
-                )
-
-        # 1. Bybit klines fallback [ts_ms, open, high, low, close, volume] — Binance layout
+        # 1. Bybit klines primary [ts_ms, open, high, low, close, volume] — Binance layout
         if not fetched:
             try:
                 connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
