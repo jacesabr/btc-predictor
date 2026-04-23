@@ -2612,7 +2612,7 @@ function App() {
       safe("/predictions/recent?n=500", setPreds);
       safe("/weights",                 setWeights);
       safe("/deepseek/accuracy",       setDeepseekAcc);
-      safe("/history/all",             setDeepseekLog);
+      safe("/deepseek/predictions?n=500", setDeepseekLog);
       safe("/accuracy/agree",          setAgreeAcc);
     }
     poll();
