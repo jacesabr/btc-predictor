@@ -267,6 +267,31 @@ def _trigger_embedding_bootstrap():
         logger.info("Embedding bootstrap skipped: DeepSeek or Cohere not configured")
 
 
+def _dashboard_accuracy_from_records(records):
+    """Compute dashboard-signal accuracy from already-loaded pattern_history rows.
+    Same logic as semantic_store.compute_dashboard_accuracy, but reuses the list
+    we already have in memory instead of re-querying Postgres per bar.
+    """
+    resolved = [r for r in records if r.get("actual_direction")]
+    if not resolved:
+        return {}
+    counts: Dict[str, Dict] = {}
+    for r in resolved:
+        actual = r["actual_direction"]
+        dash = r.get("dashboard_signals_raw") or {}
+        for key, val in dash.items():
+            if val not in ("UP", "DOWN"):
+                continue
+            counts.setdefault(key, {"correct": 0, "total": 0})
+            counts[key]["total"] += 1
+            if val == actual:
+                counts[key]["correct"] += 1
+    return {
+        k: {"accuracy": v["correct"] / v["total"], "correct": v["correct"], "total": v["total"]}
+        for k, v in counts.items() if v["total"] > 0
+    }
+
+
 current_state: Dict = {
     "price":                      None,
     "window_start_price":         None,
@@ -664,9 +689,10 @@ async def _run_full_prediction(prices, is_force=False):
             coinglass_key=config.coinglass_key,
         )
     )
-    dashboard_acc = compute_dashboard_accuracy(200)
-
+    # One DB load per bar: pull history once, derive the 200-bar dashboard view
+    # from the same records instead of a second scan.
     _all_history = load_pattern_history()[-10000:]
+    dashboard_acc = _dashboard_accuracy_from_records(_all_history[-200:])
 
     # Seed the similarity search with the previous bar's dashboard signals.
     # The current bar's dashboard hasn't arrived yet (it's fetching concurrently),

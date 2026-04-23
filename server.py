@@ -39,7 +39,7 @@ import pathlib
 import time
 from typing import Dict, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -804,27 +804,6 @@ async def reset_scores():
     return {"status": "ok", "reset_at": now, "note": note}
 
 
-@app.post("/admin/fix-neutral-correct")
-async def fix_neutral_correct():
-    """One-time migration: set correct=NULL for all NEUTRAL deepseek predictions."""
-    try:
-        from storage_pg import _conn, _put
-        conn = _conn()
-        try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE deepseek_predictions SET correct = NULL "
-                    "WHERE signal = 'NEUTRAL' AND correct IS NOT NULL"
-                )
-                updated = cur.rowcount
-            conn.commit()
-        finally:
-            _put(conn)
-        return {"status": "ok", "rows_updated": updated}
-    except Exception as exc:
-        return {"status": "error", "detail": str(exc)}
-
-
 @app.post("/admin/reset")
 async def reset_database():
     try:
@@ -833,115 +812,12 @@ async def reset_database():
     except Exception as exc:
         return {"status": "error", "detail": str(exc)}
 
-
-@app.post("/admin/backfill-pattern-history")
-async def backfill_pattern_history():
-    """
-    Read all resolved bars from deepseek_predictions and populate pattern_history.
-    Safe to call multiple times — uses INSERT ... ON CONFLICT DO NOTHING.
-    After populating, trigger background embedding via Cohere for bars with actual_direction.
-    """
-    from semantic_store import append_resolved_window as _append_ph
-    from storage_pg import _conn as _pg_conn, _put as _pg_put
-    import json as _json
-
-    inserted = 0
-    skipped  = 0
-    errors   = 0
-
-    conn = _pg_conn()
-    try:
-        with conn.cursor(cursor_factory=__import__("psycopg2.extras", fromlist=["RealDictCursor"]).RealDictCursor) as cur:
-            cur.execute("""
-                SELECT window_start, window_end, start_price, end_price,
-                       signal, confidence, reasoning, narrative, free_observation,
-                       window_count, actual_direction, correct,
-                       strategy_snapshot, indicators_snapshot, dashboard_signals_snapshot,
-                       full_prompt
-                FROM deepseek_predictions
-                WHERE actual_direction IS NOT NULL
-                ORDER BY window_start ASC
-            """)
-            rows = cur.fetchall()
-    finally:
-        _pg_put(conn)
-
-    from signals import extract_signal_directions as _extract_dirs2
-    for row in rows:
-        try:
-            sv     = _json.loads(row["strategy_snapshot"] or "{}")
-            iv     = _json.loads(row["indicators_snapshot"] or "{}")
-            dv_raw = _json.loads(row["dashboard_signals_snapshot"] or "{}")
-            dv     = _extract_dirs2(dv_raw) if dv_raw else {}
-            _append_ph(
-                window_start       = float(row["window_start"]),
-                actual_direction   = row["actual_direction"] or "",
-                start_price        = float(row["start_price"] or 0),
-                strategy_votes     = sv,
-                indicators         = iv,
-                window_end         = float(row["window_end"] or 0),
-                end_price          = float(row["end_price"] or 0),
-                deepseek_signal    = row["signal"] or "",
-                deepseek_conf      = int(float(row["confidence"] or 0) * 100) if (row["confidence"] or 0) <= 1 else int(row["confidence"] or 0),
-                deepseek_correct   = bool(row["correct"]) if row["correct"] is not None else None,
-                deepseek_reasoning = row["reasoning"] or "",
-                deepseek_narrative = row["narrative"] or "",
-                deepseek_free_obs  = row["free_observation"] or "",
-                dashboard_signals_raw = dv,
-                full_prompt        = row["full_prompt"] or "",
-                window_count       = int(row["window_count"] or 0),
-            )
-            inserted += 1
-        except Exception as exc:
-            logging.getLogger("server").warning("backfill row error ws=%.0f: %s", row.get("window_start", 0), exc)
-            errors += 1
-
-    return {"status": "ok", "inserted": inserted, "skipped": skipped, "errors": errors,
-            "note": "Call /admin/embed-pattern-history to Cohere-embed the backfilled bars"}
-
-
-@app.post("/admin/embed-pattern-history")
-async def embed_pattern_history(background_tasks: BackgroundTasks):
-    """
-    Background task: Cohere-embed all pattern_history bars that have no embedding yet.
-    Stores REAL[] vectors so cosine similarity search works without pgvector.
-    """
-    from semantic_store import load_all as _load_ph, store_embedding as _store_emb
-    from ai import embed_text as _embed, _bar_embed_text
-
-    if not config.cohere_api_key:
-        return {"status": "error", "detail": "COHERE_API_KEY not set"}
-
-    async def _run():
-        from storage_pg import _conn as _pg_conn, _put as _pg_put
-        conn = _pg_conn()
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT window_start FROM pattern_history WHERE embedding IS NULL ORDER BY window_start ASC")
-                to_embed = [r[0] for r in cur.fetchall()]
-        finally:
-            _pg_put(conn)
-
-        records = {r["window_start"]: r for r in _load_ph(10000)}
-        done = 0
-        for ws in to_embed:
-            rec = records.get(ws)
-            if not rec:
-                continue
-            try:
-                text = _bar_embed_text(rec)
-                vec  = await _embed(config.cohere_api_key, text, input_type="search_document")
-                _store_emb(ws, vec)
-                done += 1
-                if done % 10 == 0:
-                    logging.getLogger("server").info("embed-pattern-history: %d/%d done", done, len(to_embed))
-            except Exception as exc:
-                logging.getLogger("server").warning("embed bar %.0f failed: %s", ws, exc)
-
-        logging.getLogger("server").info("embed-pattern-history complete: %d bars embedded", done)
-
-    background_tasks.add_task(_run)
-    return {"status": "started", "message": "Embedding runs in background — check server logs"}
+# Removed 3 one-shot migration endpoints that had already been run and were no
+# longer referenced by anything:
+#   /admin/fix-neutral-correct       — one-time NEUTRAL.correct=NULL migration
+#   /admin/backfill-pattern-history  — replayed deepseek_predictions into pattern_history
+#   /admin/embed-pattern-history     — Cohere-embedded all un-embedded bars
+# Restore from git history if you ever need to rerun them.
 
 
 # ── WebSocket ─────────────────────────────────────────────────
