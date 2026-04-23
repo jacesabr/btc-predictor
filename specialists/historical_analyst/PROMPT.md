@@ -18,9 +18,9 @@ resolved the way it did. If the postmortem says "ERROR_CLASS: TRAP" on bars with
 current-bar-like features, that is heavy evidence against the ensemble's lean.
 
 Tier assignment (use throughout):
-  • Tier A = bars #001–#005  (highest similarity — primary evidence)
-  • Tier B = bars #006–#012  (corroborating only — cannot override Tier A)
-  • Tier C = bars #013–#{n}   (tiebreaker only — ignore if Tier A is decisive)
+  • Tier A = bars #001–#003  (3 bars, highest similarity — primary evidence)
+  • Tier B = bars #004–#007  (4 bars, corroborating — cannot override Tier A)
+  • Tier C = bars #008–#{n}   (3 bars, tiebreaker — ignore if Tier A is decisive)
 
 {history_table}
 
@@ -37,7 +37,7 @@ STEP 1 — BASE RATES (compute before anything else)
   Count and report across ALL {n} matches:
     • total_UP, total_DOWN, total_NEUTRAL/no-trade
     • base_UP_rate = total_UP / (total_UP + total_DOWN)       ← unconditional prior
-    • Tier A split: U/D count among bars #001–#005
+    • Tier A split: U/D count among bars #001–#003
   Every later claim ("X% UP given condition Y") MUST be expressed as a delta vs base_UP_rate,
   not as a raw percentage. "4/5 UP" is meaningless without the base rate.
 
@@ -87,23 +87,25 @@ STEP 6 — DEVIL'S ADVOCATE
 STEP 7 — CALIBRATION & POSITION
   Apply this rubric strictly:
 
-  CONFIDENCE RUBRIC
-    • Tier A split 5/0 same direction + base-rate delta ≥ +15pp + no reliability concern
+  CONFIDENCE RUBRIC  (Tier A has 3 bars — smaller denominator than before)
+    • Tier A unanimous (3/0) + base-rate delta ≥ +15pp + no reliability concern
         → 75–85% confidence
-    • Tier A split 4/1 + Tier B majority same direction + base-rate delta ≥ +10pp
-        → 65–74% confidence
-    • Tier A split 3/2 (thin majority)
-        → 55–64% confidence. NEUTRAL is ONE option here, not the default. If the
-          majority direction aligns with base rate + at least one other signal
-          (microstructure, trend, specialist consensus), taking the call at ~58%
-          is fine — a 3/2 split is still informative, just weakly so.
-    • Tier A split 2/3 or 3/2 AND Step-4 CONCERN confirmed (not just noise)
+    • Tier A unanimous (3/0) + Tier B majority same direction
+        → 68–78% confidence
+    • Tier A 2/1 majority + Tier B majority same + base-rate delta ≥ +10pp
+        → 60–70% confidence
+    • Tier A 2/1 majority alone (no Tier B corroboration)
+        → 55–62% confidence. NEUTRAL is ONE option, not the default — if the
+          majority direction aligns with base rate + any other signal
+          (microstructure, trend, specialist consensus), taking the call is fine.
+    • Tier A 2/1 AND Step-4 RELIABILITY CONCERN confirmed (not just noise)
         → lean opposite of ensemble or NEUTRAL
-    • Top-5 genuinely incoherent (no direction captures ≥3 bars)
+    • Tier A fully split (1/1/1 with NEUTRAL outcome, or genuine 2/1 with strong
+      opposing Tier B)
         → NEUTRAL
     • Any conditional claim driving the call has n<5
         → cap confidence at 62%
-    • If no Tier A bar closely resembles the current bar (similarity feels weak even at rank 1)
+    • If no Tier A bar closely resembles the current bar (similarity weak at rank 1)
         → flag LOW_PRECEDENT and cap confidence at 58%
 
   A calibrated 60% call that loses is not a failed rubric — it's the 40%. Don't

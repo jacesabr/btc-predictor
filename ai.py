@@ -149,7 +149,7 @@ COHERE_RERANK_URL = "https://api.cohere.com/v2/rerank"
 COHERE_EMBED_MODEL  = "embed-english-v3.0"
 COHERE_RERANK_MODEL = "rerank-english-v3.0"
 COHERE_PRE_FILTER_K = 50   # cosine candidates before reranking
-COHERE_FINAL_K      = 20   # final bars sent to LLM after reranking
+COHERE_FINAL_K      = 10   # final bars sent to LLM after reranking (was 20 — tighter set = stronger signal per bar)
 
 _ROOT = Path(__file__).parent   # btc-predictor/
 
@@ -2113,7 +2113,7 @@ async def run_historical_analyst(
     Pipeline:
       1. Embed current bar opening text via Cohere embed-english-v3.0 (search_query)
       2. pgvector cosine search in PostgreSQL → top-50 most similar stored bars
-      3. Cohere rerank → final top-20 most contextually relevant bars
+      3. Cohere rerank → final top-10 most contextually relevant bars
       4. Fire DeepSeek historical analyst on those 20 bars
 
     Raises CohereUnavailableError if Cohere is down — no fallback, caller handles pause.
