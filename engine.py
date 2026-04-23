@@ -790,6 +790,7 @@ async def _run_full_prediction(prices, is_force=False):
                 ensemble_signal=pred["signal"],
                 ensemble_conf=float(pred.get("confidence", 0.0)),
                 dashboard_directions=dash_directions or None,
+                dashboard_signals_raw=dashboard_signals or None,
                 cohere_api_key=config.cohere_api_key,
                 pgvector_search_fn=pgvector_search,
                 timings_sink=_hist_sub,

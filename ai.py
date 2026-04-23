@@ -2046,25 +2046,150 @@ def _build_history_table(records: List[Dict], compact: bool = False) -> str:
     return "\n\n".join(lines) if compact else "\n".join(lines)
 
 
+_SESSION_DESCRIPTIONS = {
+    "ASIA":    "Asia",
+    "LONDON":  "London",
+    "OVERLAP": "London/US overlap",
+    "NY":      "US",
+    "LATE":    "late US / off-hours",
+}
+
+_DAY_FULL = {"Mon":"Monday","Tue":"Tuesday","Wed":"Wednesday","Thu":"Thursday",
+             "Fri":"Friday","Sat":"Saturday","Sun":"Sunday"}
+
+_OBOS_RSI = lambda v: "deeply oversold" if v < 20 else "oversold" if v < 30 else "neutral" if v < 70 else "overbought" if v < 80 else "deeply overbought"
+_OBOS_STOCH = lambda v: "oversold" if v < 20 else "neutral" if v < 80 else "overbought"
+_BB_ZONE = lambda v: "below the lower band" if v < 0 else "in the lower third" if v < 0.4 else "mid-band" if v < 0.6 else "in the upper third" if v < 1.0 else "above the upper band"
+
+
 def _build_current_bar(
     current_indicators, current_strategy_votes, window_start_time,
     specialist_signals=None, ensemble_signal="",
     ensemble_conf=0.0, dashboard_directions=None,
+    dashboard_signals_raw=None,
 ) -> str:
+    """Render the current bar as a prose essay so the historical analyst can do
+    like-for-like comparisons against the top-10 precedent bars (which are also
+    prose — DS REASONING / DS NARRATIVE / POSTMORTEM). Token-compressed formats
+    left too many fields unnamed; the analyst repeatedly reported "current bar
+    lacks BSR / microstructure data" even though we were collecting it.
+
+    This function pulls raw numeric values and the interpretation strings that
+    each signals.py fetcher already writes, and stitches them into sentences.
+    """
     dt     = datetime.fromtimestamp(window_start_time, tz=timezone.utc) if window_start_time else None
-    day    = _DAYS[dt.weekday()] if dt else "?"
+    day    = _DAY_FULL.get(_DAYS[dt.weekday()], "?") if dt else "?"
     time_s = dt.strftime("%Y-%m-%d %H:%M UTC") if dt else "?"
-    ses    = _session(window_start_time) if window_start_time else "?"
-    ind_s  = _fmt_indicators(current_indicators)
-    vote_s = _fmt_strategy_votes(current_strategy_votes)
-    spec_s = _fmt_specialists(specialist_signals or {})
-    dash_s = _fmt_dashboard_directions(dashboard_directions or {})
-    return (
-        f"  {day} {time_s}  {ses}\n"
-        f"  Indicators   : {ind_s}\n  Strategies   : {vote_s}\n"
-        f"  Specialists  : {spec_s}\n  Microstructure: {dash_s}\n"
-        f"  Ensemble     : {ensemble_signal or '?'} {int(ensemble_conf*100)}%"
+    ses_k  = _session(window_start_time) if window_start_time else ""
+    ses_s  = _SESSIONS.get(ses_k, ses_k) if isinstance(_SESSIONS, dict) else _SESSION_DESCRIPTIONS.get(ses_k, ses_k)
+    ind    = current_indicators or {}
+    dash   = dashboard_signals_raw or {}
+
+    parts = [f"CURRENT BAR — {day} {time_s}, {ses_s} session."]
+
+    # ── Technical state ────────────────────────────────────────────────────
+    rsi = ind.get("rsi_4")
+    macd = ind.get("macd_histogram")
+    stoch = ind.get("stoch_k_5")
+    bbb  = ind.get("bollinger_pct_b")
+    ema_cross = ind.get("ema_cross_8_21")
+    vol5  = ind.get("volatility_5")
+    vol10 = ind.get("volatility_10")
+    vol20 = ind.get("volatility_20")
+    tech = ["TECHNICAL STATE:"]
+    if rsi is not None:
+        tech.append(f"RSI(4) is {rsi:.1f} ({_OBOS_RSI(rsi)}).")
+    if macd is not None:
+        dirn = "bearish" if macd < 0 else "bullish"
+        tech.append(f"MACD histogram is {dirn} at {macd:+.3f}.")
+    if stoch is not None:
+        tech.append(f"Stochastic %K is {stoch:.1f} ({_OBOS_STOCH(stoch)}).")
+    if bbb is not None:
+        tech.append(f"Bollinger %B is {bbb:.2f} ({_BB_ZONE(bbb)}).")
+    if ema_cross is not None:
+        dirn = "below" if ema_cross < 0 else "above"
+        tech.append(f"EMA(8) is {dirn} EMA(21) by {abs(ema_cross):.2f} points.")
+    parts.append(" ".join(tech))
+
+    # ── Volatility (short / medium / long) ────────────────────────────────
+    vol_parts = ["VOLATILITY:"]
+    if vol5 is not None:
+        vol_parts.append(f"5-bar realized {vol5:.3f}% (short-term).")
+    if vol10 is not None:
+        vol_parts.append(f"10-bar realized {vol10:.3f}%.")
+    if vol20 is not None:
+        vol_parts.append(f"20-bar realized {vol20:.3f}% (medium-term).")
+    dvol_block = dash.get("deribit_dvol") or {}
+    dvol_pct = dvol_block.get("dvol_pct") if isinstance(dvol_block, dict) else None
+    if dvol_pct is not None:
+        regime = "extreme (options pricing large moves)" if dvol_pct > 80 else "calm (complacent options market)" if dvol_pct < 40 else "normal"
+        vol_parts.append(f"Deribit DVOL is {dvol_pct:.1f}% annualised ({regime}) — long-term implied volatility.")
+    if len(vol_parts) > 1:
+        parts.append(" ".join(vol_parts))
+
+    # ── Microstructure (raw values + fetcher interpretations) ─────────────
+    ob = dash.get("order_book") or {}
+    if ob.get("imbalance_pct") is not None:
+        parts.append(
+            f"ORDER BOOK: {ob.get('bid_vol_btc','?')} BTC bid vs {ob.get('ask_vol_btc','?')} BTC ask, "
+            f"imbalance {ob.get('imbalance_pct'):+.2f}%. {ob.get('interpretation','')}".strip()
+        )
+    tf = dash.get("taker_flow") or {}
+    if tf.get("buy_sell_ratio") is not None:
+        parts.append(
+            f"TAKER FLOW: BSR {tf.get('buy_sell_ratio'):.3f} "
+            f"({tf.get('taker_buy_vol_btc','?')} BTC aggressive buys vs {tf.get('taker_sell_vol_btc','?')} BTC aggressive sells over last 3 bars). "
+            f"3-bar trend: {tf.get('trend_3bars','?')}. {tf.get('interpretation','')}".strip()
+        )
+    swf = dash.get("spot_whale_flow") or {}
+    if swf.get("whale_buy_btc") is not None:
+        parts.append(
+            f"SPOT WHALE FLOW: {swf.get('whale_buy_btc','?')} BTC whale buys, {swf.get('whale_sell_btc','?')} BTC whale sells "
+            f"({swf.get('whale_buy_pct','?')}% buy-side). {swf.get('interpretation','')}".strip()
+        )
+    oif = dash.get("oi_funding") or {}
+    if oif.get("funding_rate_8h_pct") is not None:
+        parts.append(
+            f"OPEN INTEREST & FUNDING: OI {oif.get('open_interest_btc','?')} BTC, 8h funding {oif.get('funding_rate_8h_pct'):+.4f}%, "
+            f"mark premium vs index {oif.get('mark_premium_vs_index_pct',0):+.4f}%. "
+            f"{oif.get('interpretation','')}".strip()
+        )
+    oiv = dash.get("oi_velocity") or {}
+    if oiv.get("oi_change_30m_pct") is not None:
+        parts.append(
+            f"OI VELOCITY: 30-minute OI change {oiv.get('oi_change_30m_pct'):+.3f}%, 1-bar {oiv.get('oi_change_1bar_pct',0):+.3f}%. "
+            f"{oiv.get('interpretation','')}".strip()
+        )
+    cz = dash.get("coinalyze") or {}
+    if cz.get("funding_rate_pct") is not None:
+        parts.append(
+            f"CROSS-EXCHANGE AGGREGATE FUNDING: {cz.get('funding_rate_pct'):+.4f}% (Coinalyze). {cz.get('interpretation','')}".strip()
+        )
+    fg = dash.get("fear_greed") or {}
+    if fg.get("index") is not None:
+        parts.append(f"FEAR & GREED: {fg.get('index')}/100 ({fg.get('classification','?')}). {fg.get('interpretation','')}".strip())
+
+    # ── Strategies, specialists, ensemble (prose summary) ─────────────────
+    votes = current_strategy_votes or {}
+    bullish = [k for k, v in votes.items() if isinstance(v, dict) and v.get("signal") == "UP"]
+    bearish = [k for k, v in votes.items() if isinstance(v, dict) and v.get("signal") == "DOWN"]
+    parts.append(
+        f"STRATEGY VOTES: {len(bullish)} bullish, {len(bearish)} bearish across {len(votes)} strategies. "
+        f"Bullish: {', '.join(bullish[:8]) or 'none'}. Bearish: {', '.join(bearish[:8]) or 'none'}."
     )
+
+    if specialist_signals:
+        spec_parts = []
+        for name, spec in specialist_signals.items():
+            if not isinstance(spec, dict): continue
+            sig = spec.get("signal","?"); conf = int((spec.get("confidence") or 0) * 100)
+            spec_parts.append(f"{name} {sig} {conf}%")
+        if spec_parts:
+            parts.append(f"SPECIALISTS: {', '.join(spec_parts)}.")
+
+    parts.append(f"ENSEMBLE VOTE: {ensemble_signal or '?'} at {int(ensemble_conf*100)}% confidence.")
+
+    return "\n\n".join(parts)
 
 
 def _parse_historical_signal(raw: str) -> Dict:
@@ -2103,6 +2228,7 @@ async def run_historical_analyst(
     ensemble_signal: str = "",
     ensemble_conf: float = 0.0,
     dashboard_directions: Optional[Dict] = None,
+    dashboard_signals_raw: Optional[Dict] = None,
     cohere_api_key: str = "",
     pgvector_search_fn=None,
     timings_sink: Optional[Dict] = None,
@@ -2161,6 +2287,7 @@ async def run_historical_analyst(
     current_bar = _build_current_bar(
         current_indicators, current_strategy_votes, window_start_time,
         specialist_signals, ensemble_signal, ensemble_conf, dashboard_directions,
+        dashboard_signals_raw,
     )
 
     # ── Step 1: Embed current bar opening conditions via Cohere ──
