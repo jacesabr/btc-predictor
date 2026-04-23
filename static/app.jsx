@@ -2190,45 +2190,86 @@ function EmbeddingAuditTab({ embeddingAuditLog, setEmbeddingAuditLog, deepseekIn
 }
 
 // ── Errors Tab ────────────────────────────────────────────────
+const _FLAG_KINDS = new Set(["DATA_GAP", "FREE_OBS", "SUGGESTION"]);
+const _FLAG_LABEL = {
+  ERROR:       "ERROR",
+  UNAVAILABLE: "UNAVAILABLE",
+  NONE:        "NONE",
+  DATA_GAP:    "DATA GAP",
+  FREE_OBS:    "FREE OBS",
+  SUGGESTION:  "SUGGESTION",
+};
+
 function ErrorsTab({ errors }) {
   const [expanded, setExpanded] = React.useState(null);
   if (!errors || errors.length === 0) return (
     <div style={{ padding:24, color:C.muted, fontSize:12, textAlign:"center" }}>
-      No errors recorded this session. ERROR/UNAVAILABLE bars will appear here.
+      No errors or DeepSeek flags recorded this session.
+      ERROR/UNAVAILABLE bars and any DATA_GAP / FREE_OBS / SUGGESTION raised by any DeepSeek call will appear here.
     </div>
   );
+  const errCount  = errors.filter(e => !_FLAG_KINDS.has(e.signal)).length;
+  const flagCount = errors.length - errCount;
   return (
     <div style={{ overflow:"auto", height:"100%", padding:"6px 0" }}>
       <div style={{ fontSize:10, color:C.muted, letterSpacing:1, marginBottom:8, paddingLeft:4 }}>
-        {errors.length} ERROR/UNAVAILABLE BAR{errors.length!==1?"S":""} — not embedded, excluded from history
+        {errCount} ERROR/UNAVAILABLE BAR{errCount!==1?"S":""} · {flagCount} DEEPSEEK FLAG{flagCount!==1?"S":""}
       </div>
       {errors.map((e, i) => {
         const isOpen = expanded === i;
+        const isFlag = _FLAG_KINDS.has(e.signal);
         const isErr  = e.signal === "ERROR";
+        const accent = isErr ? C.red : C.amber;
+        const label  = _FLAG_LABEL[e.signal] || e.signal || "?";
+        const message = e.message || (isFlag ? e.reasoning : "");
         return (
-          <div key={i} style={{ ...card, marginBottom:6, borderLeft:`3px solid ${isErr?C.red:C.amber}` }}>
-            <div style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer" }}
+          <div key={i} style={{ ...card, marginBottom:6, borderLeft:`3px solid ${accent}` }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, cursor:"pointer", flexWrap:"wrap" }}
                  onClick={() => setExpanded(isOpen ? null : i)}>
-              <span style={{ fontSize:9, fontWeight:700, color:isErr?C.red:C.amber, letterSpacing:1 }}>
-                {e.signal}
+              <span style={{ fontSize:9, fontWeight:700, color:accent, letterSpacing:1 }}>
+                {label}
               </span>
-              <span style={{ fontSize:10, color:C.muted }}>{e.bar_time}</span>
-              <span style={{ fontSize:10, color:C.muted }}>Bar #{e.bar_num}</span>
+              {e.source && (
+                <span style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1,
+                  background:C.bg, padding:"1px 6px", borderRadius:3, border:`1px solid ${C.borderSoft}` }}>
+                  {e.source}
+                </span>
+              )}
+              {e.bar_time && <span style={{ fontSize:10, color:C.muted }}>{e.bar_time}</span>}
+              {e.bar_num !== "" && e.bar_num != null && (
+                <span style={{ fontSize:10, color:C.muted }}>Bar #{e.bar_num}</span>
+              )}
+              {isFlag && message && (
+                <span style={{ fontSize:10, color:C.text, flex:"1 1 200px", minWidth:0,
+                  whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                  {message}
+                </span>
+              )}
               <span style={{ marginLeft:"auto", fontSize:9, color:C.muted }}>{isOpen?"▲":"▼"}</span>
             </div>
             {isOpen && (
               <div style={{ marginTop:8, borderTop:`1px solid ${C.border}`, paddingTop:8 }}>
-                {e.reasoning && (
+                {isFlag && message ? (
                   <div style={{ marginBottom:6 }}>
-                    <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:3 }}>REASONING</div>
-                    <pre style={{ fontSize:10, color:C.text, whiteSpace:"pre-wrap", margin:0 }}>{e.reasoning}</pre>
+                    <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:3 }}>FLAG MESSAGE</div>
+                    <pre style={{ fontSize:11, color:C.text, whiteSpace:"pre-wrap", margin:0,
+                      background:C.amberBg, border:`1px solid ${C.amberBorder}`, padding:8, borderRadius:4 }}>{message}</pre>
                   </div>
+                ) : (
+                  e.reasoning && (
+                    <div style={{ marginBottom:6 }}>
+                      <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:3 }}>REASONING</div>
+                      <pre style={{ fontSize:10, color:C.text, whiteSpace:"pre-wrap", margin:0 }}>{e.reasoning}</pre>
+                    </div>
+                  )
                 )}
                 {e.raw_response && (
                   <div>
-                    <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:3 }}>RAW RESPONSE</div>
-                    <pre style={{ fontSize:10, color:C.red, whiteSpace:"pre-wrap", margin:0, maxHeight:300, overflow:"auto",
-                      background:"#1a0a0a", padding:8, borderRadius:4 }}>{e.raw_response}</pre>
+                    <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:3 }}>
+                      {isFlag ? "RAW RESPONSE EXCERPT" : "RAW RESPONSE"}
+                    </div>
+                    <pre style={{ fontSize:10, color:isErr?C.red:C.text, whiteSpace:"pre-wrap", margin:0, maxHeight:300, overflow:"auto",
+                      background:isErr?"#1a0a0a":C.bg, padding:8, borderRadius:4, border:`1px solid ${C.borderSoft}` }}>{e.raw_response}</pre>
                   </div>
                 )}
                 <div style={{ marginTop:6, fontSize:9, color:C.muted }}>Logged {e.logged_at_str}</div>
