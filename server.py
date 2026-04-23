@@ -797,15 +797,10 @@ async def force_predict():
 @app.post("/reset-scores")
 async def reset_scores():
     import time as _time
-    now = _time.time()
+    from storage_pg import set_reset_at
+    now  = _time.time()
     note = f"Score reset {__import__('datetime').datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')} via dashboard"
-    if os.environ.get("DATABASE_URL"):
-        from storage_pg import set_reset_at
-        set_reset_at(now, note)
-    else:
-        import json as _json
-        reset_path = pathlib.Path(__file__).parent / "score_reset.json"
-        reset_path.write_text(_json.dumps({"reset_at": now, "reset_note": note}))
+    set_reset_at(now, note)
     return {"status": "ok", "reset_at": now, "note": note}
 
 
@@ -911,8 +906,7 @@ async def embed_pattern_history(background_tasks: BackgroundTasks):
     Background task: Cohere-embed all pattern_history bars that have no embedding yet.
     Stores REAL[] vectors so cosine similarity search works without pgvector.
     """
-    from semantic_store import load_all as _load_ph
-    from semantic_store_pg import store_embedding as _store_emb
+    from semantic_store import load_all as _load_ph, store_embedding as _store_emb
     from ai import embed_text as _embed, _bar_embed_text
 
     if not config.cohere_api_key:

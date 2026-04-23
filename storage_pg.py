@@ -1,12 +1,15 @@
 """
-PostgreSQL backend for Storage — mirrors the exact interface of storage.py.
-Used automatically when DATABASE_URL environment variable is set (Railway).
-Falls back to file-based storage.py when DATABASE_URL is absent (local dev).
+PostgreSQL storage layer. DATABASE_URL is required.
 
 Tables created on first run:
-  ticks                 — rolling price ticks (capped at 5000)
-  predictions           — ensemble predictions + outcomes
-  deepseek_predictions  — DeepSeek predictions + outcomes
+  ticks                  — rolling price ticks (capped at 5000)
+  predictions            — ensemble predictions + outcomes
+  deepseek_predictions   — DeepSeek predictions + outcomes
+  score_reset            — single-row timestamp filtering accuracy counters
+  events                 — error/flag/suggestion log (hydrated into /errors on boot)
+
+The long-dead file-based `storage.py` backend has been removed; production
+has always run on Postgres.
 """
 
 import json

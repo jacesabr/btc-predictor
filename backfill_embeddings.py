@@ -28,7 +28,7 @@ except ImportError:
 
 from config import Config
 from ai import embed_text, _bar_embed_text
-from semantic_store_pg import load_all, store_embedding
+from semantic_store import load_all, store_embedding
 
 logging.basicConfig(
     level=logging.INFO,
