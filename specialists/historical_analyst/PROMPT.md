@@ -5,7 +5,17 @@ Target: help the system cross 60% win rate. That only happens if your confidence
 ═══════════════════════════════════════════════════════
   TOP {n} SIMILAR BARS  (pre-ranked by Cohere rerank — most similar first)
 ═══════════════════════════════════════════════════════
-Format: #NNN DayHH:MMses OUTCOME | ENS=signal+conf+correct DS=signal+conf+correct | RSI_TOKEN MACD_TOKEN STOCH_TOKEN BB_TOKEN [SPEC:signals] | ob/ls/tf/fg/mem directions | CE:narrative
+Each bar is presented with:
+  • Header: #NNN, day/time, session, actual outcome, start→end price (+/- move)
+  • ensemble + deepseek calls with correct/wrong markers
+  • DS REASONING — the Bayesian argument the system made BEFORE that bar resolved
+  • DS NARRATIVE — the chart story seen at that moment
+  • DS FREE_OBS — the most notable divergence at that moment
+  • POSTMORTEM  — post-resolve forensic analysis: VERDICT, ERROR_CLASS, ROOT_CAUSE
+  • INDICATORS + SPEC + DASH tokens at the bottom as pattern-match anchor
+Read the POSTMORTEM first for each Tier A bar — it tells you WHY the similar setup
+resolved the way it did. If the postmortem says "ERROR_CLASS: TRAP" on bars with
+current-bar-like features, that is heavy evidence against the ensemble's lean.
 
 Tier assignment (use throughout):
   • Tier A = bars #001–#005  (highest similarity — primary evidence)
