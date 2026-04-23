@@ -48,6 +48,9 @@ async def startup():
     asyncio.create_task(run_binance_feed())
     asyncio.create_task(run_indicator_refresh())
     asyncio.create_task(run_embedding_audit_loop())
+    # Count unembedded bars and surface a DATA_GAP event if any exist.
+    # Does NOT mass-embed — operator triggers POST /admin/embed-missing manually.
+    _trigger_embedding_bootstrap()
 
 
 # ── Pydantic models ───────────────────────────────────────────
@@ -611,6 +614,56 @@ async def reset_database():
         return {"status": "ok", "deleted": counts}
     except Exception as exc:
         return {"status": "error", "detail": str(exc)}
+
+
+@app.post("/admin/embed-missing")
+async def embed_missing(limit: int = 20):
+    """Manually Cohere-embed unembedded RESOLVED bars, up to `limit` at a time.
+
+    The old mass-bootstrap was removed because a coverage-check bug was
+    silently re-embedding every bar on every deploy. This replaces it with
+    a deliberate, rate-limited, capped operation the operator triggers when
+    the ERRORS tab shows unembedded bars.
+
+    Returns counts of: requested, attempted, succeeded, failed, and the
+    window_starts that were processed.
+    """
+    from ai import embed_text, _bar_embed_text
+    from semantic_store import embedded_window_starts, load_all, store_embedding
+    if not config.cohere_api_key:
+        return {"status": "error", "detail": "COHERE_API_KEY not configured"}
+    if limit <= 0 or limit > 100:
+        return {"status": "error", "detail": "limit must be 1..100"}
+    try:
+        embedded = embedded_window_starts()
+        all_bars = load_all()
+        resolved = [r for r in all_bars if r.get("actual_direction")]
+        missing  = [r for r in resolved if r.get("window_start") not in embedded][:limit]
+        if not missing:
+            return {"status": "ok", "requested": limit, "attempted": 0,
+                    "succeeded": 0, "failed": 0, "message": "no missing embeddings"}
+        succeeded, failed, done_ws = 0, 0, []
+        for bar in missing:
+            ws = bar.get("window_start")
+            try:
+                text = _bar_embed_text(bar)
+                vec  = await embed_text(config.cohere_api_key, text, input_type="search_document")
+                store_embedding(ws, vec)
+                succeeded += 1
+                done_ws.append(ws)
+                await asyncio.sleep(0.1)   # ~10/sec rate limit
+            except Exception as exc:
+                failed += 1
+                logger.warning("embed_missing: bar %.0f failed: %s", ws or 0, exc)
+        return {
+            "status": "ok", "requested": limit, "attempted": len(missing),
+            "succeeded": succeeded, "failed": failed,
+            "window_starts": done_ws,
+            "remaining_missing": max(0, len(resolved) - len(embedded) - succeeded),
+        }
+    except Exception as exc:
+        return {"status": "error", "detail": str(exc)}
+
 
 # Removed 3 one-shot migration endpoints that had already been run and were no
 # longer referenced by anything:

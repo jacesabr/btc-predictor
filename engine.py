@@ -176,101 +176,51 @@ def _hydrate_error_log_from_db() -> None:
 _hydrate_error_log_from_db()
 set_flag_callback(_record_deepseek_flag)
 
-# Embedding bootstrap state
-_embedding_bootstrap_running: bool = False
-
-
-async def _bootstrap_embeddings_background():
-    """
-    Background task: embed all un-embedded bars in pattern_history to pgvector.
-    Runs on startup if embedding coverage < 50%, at ~10 bars/sec to respect Cohere rate limits.
-    """
-    global _embedding_bootstrap_running
-    if _embedding_bootstrap_running:
-        return
-
-    _embedding_bootstrap_running = True
-    try:
-        if not config.cohere_api_key or not config.deepseek_api_key:
-            logger.info("Embedding bootstrap skipped: Cohere or DeepSeek API key not configured")
-            return
-
-        # Load all bars from pattern history
-        all_history = load_pattern_history()
-        if not all_history:
-            logger.info("Embedding bootstrap: no bars in history yet")
-            return
-
-        # Coverage is determined by the pgvector `embedding` column, NOT by any
-        # field in the JSON blob (the blob never carries it). Using the blob
-        # would make coverage appear 0% on every restart and re-embed every
-        # bar, which silently burns the Cohere budget. The helper queries the
-        # column directly and returns the set of already-embedded window_starts.
-        from semantic_store import embedded_window_starts
-        embedded_ws  = embedded_window_starts()
-        bars_to_embed = [r for r in all_history if r.get("window_start") not in embedded_ws]
-        total         = len(all_history)
-        coverage_pct  = (total - len(bars_to_embed)) / total * 100 if total else 0
-
-        logger.info("Embedding bootstrap: coverage %.0f%% (%d/%d bars embedded in pgvector)",
-                    coverage_pct, total - len(bars_to_embed), total)
-
-        # Only bootstrap if coverage is below 50%
-        if coverage_pct >= 50:
-            logger.info("Embedding bootstrap: coverage sufficient (%.0f%% >= 50%%), skipping", coverage_pct)
-            return
-
-        if not bars_to_embed:
-            logger.info("Embedding bootstrap: all bars already embedded")
-            return
-
-        logger.info("Embedding bootstrap: starting background job for %d bars (target: ~10/sec)", len(bars_to_embed))
-
-        # Embed at ~10 bars/second (100ms per bar = 0.1 sec)
-        embedded_count = 0
-        start_time = time.time()
-
-        for bar in bars_to_embed:
-            try:
-                # Build the bar's text representation for embedding
-                text = _bar_embed_text(bar)
-                # Embed via Cohere
-                vec = await embed_text(config.cohere_api_key, text, input_type="search_document")
-                # Store in pgvector
-                store_bar_embedding(bar.get("window_start"), vec)
-                embedded_count += 1
-
-                # Rate limiting: ~100ms per bar = ~10/second
-                if embedded_count % 10 == 0:
-                    elapsed = time.time() - start_time
-                    rate = embedded_count / elapsed if elapsed > 0 else 0
-                    logger.info("Embedding bootstrap: %d/%d bars embedded (%.1f bars/sec)",
-                                embedded_count, len(bars_to_embed), rate)
-                    # Sleep to maintain ~10 bars/sec rate
-                    await asyncio.sleep(0.05)
-            except CohereUnavailableError as cohere_exc:
-                logger.warning("Embedding bootstrap: Cohere failed, pausing: %s", cohere_exc)
-                break
-            except Exception as exc:
-                logger.warning("Embedding bootstrap: failed to embed bar at %.0f: %s",
-                               bar.get("window_start", 0), exc)
-                continue
-
-        elapsed = time.time() - start_time
-        logger.info("Embedding bootstrap complete: %d bars embedded in %.1fs (%.1f bars/sec)",
-                    embedded_count, elapsed, embedded_count / elapsed if elapsed > 0 else 0)
-    except Exception as exc:
-        logger.error("Embedding bootstrap failed: %s", exc)
-    finally:
-        _embedding_bootstrap_running = False
-
-
 def _trigger_embedding_bootstrap():
-    """Trigger the embedding bootstrap task (called at startup)."""
-    if deepseek and config.cohere_api_key:
-        asyncio.create_task(_bootstrap_embeddings_background())
-    else:
-        logger.info("Embedding bootstrap skipped: DeepSeek or Cohere not configured")
+    """Startup: count unembedded RESOLVED bars and log a warning event if any.
+
+    Mass-embedding on startup is DISABLED — a silent bug in an earlier version
+    repeatedly burned Cohere budget by re-embedding bars that were already in
+    pgvector (the JSON blob didn't mirror the column, so coverage always
+    appeared 0%). Automatic mass-embed is gone permanently. Per-bar embeds
+    still happen on bar resolution (1 call each), and the current-bar query
+    embed + rerank still happen per bar at prediction time — those are needed.
+
+    If any resolved bars lack vectors, the operator can trigger a small,
+    rate-limited embed via POST /admin/embed-missing?limit=N.
+    """
+    if not config.cohere_api_key:
+        logger.info("Embedding coverage check skipped: Cohere key not configured")
+        return
+    try:
+        from semantic_store import embedded_window_starts, load_all as _load_all
+        embedded = embedded_window_starts()
+        all_bars = _load_all()
+        resolved = [r for r in all_bars if r.get("actual_direction")]
+        missing  = [r for r in resolved if r.get("window_start") not in embedded]
+        total, have, gap = len(resolved), len(resolved) - len(missing), len(missing)
+        coverage = have / total * 100 if total else 100.0
+        logger.info("Embedding coverage: %d/%d resolved bars have vectors (%.1f%%)",
+                    have, total, coverage)
+        if gap > 0:
+            msg = (f"{gap} resolved bar(s) missing Cohere embeddings "
+                   f"(coverage {coverage:.1f}%). Trigger manually with "
+                   f"POST /admin/embed-missing?limit=20 to fix in small batches.")
+            logger.warning(msg)
+            try:
+                storage.store_event(
+                    source="embedding",
+                    kind="DATA_GAP",
+                    message=msg,
+                    bar_time="",
+                    bar_num="",
+                    window_start=0.0,
+                    raw_excerpt="",
+                )
+            except Exception:
+                pass
+    except Exception as exc:
+        logger.warning("Embedding coverage check failed: %s", exc)
 
 
 def _dashboard_accuracy_from_records(records):
