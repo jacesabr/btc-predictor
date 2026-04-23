@@ -739,16 +739,25 @@ async def get_suggestions(limit: int = 30):
     except Exception as exc:
         logger.warning("postmortem lesson fetch failed: %s", exc)
 
-    # 2+3) Specialist suggestions.txt tail
-    def _tail(path: pathlib.Path, n: int = 40) -> list:
-        try:
-            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
-            return [l.strip() for l in lines[-n:] if l.strip()]
-        except Exception:
-            return []
-    root = pathlib.Path(__file__).parent / "specialists"
-    hist_sugg = _tail(root / "historical_analyst" / "suggestions.txt", 20)
-    uni_sugg  = _tail(root / "unified_analyst"    / "suggestions.txt", 20)
+    # 2+3) Specialist SUGGESTION events. Previously read from ephemeral
+    # specialists/*/suggestions.txt files; those get wiped on each Render
+    # deploy. Now backed by the `events` Postgres table (store_event writes
+    # every SUGGESTION flag) so history survives.
+    hist_sugg: list = []
+    uni_sugg:  list = []
+    try:
+        rows = storage.load_recent_events(limit=200, kind="SUGGESTION")
+        for r in rows:
+            src = (r.get("source") or "").lower()
+            msg = r.get("message") or ""
+            bar = r.get("bar_time") or ""
+            line = f"[{bar}] {msg}" if bar else msg
+            if "historical_analyst" in src and len(hist_sugg) < 20:
+                hist_sugg.append(line)
+            elif "unified_analyst" in src and len(uni_sugg) < 20:
+                uni_sugg.append(line)
+    except Exception as exc:
+        logger.warning("SUGGESTION event fetch failed: %s", exc)
 
     return {
         "lessons":                       lessons,

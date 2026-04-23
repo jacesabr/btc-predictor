@@ -111,6 +111,22 @@ CREATE TABLE IF NOT EXISTS deepseek_predictions (
     postmortem                TEXT,
     polymarket_url            TEXT
 );
+
+-- Persistent flag / error / suggestion log. Survives deploy so the ERRORS tab
+-- and /api/suggestions keep their history across Render restarts.
+CREATE TABLE IF NOT EXISTS events (
+    id            BIGSERIAL PRIMARY KEY,
+    logged_at     DOUBLE PRECISION NOT NULL,
+    source        TEXT,              -- e.g. historical_analyst / binance_expert / main_predictor
+    kind          TEXT,              -- ERROR | UNAVAILABLE | DATA_GAP | FREE_OBS | SUGGESTION
+    message       TEXT,
+    bar_time      TEXT,
+    bar_num       TEXT,
+    window_start  DOUBLE PRECISION,
+    raw_excerpt   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_events_logged_at ON events (logged_at DESC);
+CREATE INDEX IF NOT EXISTS idx_events_kind_logged_at ON events (kind, logged_at DESC);
 """
 
 
@@ -769,6 +785,53 @@ class StoragePG:
         finally:
             _put(conn)
         return counts
+
+    def store_event(self, *, source: str, kind: str, message: str,
+                    bar_time: str = "", bar_num: str = "",
+                    window_start: float = 0.0, raw_excerpt: str = "",
+                    logged_at: float = 0.0) -> None:
+        """Persist an error / flag / suggestion so the ERRORS tab survives deploys."""
+        import time as _time
+        conn = _conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO events (logged_at, source, kind, message, bar_time, bar_num, window_start, raw_excerpt) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (logged_at or _time.time(), source or "", kind or "", (message or "")[:4000],
+                     bar_time or "", str(bar_num or ""),
+                     float(window_start or 0.0), (raw_excerpt or "")[:4000]),
+                )
+            conn.commit()
+        except Exception as exc:
+            logger.warning("store_event failed: %s", exc)
+        finally:
+            _put(conn)
+
+    def load_recent_events(self, limit: int = 500, kind: Optional[str] = None) -> List[Dict]:
+        """Return most-recent events (newest first), optionally filtered by kind."""
+        conn = _conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                if kind:
+                    cur.execute(
+                        "SELECT logged_at, source, kind, message, bar_time, bar_num, window_start, raw_excerpt "
+                        "FROM events WHERE kind = %s ORDER BY logged_at DESC LIMIT %s",
+                        (kind, limit),
+                    )
+                else:
+                    cur.execute(
+                        "SELECT logged_at, source, kind, message, bar_time, bar_num, window_start, raw_excerpt "
+                        "FROM events ORDER BY logged_at DESC LIMIT %s",
+                        (limit,),
+                    )
+                rows = cur.fetchall()
+            return [dict(r) for r in rows]
+        except Exception as exc:
+            logger.warning("load_recent_events failed: %s", exc)
+            return []
+        finally:
+            _put(conn)
 
 
 def get_storage(**kwargs):

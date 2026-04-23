@@ -101,15 +101,15 @@ binance_klines: List = []
 
 # In-memory error log — ERROR/UNAVAILABLE bars + non-fatal DeepSeek flags
 # (DATA_GAP / FREE_OBS / SUGGESTION) emitted by ai.py via set_flag_callback.
+# Hydrated from Postgres `events` table at startup so it survives deploys.
 _error_log: list = []
 _ERROR_LOG_MAX = 500   # bound memory; oldest entries evicted past this
 
 
 def _record_deepseek_flag(source: str, kind: str, message: str, ctx: dict) -> None:
-    """Append a non-fatal DeepSeek flag to the in-memory error log.
-
-    Wired into ai.set_flag_callback at startup. Skips empty/NONE messages
-    (the scanner already filters those, but defend anyway).
+    """Append a non-fatal DeepSeek flag to the in-memory error log AND persist
+    it to Postgres. Wired into ai.set_flag_callback at startup. Skips empty/NONE
+    messages (the scanner already filters those, but defend anyway).
     """
     msg = (message or "").strip()
     if not msg or msg.upper() == "NONE":
@@ -119,22 +119,62 @@ def _record_deepseek_flag(source: str, kind: str, message: str, ctx: dict) -> No
         time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(ws))
         if ws else (ctx.get("bar_ts") or "")
     )
+    now_ts = time.time()
+    raw_excerpt = (ctx.get("raw_excerpt") or "")[:2000]
+    bar_num = ctx.get("window_count") or ""
+
+    # In-memory for the live /errors endpoint
     _error_log.append({
         "window_start": ws,
         "bar_time":     bar_ts,
-        "bar_num":      ctx.get("window_count") or "",
+        "bar_num":      bar_num,
         "signal":       kind,           # "DATA_GAP" | "FREE_OBS" | "SUGGESTION"
         "source":       source,         # which DeepSeek call raised it
         "message":      msg,
         "reasoning":    msg,            # legacy field reused for UI back-compat
-        "raw_response": (ctx.get("raw_excerpt") or "")[:2000],
-        "logged_at":    time.time(),
+        "raw_response": raw_excerpt,
+        "logged_at":    now_ts,
     })
-    # Evict oldest entries past cap so long-running processes don't grow unbounded.
     if len(_error_log) > _ERROR_LOG_MAX:
         del _error_log[:len(_error_log) - _ERROR_LOG_MAX]
 
+    # Persistent row in Postgres — survives deploys
+    try:
+        storage.store_event(
+            source=source, kind=kind, message=msg,
+            bar_time=bar_ts, bar_num=str(bar_num),
+            window_start=ws, raw_excerpt=raw_excerpt,
+            logged_at=now_ts,
+        )
+    except Exception as exc:
+        logger.warning("store_event failed (non-fatal): %s", exc)
 
+
+def _hydrate_error_log_from_db() -> None:
+    """Refill _error_log from Postgres on startup so the ERRORS tab isn't empty
+    immediately after a Render redeploy."""
+    try:
+        rows = storage.load_recent_events(limit=_ERROR_LOG_MAX)
+    except Exception as exc:
+        logger.warning("hydrate_error_log failed: %s", exc)
+        return
+    # rows are newest-first; _error_log is oldest-first
+    for r in reversed(rows):
+        _error_log.append({
+            "window_start": r.get("window_start") or 0.0,
+            "bar_time":     r.get("bar_time") or "",
+            "bar_num":      r.get("bar_num") or "",
+            "signal":       r.get("kind"),
+            "source":       r.get("source"),
+            "message":      r.get("message"),
+            "reasoning":    r.get("message"),
+            "raw_response": r.get("raw_excerpt") or "",
+            "logged_at":    r.get("logged_at") or 0.0,
+        })
+    logger.info("Hydrated _error_log from DB: %d entries", len(_error_log))
+
+
+_hydrate_error_log_from_db()
 set_flag_callback(_record_deepseek_flag)
 
 # Embedding bootstrap state
