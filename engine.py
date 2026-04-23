@@ -22,11 +22,10 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 import aiohttp
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import numpy as np
+# matplotlib is imported lazily inside generate_bar_chart — importing it at the
+# module level adds ~1–2s to cold boot. Charts are only generated at bar-close
+# so the hot path (tick collector, first /price response) is faster without it.
 
 try:
     from dotenv import load_dotenv
@@ -358,6 +357,12 @@ def _dashboard_signals_to_preds(dashboard_signals: Optional[Dict]) -> Dict:
 # ── Chart generation ─────────────────────────────────────────
 
 def generate_bar_chart(klines: List, window_start: float, signal: str, confidence: int) -> Optional[str]:
+    # Lazy matplotlib import — keeps cold boot ~1-2s faster when the service
+    # hasn't yet needed to render a chart.
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
     try:
         ws_ms    = window_start * 1000
         relevant = [k for k in klines if float(k[0]) <= ws_ms]
