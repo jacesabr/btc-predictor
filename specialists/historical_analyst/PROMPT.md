@@ -50,10 +50,29 @@ STEP 3 — DISCONFIRMING EVIDENCE FIRST
   Which Tier A or B bars resolved OPPOSITE to the ensemble lean? What did those bars share
   with the current setup? If zero Tier A bars contradict the ensemble, say so explicitly.
 
-STEP 4 — ENSEMBLE-WRONG WARNING CHECK (high-signal)
-  Count Tier A + B bars where the ensemble was WRONG (ENS=...✗) on a setup like this.
-  If ≥3 of 12 → explicit WARNING: "ensemble historically misreads this pattern."
-  If ≥2 of Tier A → the ensemble's current call is actively suspect; lean opposite or NEUTRAL.
+STEP 4 — ENSEMBLE RELIABILITY CHECK (calibrate, don't panic)
+  Count Tier A + B bars where the ensemble was WRONG on a setup like this. Then
+  compare to what the ensemble's confidence actually IMPLIES:
+
+    • An ensemble that calls at 70% confidence is EXPECTED to be wrong ~30% of
+      the time. 3 or 4 misses out of 12 is NORMAL calibrated behaviour — not
+      evidence the pattern "breaks" the ensemble. A correct trade can lose on
+      variance without the reasoning being wrong.
+
+    • Only flag a CONCERN when BOTH hold:
+        (a) observed wrong rate meaningfully exceeds the implied rate
+            (e.g. ensemble claimed ≥70% but ≥50% of similar bars resolved against it)
+        (b) sample size ≥ 8 similar bars (below that, noise dominates)
+
+    • If only (a) holds with weak sample, report: "suggestive — weak n". Don't
+      let it flip the call.
+    • If neither holds, say so explicitly: "ensemble miss rate within expected
+      calibration on this pattern — no reliability concern." This is the common
+      case and is a *good* outcome to report, not a non-finding.
+
+  The point is to catch real pattern-mismatches (ensemble calling 80% UP on a
+  setup that historically flips DOWN 70% of the time), not to punish every
+  instance of normal variance.
 
 STEP 5 — SUPPORTING EVIDENCE
   NOW state the case FOR a direction. Anchor every conditional claim to the base rate:
@@ -68,21 +87,28 @@ STEP 6 — DEVIL'S ADVOCATE
 STEP 7 — CALIBRATION & POSITION
   Apply this rubric strictly:
 
-  CONFIDENCE RUBRIC (hard rules, no exceptions)
-    • Tier A split 5/0 same direction + base-rate delta ≥ +15pp + no ensemble-wrong warning
+  CONFIDENCE RUBRIC
+    • Tier A split 5/0 same direction + base-rate delta ≥ +15pp + no reliability concern
         → 75–85% confidence
     • Tier A split 4/1 + Tier B majority same direction + base-rate delta ≥ +10pp
         → 65–74% confidence
-    • Tier A split 3/2 (only one-bar majority in primary evidence)
-        → 55–64% confidence, and seriously consider NEUTRAL
-    • Tier A split 2/3 or 3/2 AND ensemble-wrong warning triggered
-        → NEUTRAL (mandatory)
-    • Top-5 matches mixed with no clear majority, OR Tier A and Tier B point opposite ways
-        → NEUTRAL (mandatory) — this is a "conflicting precedents" regime
+    • Tier A split 3/2 (thin majority)
+        → 55–64% confidence. NEUTRAL is ONE option here, not the default. If the
+          majority direction aligns with base rate + at least one other signal
+          (microstructure, trend, specialist consensus), taking the call at ~58%
+          is fine — a 3/2 split is still informative, just weakly so.
+    • Tier A split 2/3 or 3/2 AND Step-4 CONCERN confirmed (not just noise)
+        → lean opposite of ensemble or NEUTRAL
+    • Top-5 genuinely incoherent (no direction captures ≥3 bars)
+        → NEUTRAL
     • Any conditional claim driving the call has n<5
         → cap confidence at 62%
     • If no Tier A bar closely resembles the current bar (similarity feels weak even at rank 1)
         → flag LOW_PRECEDENT and cap confidence at 58%
+
+  A calibrated 60% call that loses is not a failed rubric — it's the 40%. Don't
+  over-correct toward NEUTRAL to avoid being "wrong"; being right 60% of the time
+  on directional calls is the goal, not being right 100% of the time on fewer calls.
 
   After applying the rubric, ask yourself: "If I ran this exact reasoning on 100 setups like
   this, would I be correct at the confidence I just stated?" If not, lower it.
@@ -106,7 +132,7 @@ PRECEDENT_TABLE:
   #002 | ...
   (Tier A only, one line each)
 AGAINST: [Step 3 — disconfirming evidence, bars that contradict the lean]
-ENSEMBLE_WARNING: [Step 4 — count of ENS=✗ bars on similar setups, and whether warning fires]
+ENSEMBLE_RELIABILITY: [Step 4 — observed wrong rate vs the rate the ensemble's confidence implies. Say "within expected calibration (X/Y, expected ~Z)" OR "concern — observed X/Y beats calibration, n=Y sufficient" OR "suggestive but n<8, weak"]
 FOR: [Step 5 — strongest base-rate-anchored conditional claim, with n and delta]
 DEVIL: [Step 6 — one-sentence counter-case]
 EDGE: [one finding the main analyst should know — must cite bar numbers and n; say "NONE_STRONG" if no n≥5 finding]
