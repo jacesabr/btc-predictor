@@ -1948,8 +1948,30 @@ _KEY_DASH_COMPACT = [
 ]
 
 def _build_history_table(records: List[Dict], compact: bool = False) -> str:
+    """Render similar-bar records for the analyst prompt.
+
+    The `compact` path is what the LLM actually sees. It keeps the narrative
+    fields (DeepSeek's reasoning, free-observation, postmortem) verbatim so the
+    analyst can read HOW each prior setup was analysed and WHY it resolved the
+    way it did — not just the indicator state at bar-open. Symbolic tokens still
+    sit at the bottom as a pattern-match anchor.
+
+    If a record has a `postmortem` key (injected by run_historical_analyst via
+    fetch_postmortems), it is included. Otherwise that section is skipped.
+    """
     if not records:
         return "  (no resolved history yet)"
+
+    def _trim(text: str, limit: int) -> str:
+        """Collapse whitespace and hard-cap to `limit` chars at a word boundary."""
+        s = " ".join((text or "").split())
+        if len(s) <= limit:
+            return s
+        cut = s.rfind(" ", 0, limit - 1)
+        if cut < limit - 80:   # too far back — just hard-cut
+            cut = limit - 1
+        return s[:cut] + "…"
+
     lines = []
     for i, r in enumerate(records, 1):
         ts     = r.get("window_start", 0)
@@ -1959,33 +1981,22 @@ def _build_history_table(records: List[Dict], compact: bool = False) -> str:
         ses    = r.get("session") or (_session(ts) if ts else "?")
         actual = r.get("actual_direction", "?")
         sp     = r.get("start_price", 0); ep = r.get("end_price", 0)
-        price_s = f"${sp:,.0f}→${ep:,.0f}" if sp and ep else "?"
+        if sp and ep:
+            move_pct = ((ep - sp) / sp) * 100
+            price_s  = f"${sp:,.0f}→${ep:,.0f} ({move_pct:+.2f}%)"
+        else:
+            price_s = "?"
         e_sig  = r.get("ensemble_signal", "?"); e_conf = int((r.get("ensemble_conf") or 0) * 100)
         e_ok   = "✓" if r.get("ensemble_correct") else "✗"
         d_sig  = r.get("deepseek_signal", ""); d_conf = r.get("deepseek_conf", 0)
         d_ok   = "✓" if r.get("deepseek_correct") else "✗" if r.get("deepseek_correct") is False else "?"
-        ind_s  = _fmt_indicators(r.get("indicators", {}))
-        vote_s = _fmt_strategy_votes(r.get("strategy_votes", {}))
         spec_s = _fmt_specialists(r.get("specialist_signals", {}))
-        dash_s = _fmt_dashboard_directions(r.get("dashboard_signals_raw", {}))
-        ce     = (r.get("creative_edge") or "").strip()
 
         if compact:
-            # ── STEP 5: Compact one-line format with symbolic tokens ────────────
-            # Symbolic tokens (RSI_OVERSOLD) are used instead of raw numbers (28.3)
-            # because LLMs pattern-match on language tokens, not numeric magnitudes.
-            # The similarity SEARCH already used the raw numbers (Step 2/3).
-            # Here we only need the LLM to REASON about the pattern — labels are better.
-            time_c = dt.strftime("%a%H:%M") if dt else "?"
-            ses_c  = ses[:3].upper() if ses else "?"
-            out_c  = actual[0] if actual and actual != "?" else "?"
-            ens_c  = f"ENS={e_sig[0] if e_sig else '?'}{e_conf}{e_ok}"
-            ds_c   = f"DS={d_sig[0] if d_sig else '?'}{d_conf}{d_ok}" if d_sig else "DS=?"
-            # Symbolic indicator tokens (via Step 1 tokeniser)
+            # Symbolic indicator tokens — the LLM uses these for fast pattern match
             sym    = _symbolize_indicators(r.get("indicators", {}))
             ind_c  = f"{sym['rsi']} {sym['macd']} {sym['stoch']} {sym['bb']}"
-            # SPEC only when signals present
-            spec_c = f" SPEC:{spec_s}" if spec_s != "none" else ""
+            spec_c = f"SPEC: {spec_s}" if spec_s != "none" else "SPEC: —"
             # Key dashboard signals only
             dash   = r.get("dashboard_signals_raw", {})
             dp     = []
@@ -1995,17 +2006,44 @@ def _build_history_table(records: List[Dict], compact: bool = False) -> str:
                 v = v.upper() if isinstance(v, str) else ""
                 if v == "UP":   dp.append(f"{abbrev}=UP")
                 elif v == "DOWN": dp.append(f"{abbrev}=DN")
-            dash_c = " ".join(dp) if dp else "neutral"
-            ce_c   = ce[:150].replace("\n", " ") if ce else "—"
-            lines.append(f"#{i:03d} {time_c}{ses_c} {out_c}|{ens_c} {ds_c}|{ind_c}{spec_c}|{dash_c}|CE:{ce_c}")
+            dash_c = " ".join(dp) if dp else "—"
+
+            # Narrative fields — THIS is the bar's story
+            reasoning = _trim(r.get("deepseek_reasoning") or "", 800)
+            narrative = _trim(r.get("deepseek_narrative") or "", 300)
+            free_obs  = _trim(r.get("deepseek_free_obs") or "", 250)
+            postmort  = _trim(r.get("postmortem")         or "", 500)
+            creative  = _trim(r.get("creative_edge")      or "", 200)
+
+            parts = [
+                f"#{i:03d}  {day} {time_s} {ses}  |  actual: {actual}  |  {price_s}",
+                f"    ensemble: {e_sig} {e_conf}% {e_ok}    deepseek: {d_sig} {d_conf}% {d_ok}",
+            ]
+            if reasoning:
+                parts.append(f"    DS REASONING: {reasoning}")
+            if narrative:
+                parts.append(f"    DS NARRATIVE: {narrative}")
+            if free_obs:
+                parts.append(f"    DS FREE_OBS:  {free_obs}")
+            if postmort:
+                parts.append(f"    POSTMORTEM:   {postmort}")
+            elif creative:
+                parts.append(f"    CREATIVE EDGE:{creative}")
+            parts.append(f"    INDICATORS: {ind_c}   {spec_c}   DASH: {dash_c}")
+            lines.append("\n".join(parts))
         else:
-            ce_s = ce[:70].replace("\n", " ") if ce else "—"
+            # Full format — written to disk for later forensics, not sent to LLM
+            ind_s  = _fmt_indicators(r.get("indicators", {}))
+            vote_s = _fmt_strategy_votes(r.get("strategy_votes", {}))
+            dash_s = _fmt_dashboard_directions(r.get("dashboard_signals_raw", {}))
+            ce     = (r.get("creative_edge") or "").strip()
+            ce_s   = ce[:70].replace("\n", " ") if ce else "—"
             lines.append(
                 f"  #{i:03d}|{actual}|{price_s}|{day} {time_s} {ses}\n"
                 f"    ENS={e_sig[0] if e_sig else '?'}{e_conf}{e_ok}  DS={d_sig[0] if d_sig else '?'}{d_conf}{d_ok}\n"
                 f"    {ind_s}\n    STRAT: {vote_s}\n    SPEC: {spec_s}  |  DASH: {dash_s}\n    CE: {ce_s}"
             )
-    return "\n".join(lines)
+    return "\n\n".join(lines) if compact else "\n".join(lines)
 
 
 def _build_current_bar(
@@ -2168,6 +2206,25 @@ async def run_historical_analyst(
         similar_bars = pre_bars
         logger.info("Cohere rerank skipped: only %d candidates (≤%d)", len(pre_bars), COHERE_FINAL_K)
     _record("cohere_rerank", _t)
+
+    # ── Step 3b: Pull postmortems for the top bars so the analyst prompt can
+    # show WHAT ACTUALLY HAPPENED, not just what was predicted. Fetched fresh
+    # per window since they get rewritten after resolution.
+    _mark("fetch_postmortems")
+    _t = time.time()
+    try:
+        from semantic_store import fetch_postmortems as _fetch_pm
+        ts_list = [b.get("window_start") for b in similar_bars if b.get("window_start")]
+        postmortems = _fetch_pm(ts_list)
+        for b in similar_bars:
+            pm = postmortems.get(float(b.get("window_start") or 0))
+            if pm:
+                b["postmortem"] = pm
+        logger.info("Postmortems fetched: %d/%d bars enriched", len(postmortems), len(similar_bars))
+        _record("fetch_postmortems", _t)
+    except Exception as pm_exc:
+        logger.warning("Postmortem fetch failed, continuing without: %s", pm_exc)
+        _record("fetch_postmortems", _t, ok=False, error=f"{type(pm_exc).__name__}: {pm_exc}")
 
     history_table_full    = _build_history_table(history_records, compact=False)
     history_table_compact = _build_history_table(similar_bars,    compact=True)

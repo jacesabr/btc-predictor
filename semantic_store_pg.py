@@ -185,6 +185,32 @@ def load_all(limit: int = 10000) -> List[Dict]:
         _put(conn)
 
 
+def fetch_postmortems(window_starts: List[float]) -> Dict[float, str]:
+    """Return {window_start: postmortem_text} for the given bars.
+
+    The historical-analyst prompt injects postmortems alongside each bar's
+    predictions so the LLM can see how each similar setup RESOLVED — not just
+    the indicator state. Stored in deepseek_predictions; pattern_history only
+    has the pre-resolve snapshot.
+    """
+    if not window_starts:
+        return {}
+    conn = _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT window_start, postmortem FROM deepseek_predictions "
+                "WHERE window_start = ANY(%s) AND postmortem IS NOT NULL AND LENGTH(postmortem) > 50",
+                (list(window_starts),),
+            )
+            return {float(ws): pm for ws, pm in cur.fetchall()}
+    except Exception as exc:
+        logger.warning("fetch_postmortems failed: %s", exc)
+        return {}
+    finally:
+        _put(conn)
+
+
 # ── Vector search ─────────────────────────────────────────────────────────────
 
 def store_embedding(window_start: float, vector: np.ndarray):

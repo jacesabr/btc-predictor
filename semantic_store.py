@@ -348,8 +348,13 @@ if os.environ.get("DATABASE_URL"):
             compute_all_indicator_accuracy,
             store_embedding,
             search_similar,
+            fetch_postmortems,
         )
         logger.info("semantic_store: using PostgreSQL backend")
     except ImportError as _e:
         logger.warning("semantic_store: psycopg2 not installed, falling back to file (%s)", _e)
+else:
+    def fetch_postmortems(window_starts):   # type: ignore
+        """File-backed shim — local dev has no postmortems table, return empty."""
+        return {}
 
