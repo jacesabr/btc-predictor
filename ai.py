@@ -2194,11 +2194,15 @@ def _build_current_bar(
     # similar things about order book + taker flow + positioning tend to
     # resolve similarly.
     if isinstance(binance_expert_analysis, dict):
-        be_sig  = binance_expert_analysis.get("signal", "?")
-        be_conf = int((binance_expert_analysis.get("confidence") or 0) * 100)
+        be_sig_raw = binance_expert_analysis.get("signal", "?")
+        be_sig = str(be_sig_raw).upper() if be_sig_raw else "?"
+        # confidence is stored as integer % (e.g. 55), NOT a 0-1 fraction
+        be_conf_raw = binance_expert_analysis.get("confidence") or 0
+        be_conf = int(be_conf_raw * 100) if 0 <= be_conf_raw <= 1 else int(be_conf_raw)
         be_parts = [f"BINANCE MICROSTRUCTURE EXPERT: {be_sig} at {be_conf}% confidence."]
-        for fld in ("taker_flow_read", "positioning_read", "whale_flow_read",
-                    "oi_funding_read", "order_book_read", "confluence", "key_edge", "watch_for"):
+        # Field names match _parse_binance_expert_response output (no _read suffix)
+        for fld in ("taker_flow", "positioning", "whale_flow",
+                    "oi_funding", "order_book", "confluence", "key_edge", "watch_for"):
             v = binance_expert_analysis.get(fld)
             if v:
                 label = fld.replace("_", " ").title()
