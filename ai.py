@@ -2067,6 +2067,7 @@ def _build_current_bar(
     specialist_signals=None, ensemble_signal="",
     ensemble_conf=0.0, dashboard_directions=None,
     dashboard_signals_raw=None,
+    binance_expert_analysis=None,
 ) -> str:
     """Render the current bar as a prose essay so the historical analyst can do
     like-for-like comparisons against the top-10 precedent bars (which are also
@@ -2187,6 +2188,24 @@ def _build_current_bar(
         if spec_parts:
             parts.append(f"SPECIALISTS: {', '.join(spec_parts)}.")
 
+    # ── Binance microstructure expert (ran right before this) ─────────────
+    # Feeding its verbatim read into the historical query gives retrieval a
+    # signal that goes beyond raw features — past bars where the expert said
+    # similar things about order book + taker flow + positioning tend to
+    # resolve similarly.
+    if isinstance(binance_expert_analysis, dict):
+        be_sig  = binance_expert_analysis.get("signal", "?")
+        be_conf = int((binance_expert_analysis.get("confidence") or 0) * 100)
+        be_parts = [f"BINANCE MICROSTRUCTURE EXPERT: {be_sig} at {be_conf}% confidence."]
+        for fld in ("taker_flow_read", "positioning_read", "whale_flow_read",
+                    "oi_funding_read", "order_book_read", "confluence", "key_edge", "watch_for"):
+            v = binance_expert_analysis.get(fld)
+            if v:
+                label = fld.replace("_", " ").title()
+                be_parts.append(f"{label}: {str(v).strip()}")
+        if len(be_parts) > 1:
+            parts.append(" ".join(be_parts))
+
     parts.append(f"ENSEMBLE VOTE: {ensemble_signal or '?'} at {int(ensemble_conf*100)}% confidence.")
 
     return "\n\n".join(parts)
@@ -2229,6 +2248,7 @@ async def run_historical_analyst(
     ensemble_conf: float = 0.0,
     dashboard_directions: Optional[Dict] = None,
     dashboard_signals_raw: Optional[Dict] = None,
+    binance_expert_analysis: Optional[Dict] = None,
     cohere_api_key: str = "",
     pgvector_search_fn=None,
     timings_sink: Optional[Dict] = None,
@@ -2287,7 +2307,7 @@ async def run_historical_analyst(
     current_bar = _build_current_bar(
         current_indicators, current_strategy_votes, window_start_time,
         specialist_signals, ensemble_signal, ensemble_conf, dashboard_directions,
-        dashboard_signals_raw,
+        dashboard_signals_raw, binance_expert_analysis,
     )
 
     # ── Step 1: Embed current bar opening conditions via Cohere ──

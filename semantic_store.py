@@ -189,6 +189,23 @@ def load_all(limit: int = 10000) -> List[Dict]:
         _put(conn)
 
 
+def embedded_window_starts() -> set:
+    """Return the set of window_start timestamps that already have an embedding
+    stored in the pgvector column. Used by the bootstrap to avoid re-embedding
+    bars whose vector already exists (the JSON blob does NOT mirror this column,
+    so a naive `r.get("embedding")` check would count everything as unembedded
+    and burn Cohere calls on every service restart).
+    """
+    _init()
+    conn = _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT window_start FROM pattern_history WHERE embedding IS NOT NULL")
+            return {float(r[0]) for r in cur.fetchall()}
+    finally:
+        _put(conn)
+
+
 def fetch_postmortems(window_starts: List[float]) -> Dict[float, str]:
     """Return {window_start: postmortem_text} for the given bars.
 

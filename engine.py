@@ -201,13 +201,19 @@ async def _bootstrap_embeddings_background():
             logger.info("Embedding bootstrap: no bars in history yet")
             return
 
-        # Count bars with embeddings by checking if 'embedding' key is non-null
-        bars_with_embedding = [r for r in all_history if r.get("embedding")]
-        bars_to_embed = [r for r in all_history if not r.get("embedding")]
-        coverage_pct = (len(bars_with_embedding) / len(all_history) * 100) if all_history else 0
+        # Coverage is determined by the pgvector `embedding` column, NOT by any
+        # field in the JSON blob (the blob never carries it). Using the blob
+        # would make coverage appear 0% on every restart and re-embed every
+        # bar, which silently burns the Cohere budget. The helper queries the
+        # column directly and returns the set of already-embedded window_starts.
+        from semantic_store import embedded_window_starts
+        embedded_ws  = embedded_window_starts()
+        bars_to_embed = [r for r in all_history if r.get("window_start") not in embedded_ws]
+        total         = len(all_history)
+        coverage_pct  = (total - len(bars_to_embed)) / total * 100 if total else 0
 
-        logger.info("Embedding bootstrap: coverage %.0f%% (%d/%d bars embedded)",
-                    coverage_pct, len(bars_with_embedding), len(all_history))
+        logger.info("Embedding bootstrap: coverage %.0f%% (%d/%d bars embedded in pgvector)",
+                    coverage_pct, total - len(bars_to_embed), total)
 
         # Only bootstrap if coverage is below 50%
         if coverage_pct >= 50:
@@ -481,10 +487,20 @@ async def _run_postmortem_background(
 async def _embed_bar_background(window_start: float, bar_record: dict):
     """
     Fire after bar resolves: embed full bar text via Cohere and store in
-    pattern_history.embedding via pgvector. No local cache — PostgreSQL owns it.
+    pattern_history.embedding via pgvector. PostgreSQL owns it.
+
+    Skips if this window_start is already embedded (defensive — a double-resolve
+    or admin replay should not burn an extra Cohere call).
     """
     if not config.cohere_api_key:
         return
+    try:
+        from semantic_store import embedded_window_starts
+        if float(window_start) in embedded_window_starts():
+            logger.info("Cohere embed skipped — bar %.0f already has a vector", window_start)
+            return
+    except Exception:
+        pass  # if the check itself fails, fall through and embed
     try:
         text = _bar_embed_text(bar_record)
         vec  = await embed_text(config.cohere_api_key, text, input_type="search_document")
@@ -504,33 +520,15 @@ async def _run_deepseek(
     ensemble_result=None, polymarket_slug=None, dashboard_signals=None,
     indicator_accuracy=None, ensemble_weights=None,
     historical_analysis=None, dashboard_accuracy=None,
-    dry_run=False, binance_expert_task=None,
+    dry_run=False, binance_expert_analysis=None,
 ):
-    """Fire DeepSeek at bar open; stage result until bar closes."""
+    """Fire DeepSeek at bar open; stage result until bar closes.
+    binance_expert_analysis is now the materialised dict (ran serially before
+    historical analyst earlier in the pipeline), not an in-flight task.
+    """
     bar_ts = time.strftime("%H:%M:%S UTC", time.gmtime(window_start_time))
     logger.info(">>> DeepSeek FIRED for bar %s", bar_ts)
     try:
-        # Await Binance expert (was created ~15-25s ago after dashboard signals arrived).
-        # DeepSeek itself takes 30-50s, so waiting here costs nothing — expert finishes first.
-        binance_expert_result = None
-        if binance_expert_task is not None:
-            _bx_t0 = time.time()
-            try:
-                binance_expert_result = await asyncio.wait_for(
-                    asyncio.shield(binance_expert_task), timeout=70.0
-                )
-                if binance_expert_result:
-                    current_state["bar_binance_expert"] = _json_safe(binance_expert_result)
-                    logger.info("Binance expert result received before DeepSeek API call — injected into prompt")
-                _record_stage("binance_expert", time.time() - _bx_t0, ok=bool(binance_expert_result))
-            except asyncio.TimeoutError:
-                logger.warning("Binance expert timed out (70s) — DeepSeek fires without it")
-                _record_stage("binance_expert", time.time() - _bx_t0, ok=False, error="timeout 70s")
-            except Exception as bx_exc:
-                logger.warning("Binance expert task error: %s — DeepSeek fires without it", bx_exc)
-                _record_stage("binance_expert", time.time() - _bx_t0, ok=False,
-                              error=f"{type(bx_exc).__name__}: {bx_exc}")
-
         neutral_analysis = _safe_storage(storage.get_neutral_analysis, default={})
         _main_t0 = time.time()
         result = await deepseek.predict(
@@ -542,7 +540,7 @@ async def _run_deepseek(
             indicator_accuracy=indicator_accuracy, ensemble_weights=ensemble_weights,
             historical_analysis=historical_analysis,
             dashboard_accuracy=dashboard_accuracy, neutral_analysis=neutral_analysis,
-            binance_expert_analysis=binance_expert_result or current_state.get("bar_binance_expert") or None,
+            binance_expert_analysis=binance_expert_analysis or current_state.get("bar_binance_expert") or None,
             historical_failure_note=current_state.get("bar_historical_failure_note", ""),
         )
         _record_stage("main_deepseek", time.time() - _main_t0, ok=(result.get("signal") not in ("ERROR", "UNAVAILABLE")),
@@ -748,7 +746,6 @@ async def _run_full_prediction(prices, is_force=False):
         _record_stage("dashboard_signals", time.time() - _dash_t0, ok=False, error=f"{type(exc).__name__}: {exc}")
 
     # Step 3 — Inject dashboard into ensemble
-    binance_expert_task = None
     if dashboard_signals:
         dash_preds = _dashboard_signals_to_preds(dashboard_signals)
         strategy_preds.update(dash_preds)
@@ -762,15 +759,37 @@ async def _run_full_prediction(prices, is_force=False):
     current_state["strategies"]       = strategy_preds
     current_state["agree_accuracy"]   = _safe_storage(storage.get_agree_accuracy, default={})
 
-    # Step 5 — Historical analyst (sequential: specialist already done, no other DS call running)
-    historical_analysis = None
-    hist_signal         = None
+    # Step 5a — Binance expert runs BEFORE historical analyst so the historical
+    # query can include the expert's conclusion. This adds ~8s to the sequential
+    # path but gives retrieval a materially richer signal: past bars are scored
+    # against not just raw features but also the Binance expert's read.
     dash_directions: Dict = {}
     if dashboard_signals:
         try: dash_directions = extract_signal_directions(dashboard_signals)
         except: pass
 
-    # Track whether historical analyst fired (used to prevent hallucination)
+    binance_expert_result = None
+    if deepseek and dashboard_signals:
+        _bx_t0 = time.time()
+        try:
+            binance_expert_result = await asyncio.wait_for(
+                run_binance_expert(config.deepseek_api_key, dashboard_signals),
+                timeout=75.0,
+            )
+            if binance_expert_result:
+                current_state["bar_binance_expert"] = _json_safe(binance_expert_result)
+                logger.info("Binance expert done in %.1fs — feeding to historical analyst",
+                            time.time() - _bx_t0)
+            _record_stage("binance_expert", time.time() - _bx_t0, ok=bool(binance_expert_result))
+        except asyncio.TimeoutError:
+            logger.warning("Binance expert timed out (75s) — historical analyst fires without it")
+            _record_stage("binance_expert", time.time() - _bx_t0, ok=False, error="timeout 75s")
+        except Exception as bx_exc:
+            logger.warning("Binance expert error: %s — historical analyst fires without it", bx_exc)
+            _record_stage("binance_expert", time.time() - _bx_t0, ok=False,
+                          error=f"{type(bx_exc).__name__}: {bx_exc}")
+
+    # Step 5b — Historical analyst (now sees Binance expert output too)
     historical_analyst_fired = False
     hist_signal = None
     historical_analysis = None
@@ -791,6 +810,7 @@ async def _run_full_prediction(prices, is_force=False):
                 ensemble_conf=float(pred.get("confidence", 0.0)),
                 dashboard_directions=dash_directions or None,
                 dashboard_signals_raw=dashboard_signals or None,
+                binance_expert_analysis=binance_expert_result,
                 cohere_api_key=config.cohere_api_key,
                 pgvector_search_fn=pgvector_search,
                 timings_sink=_hist_sub,
@@ -849,19 +869,8 @@ async def _run_full_prediction(prices, is_force=False):
     current_state["bar_historical_analyst_fired"] = historical_analyst_fired
     current_state["bar_historical_failure_note"]  = hist_failure_note or ""
 
-    # Step 5b — Binance expert (fire as background task, DeepSeek will await it)
-    binance_expert_task = None
-    if deepseek and dashboard_signals:
-        try:
-            binance_expert_task = asyncio.create_task(
-                asyncio.wait_for(
-                    run_binance_expert(config.deepseek_api_key, dashboard_signals),
-                    timeout=75.0,
-                )
-            )
-            logger.info("Binance expert task created — DeepSeek will await it")
-        except Exception as _bx_e:
-            logger.warning("Binance expert task creation failed: %s", _bx_e)
+    # Binance expert already ran at Step 5a above (result in binance_expert_result);
+    # pass it directly to the main predictor instead of an in-flight task.
 
     pm_odds_open = polymarket_feed.market_odds if polymarket_feed.is_live else None
     pm_ev_open   = (calculate_ev(pred["confidence"], pm_odds_open).expected_value
@@ -928,7 +937,7 @@ async def _run_full_prediction(prices, is_force=False):
                 ensemble_weights=ensemble.get_weights(),
                 historical_analysis=historical_analysis,
                 dashboard_accuracy=dashboard_acc,
-                binance_expert_task=binance_expert_task,
+                binance_expert_analysis=binance_expert_result,
             )
         )
 
