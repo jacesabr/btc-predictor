@@ -58,7 +58,6 @@ from engine import (
 from signals import fetch_dashboard_signals, extract_signal_directions
 from strategies import get_all_predictions, calculate_ev, required_accuracy_for_odds
 from semantic_store import compute_all_indicator_accuracy, compute_dashboard_accuracy, load_all as load_pattern_history
-from ai import SPECIALIST_KEYS as _SPEC_KEYS
 
 logger = logging.getLogger(__name__)
 

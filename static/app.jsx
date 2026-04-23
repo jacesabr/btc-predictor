@@ -547,31 +547,87 @@ function BarDetail({ row, ws, expanded, setExpanded }) {
   const isUp     = row.signal === "UP";
   const isNeutral= row.signal === "NEUTRAL";
 
+  // Outcome derivation for the result banner
+  const resolved = row.end_price != null;
+  const movePct  = resolved ? ((row.end_price - row.start_price) / row.start_price * 100) : null;
+  const correct  = row.correct;  // true | false | null
+  let outcomeKind = "PENDING";
+  if (isNeutral && resolved) outcomeKind = "ABSTAINED";
+  else if (correct === true)  outcomeKind = "WIN";
+  else if (correct === false) outcomeKind = "LOSS";
+  const outcomeStyle = {
+    WIN:       { bg:C.greenBg, border:C.greenBorder, color:C.green,  label:"✓ CORRECT CALL" },
+    LOSS:      { bg:C.redBg,   border:C.redBorder,   color:C.red,    label:"✕ WRONG CALL"   },
+    ABSTAINED: { bg:C.bg,      border:C.borderSoft,  color:C.muted,  label:"— NO TRADE"     },
+    PENDING:   { bg:C.amberBg, border:C.amberBorder, color:C.amber,  label:"● PENDING"      },
+  }[outcomeKind];
+
+  // Pull LESSON_NAME / LESSON_RULE / ERROR_CLASS from postmortem for a prominent callout
+  const pmLines = String(row.postmortem || "").split("\n").map(l => l.trim());
+  const lesson = {
+    name:       (pmLines.find(l => l.startsWith("LESSON_NAME:"))       || "").replace("LESSON_NAME:", "").trim(),
+    rule:       (pmLines.find(l => l.startsWith("LESSON_RULE:"))       || "").replace("LESSON_RULE:", "").trim(),
+    effect:     (pmLines.find(l => l.startsWith("LESSON_EFFECT:"))     || "").replace("LESSON_EFFECT:", "").trim(),
+    errorClass: (pmLines.find(l => l.startsWith("ERROR_CLASS:"))       || "").replace("ERROR_CLASS:", "").trim(),
+    rootCause:  (pmLines.find(l => l.startsWith("ROOT_CAUSE:"))        || "").replace("ROOT_CAUSE:", "").trim(),
+  };
+  const hasLesson = lesson.name && lesson.name.toUpperCase() !== "NONE";
+
   return (
     <div>
-      {/* Price block */}
-      <div style={{ display:"flex", alignItems:"baseline", gap:10, marginBottom:10, flexWrap:"wrap" }}>
-        <div>
-          <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase" }}>Open</div>
-          <div style={{ fontSize:20, fontWeight:900, color:C.text }}>${row.start_price?.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
+      {/* ── Result banner (prominent outcome + key numbers) ── */}
+      <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, flexWrap:"wrap",
+        padding:"10px 14px", borderRadius:8,
+        background:outcomeStyle.bg, border:`1px solid ${outcomeStyle.border}`, borderLeft:`4px solid ${outcomeStyle.color}` }}>
+        <div style={{ fontSize:13, fontWeight:900, color:outcomeStyle.color, letterSpacing:0.5, whiteSpace:"nowrap" }}>
+          {outcomeStyle.label}
         </div>
-        {row.end_price != null ? (<>
-          <span style={{ fontSize:16, color:C.muted }}>→</span>
-          <div>
-            <div style={{ fontSize:9, fontWeight:700, color:C.muted, textTransform:"uppercase" }}>Close</div>
-            <div style={{ fontSize:20, fontWeight:900, color:row.end_price>=row.start_price?C.green:C.red }}>
-              ${row.end_price?.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
-            </div>
-          </div>
-          <span style={{ fontSize:13, fontWeight:800, color:row.end_price>=row.start_price?C.green:C.red, alignSelf:"flex-end", paddingBottom:2 }}>
-            {row.end_price>=row.start_price?"+":""}{((row.end_price-row.start_price)/row.start_price*100).toFixed(3)}%
+        <div style={{ height:24, width:1, background:outcomeStyle.border }} />
+        <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+          <span style={{ fontSize:18, fontWeight:900, color:isUp?C.green:isNeutral?C.amber:C.red }}>
+            {isUp?"▲ UP":isNeutral?"— NEUTRAL":"▼ DOWN"}
           </span>
-        </>) : <span style={{ fontSize:12, color:C.muted, alignSelf:"flex-end", paddingBottom:4 }}>→ PENDING</span>}
-        <div style={{ marginLeft:"auto", textAlign:"right" }}>
-          <div style={{ fontSize:20, fontWeight:900, color:isUp?C.green:isNeutral?C.amber:C.red }}>{isUp?"▲ UP":isNeutral?"— NEUTRAL":"▼ DOWN"}</div>
-          <div style={{ fontSize:15, fontWeight:900, color:C.text }}>{row.confidence ?? "—"}%</div>
+          <span style={{ fontSize:14, fontWeight:800, color:C.text }}>{row.confidence ?? "—"}%</span>
+        </div>
+        {resolved && (
+          <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
+            <span style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:1, textTransform:"uppercase" }}>Move</span>
+            <span style={{ fontSize:14, fontWeight:900, color:movePct>=0?C.green:C.red }}>
+              {movePct>=0?"+":""}{movePct.toFixed(3)}%
+            </span>
+            <span style={{ fontSize:11, color:C.muted }}>
+              ${row.start_price?.toLocaleString(undefined,{maximumFractionDigits:2})}
+              &nbsp;→&nbsp;
+              ${row.end_price?.toLocaleString(undefined,{maximumFractionDigits:2})}
+            </span>
+          </div>
+        )}
+        <div style={{ marginLeft:"auto", display:"flex", gap:10, fontSize:9, color:C.muted }}>
+          {row.latency_ms ? <span>{row.latency_ms}ms</span> : null}
+          {snap && Object.keys(snap).length ? <span>{bullish}↑/{bearish}↓ strategies</span> : null}
         </div>
       </div>
+
+      {/* ── LESSON callout — extracted from postmortem ── */}
+      {hasLesson && (
+        <div style={{ marginBottom:10, padding:"10px 14px", borderRadius:6,
+          background:"#EEF2FF", border:"1px solid #C7D2FE", borderLeft:`4px solid ${C.indigo}` }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, flexWrap:"wrap" }}>
+            <span style={{ fontSize:9, fontWeight:800, color:C.indigo, letterSpacing:1.5, textTransform:"uppercase" }}>
+              💡 Lesson — {lesson.name}
+            </span>
+            {lesson.errorClass && (
+              <span style={{ fontSize:8, fontWeight:700, padding:"1px 6px", borderRadius:3,
+                color:C.indigo, border:`1px solid ${C.indigo}`, background:C.surface }}>
+                {lesson.errorClass}
+              </span>
+            )}
+          </div>
+          {lesson.rule   && <div style={{ fontSize:11, color:"#3730A3", lineHeight:1.6, marginBottom:3 }}><strong>Rule:</strong> {lesson.rule}</div>}
+          {lesson.effect && <div style={{ fontSize:11, color:"#3730A3", lineHeight:1.6, marginBottom:3 }}><strong>Effect:</strong> {lesson.effect}</div>}
+          {lesson.rootCause && <div style={{ fontSize:10, color:"#4338CA", lineHeight:1.5, fontStyle:"italic" }}>{lesson.rootCause}</div>}
+        </div>
+      )}
 
       {/* NEUTRAL outcome info */}
       {isNeutral && (
@@ -3162,41 +3218,8 @@ function App() {
           <ErrorBoundary key="history-tab">
           <div style={{ height:"100%", overflowY:"auto", display:"flex", flexDirection:"column", gap:8, paddingBottom:8 }}>
 
-            {/* Accuracy summary row */}
-            <div style={{ ...card, flexShrink:0, padding:"6px 0" }}>
-              {/* Top row: 5 core metrics */}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr", gap:0 }}>
-                {[
-                  ["Math Ensemble",
-                    allTimeTotal>0?`${allTimeAccuracy.toFixed(1)}%`:"—",
-                    allTimeTotal>0?`${allTimeCorrect}W · ${allTimeTotal-allTimeCorrect}L · ${allTimeNeutral}N`:"no data",
-                    allTimeTotal>0?(allTimeAccuracy>=50?C.green:C.red):C.muted],
-                  ["DeepSeek AI",
-                    deepseekAcc?.total>0?`${(deepseekAcc.accuracy*100).toFixed(1)}%`:"—",
-                    deepseekAcc?.total>0?`${deepseekAcc.correct}W · ${deepseekAcc.total-deepseekAcc.correct}L · ${deepseekAcc.neutrals??0}N`:"no data",
-                    deepseekAcc?.total>0?(deepseekAcc.accuracy>=0.5?C.green:C.red):C.muted],
-                  ["Agree Only",
-                    agreeAcc?.total_agree>0?`${(agreeAcc.accuracy_agree*100).toFixed(1)}%`:"—",
-                    agreeAcc?.total_agree>0?`${agreeAcc.correct_agree}W · ${agreeAcc.total_agree-agreeAcc.correct_agree}L`:"needs both to agree",
-                    agreeAcc?.total_agree>0?(agreeAcc.accuracy_agree>=0.5?C.green:C.red):C.muted],
-                  ["Agree Rate",
-                    agreeAcc?.total_agree>0 && allTimeTotal>0
-                      ? `${(agreeAcc.total_agree/Math.max(allTimeTotal,deepseekAcc?.total||1)*100).toFixed(0)}%`
-                      : "—",
-                    agreeAcc?.total_agree>0
-                      ? `${agreeAcc.total_agree} bars both agreed`
-                      : "needs both to fire",
-                    C.textSec],
-                  ["System", connected?"Live":"Offline", `${strats.length}/${STRATEGY_META.length} strategies`, connected?C.green:C.amber],
-                ].map(([name,big,sub,col],i,arr)=>(
-                  <div key={name} style={{ padding:"4px 12px", borderRight:i<arr.length-1?`1px solid ${C.borderSoft}`:"none" }}>
-                    <div style={{ fontSize:9, color:C.muted, letterSpacing:1, textTransform:"uppercase", marginBottom:2 }}>{name}</div>
-                    <div style={{ fontSize:18, fontWeight:900, color:col, lineHeight:1 }}>{big}</div>
-                    <div style={{ fontSize:9, color:C.textSec, marginTop:2 }}>{sub}</div>
-                  </div>
-                ))}
-              </div>
-              {/* Strategy accuracy pills — show when allAccuracy is loaded */}
+            {/* Per-signal accuracy pills — kept for diagnostics; 5-metric banner removed (DeepSeek win rate lives on LIVE tab) */}
+            <div style={{ ...card, flexShrink:0, padding:"6px 12px" }}>
               {allAccuracy && (() => {
                 const cats = [
                   { key:"strategies", label:"Strategies" },
@@ -3213,7 +3236,7 @@ function App() {
                 if (!allRows.length) return null;
                 allRows.sort((a,b) => b.accuracy - a.accuracy);
                 return (
-                  <div style={{ borderTop:`1px solid ${C.borderSoft}`, marginTop:6, paddingTop:5, paddingLeft:12, paddingRight:12 }}>
+                  <div>
                     <div style={{ fontSize:8, color:C.muted, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", marginBottom:4 }}>
                       Per-signal accuracy ({allRows.length} tracked) — sorted best→worst
                     </div>

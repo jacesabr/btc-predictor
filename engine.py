@@ -849,8 +849,9 @@ async def _run_full_prediction(prices, is_force=False):
         ds_acc = _safe_storage(storage.get_deepseek_accuracy, default={})
 
     indicator_acc_full = _safe_storage(storage.get_strategy_accuracy_full, 100, default={})
-    dash_acc2 = compute_dashboard_accuracy(100)
-    for name, stats in dash_acc2.items():
+    # Reuse the 200-bar dashboard accuracy already computed earlier in this bar
+    # (was a 2nd DB load at window=100 — the 200-bar superset is strictly better).
+    for name, stats in dashboard_acc.items():
         indicator_acc_full[f"dash:{name}"] = stats
     if indicator_acc_full:
         ensemble.update_weights_from_full_stats(indicator_acc_full)
