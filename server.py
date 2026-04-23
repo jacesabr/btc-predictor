@@ -672,6 +672,96 @@ async def get_errors():
     return {"errors": errors, "count": len(errors)}
 
 
+@app.get("/api/suggestions")
+async def get_suggestions(limit: int = 30):
+    """System-improvement suggestions harvested from postmortems + specialist files.
+
+    Pulls three sources:
+      1. Postmortems on recent bars (LESSON_NAME / LESSON_RULE / LESSON_EFFECT blocks).
+         These are the system's own self-derived rules for avoiding repeat mistakes.
+      2. historical_analyst/suggestions.txt — appended by run_historical_analyst
+      3. unified_analyst/suggestions.txt   — appended by run_specialists
+
+    The ERRORS tab renders this so the user can see *what the system thinks it
+    should do differently*, not just that something went wrong.
+    """
+    import re
+    from datetime import datetime, timezone
+    lessons   = []
+    hist_sugg = []
+    uni_sugg  = []
+
+    # 1) Postmortem lessons
+    try:
+        from storage_pg import _conn, _put
+        conn = _conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT window_start, signal, correct, postmortem FROM deepseek_predictions "
+                    "WHERE postmortem IS NOT NULL AND LENGTH(postmortem) > 200 "
+                    "ORDER BY window_start DESC LIMIT %s",
+                    (limit,),
+                )
+                rows = cur.fetchall()
+        finally:
+            _put(conn)
+
+        seen_names = set()
+        for ws, sig, correct, pm in rows:
+            name = rule = effect = preconds = root_cause = error_class = ""
+            for line in pm.splitlines():
+                s = line.strip()
+                if s.startswith("LESSON_NAME:"):    name       = s.split(":",1)[1].strip()
+                elif s.startswith("LESSON_RULE:"):  rule       = s.split(":",1)[1].strip()
+                elif s.startswith("LESSON_EFFECT:"):effect     = s.split(":",1)[1].strip()
+                elif s.startswith("LESSON_PRECONDITIONS:"): preconds = s.split(":",1)[1].strip()
+                elif s.startswith("ROOT_CAUSE:"):  root_cause  = s.split(":",1)[1].strip()
+                elif s.startswith("ERROR_CLASS:"): error_class = s.split(":",1)[1].strip()
+            if not name or name.upper() in ("NONE", "N/A", ""):
+                continue
+            if name in seen_names:
+                continue
+            seen_names.add(name)
+            lessons.append({
+                "window_start":  float(ws),
+                "window_start_str": datetime.fromtimestamp(float(ws), tz=timezone.utc)
+                                        .strftime("%Y-%m-%d %H:%M UTC"),
+                "signal":        sig,
+                "correct":       correct,
+                "name":          name,
+                "rule":          rule,
+                "effect":        effect,
+                "preconditions": preconds,
+                "root_cause":    root_cause,
+                "error_class":   error_class,
+            })
+    except Exception as exc:
+        logger.warning("postmortem lesson fetch failed: %s", exc)
+
+    # 2+3) Specialist suggestions.txt tail
+    def _tail(path: pathlib.Path, n: int = 40) -> list:
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            return [l.strip() for l in lines[-n:] if l.strip()]
+        except Exception:
+            return []
+    root = pathlib.Path(__file__).parent / "specialists"
+    hist_sugg = _tail(root / "historical_analyst" / "suggestions.txt", 20)
+    uni_sugg  = _tail(root / "unified_analyst"    / "suggestions.txt", 20)
+
+    return {
+        "lessons":                       lessons,
+        "historical_analyst_suggestions": hist_sugg,
+        "unified_analyst_suggestions":    uni_sugg,
+        "counts": {
+            "lessons":             len(lessons),
+            "historical_analyst":  len(hist_sugg),
+            "unified_analyst":     len(uni_sugg),
+        },
+    }
+
+
 @app.post("/force-predict")
 async def force_predict():
     prices = collector.get_prices(400)

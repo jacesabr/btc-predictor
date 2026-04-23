@@ -1494,224 +1494,6 @@ function SourceCard({ def, data }) {
   );
 }
 
-function SourceHistoryTab({ sourceHistory, selectedSource, setSelectedSource }) {
-  const record = sourceHistory[selectedSource] || null;
-  const ds = record?.dashboard_signals_snapshot || {};
-  const strats = record?.strategy_snapshot || {};
-
-  function fmtTime(ts) {
-    if (!ts) return "—";
-    const d = new Date(ts * 1000);
-    return String(d.getUTCHours()).padStart(2,"0") + ":" +
-           String(d.getUTCMinutes()).padStart(2,"0") + " UTC";
-  }
-
-  return (
-    <div style={{ display:"flex", gap:8, height:"100%", minHeight:0 }}>
-
-      {/* Left column — window selector */}
-      <div style={{ ...card, flex:"0 0 200px", display:"flex", flexDirection:"column", minHeight:0 }}>
-        <div style={{ ...label, marginBottom:8, flexShrink:0 }}>Windows</div>
-        <div style={{ flex:1, overflowY:"auto" }}>
-          {sourceHistory.length === 0 && (
-            <div style={{ color:C.muted, fontSize:10, padding:8 }}>
-              No source history yet — data is stored from the next DeepSeek bar.
-            </div>
-          )}
-          {sourceHistory.map((rec, i) => {
-            const hasSig  = rec.dashboard_signals_snapshot && Object.keys(rec.dashboard_signals_snapshot).length > 0;
-            const correct = rec.correct;
-            const active  = i === selectedSource;
-            return (
-              <div key={i} onClick={() => setSelectedSource(i)}
-                style={{ padding:"7px 10px", cursor:"pointer", borderRadius:4, marginBottom:2,
-                  background: active ? C.amberBg : "transparent",
-                  border: `1px solid ${active ? C.amberBorder : "transparent"}` }}>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-                  <span style={{ fontSize:10, fontWeight:700, color: active ? C.amber : C.text }}>
-                    {fmtTime(rec.window_start)}
-                  </span>
-                  {correct != null && (
-                    <span style={{ fontSize:9, fontWeight:700,
-                      color: correct ? C.green : C.red }}>
-                      {correct ? "✓" : "✕"}
-                    </span>
-                  )}
-                </div>
-                <div style={{ display:"flex", alignItems:"center", gap:4, marginTop:2 }}>
-                  <span style={{ fontSize:10, fontWeight:700,
-                    color: rec.signal==="UP" ? C.green : C.red }}>
-                    {rec.signal==="UP" ? "▲" : "▼"} {rec.confidence}%
-                  </span>
-                  {!hasSig && (
-                    <span style={{ fontSize:8, color:C.muted, fontStyle:"italic" }}>no snapshot</span>
-                  )}
-                </div>
-                {rec.start_price && (
-                  <div style={{ fontSize:9, color:C.textSec }}>
-                    ${rec.start_price.toFixed(0)}
-                    {rec.end_price ? ` → $${rec.end_price.toFixed(0)}` : ""}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Right panel — source detail */}
-      <div style={{ flex:1, display:"flex", flexDirection:"column", gap:8, minWidth:0, overflowY:"auto", paddingBottom:8 }}>
-
-        {!record ? (
-          <div style={{ ...card, flex:1, display:"flex", alignItems:"center", justifyContent:"center",
-            color:C.muted, fontSize:11 }}>
-            Select a window from the left to inspect its source data.
-          </div>
-        ) : (
-          <>
-            {/* Header */}
-            <div style={{ ...card, flexShrink:0, display:"flex", gap:16, alignItems:"center", flexWrap:"wrap" }}>
-              <div>
-                <div style={{ ...label, marginBottom:2 }}>Window</div>
-                <div style={{ fontSize:13, fontWeight:900, color:C.text }}>
-                  {fmtTime(record.window_start)}
-                  <span style={{ fontSize:10, fontWeight:400, color:C.textSec, marginLeft:6 }}>
-                    → {fmtTime(record.window_end)}
-                  </span>
-                </div>
-              </div>
-              <div>
-                <div style={{ ...label, marginBottom:2 }}>DeepSeek Signal</div>
-                <div style={{ fontSize:13, fontWeight:900,
-                  color: record.signal==="UP" ? C.green : C.red }}>
-                  {record.signal==="UP" ? "▲ UP" : "▼ DOWN"} · {record.confidence}%
-                </div>
-              </div>
-              {record.actual_direction && (
-                <div>
-                  <div style={{ ...label, marginBottom:2 }}>Outcome</div>
-                  <div style={{ fontSize:13, fontWeight:900,
-                    color: record.correct ? C.green : C.red }}>
-                    {record.correct ? "✓ WIN" : "✕ LOSS"} · actual {record.actual_direction}
-                  </div>
-                </div>
-              )}
-              <div>
-                <div style={{ ...label, marginBottom:2 }}>Latency</div>
-                <div style={{ fontSize:12, fontWeight:700, color:C.textSec }}>
-                  {record.latency_ms ? `${(record.latency_ms/1000).toFixed(1)}s` : "—"}
-                </div>
-              </div>
-            </div>
-
-            {/* DeepSeek interpretation of the data */}
-            <div style={{ ...card, flexShrink:0 }}>
-              <div style={{ ...label, marginBottom:6 }}>How DeepSeek Used the Data</div>
-              {record.data_received && (
-                <div style={{ marginBottom:8 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1,
-                    textTransform:"uppercase", marginBottom:3 }}>Data Received (self-reported)</div>
-                  <div style={{ fontSize:10, color:C.textSec, lineHeight:1.5 }}>{record.data_received}</div>
-                </div>
-              )}
-              {record.reasoning && (
-                <div style={{ marginBottom:8 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1,
-                    textTransform:"uppercase", marginBottom:3 }}>Reasoning</div>
-                  <div style={{ fontSize:10, color:C.text, lineHeight:1.6,
-                    borderLeft:`3px solid ${record.signal==="UP"?C.greenBorder:C.redBorder}`,
-                    paddingLeft:8, background:record.signal==="UP"?C.greenBg:C.redBg,
-                    padding:"6px 8px", borderRadius:4 }}>{record.reasoning}</div>
-                </div>
-              )}
-              {record.narrative && (
-                <div style={{ marginBottom:8 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1,
-                    textTransform:"uppercase", marginBottom:3 }}>Extended Narrative</div>
-                  <div style={{ fontSize:10, color:C.textSec, lineHeight:1.55 }}>{record.narrative}</div>
-                </div>
-              )}
-              {record.data_requests && record.data_requests.toUpperCase() !== "NONE" && record.data_requests.trim() !== "" && (
-                <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:C.amber, letterSpacing:1,
-                    textTransform:"uppercase", marginBottom:3 }}>⚠ Data Gaps Flagged</div>
-                  <div style={{ fontSize:10, color:C.amber, lineHeight:1.5 }}>{record.data_requests}</div>
-                </div>
-              )}
-              {record.free_observation && (
-                <div style={{ marginTop:8 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1,
-                    textTransform:"uppercase", marginBottom:3 }}>Free Observation</div>
-                  <div style={{ fontSize:10, color:C.textSec, lineHeight:1.5 }}>{record.free_observation}</div>
-                </div>
-              )}
-            </div>
-
-            {/* Microstructure source cards */}
-            <div style={{ display:"flex", alignItems:"center", gap:8, flexShrink:0 }}>
-              <div style={{ ...label }}>Microstructure Snapshot · embedding inputs</div>
-              {(() => { const n = SOURCE_DEFS.filter(d=>ds[d.key]).length; const tot = SOURCE_DEFS.length; return (
-                <span style={{ fontSize:9, fontWeight:700, padding:"1px 6px", borderRadius:3,
-                  background:n>=14?C.greenBg:n>=8?C.amberBg:C.redBg,
-                  color:n>=14?C.green:n>=8?C.amber:C.red,
-                  border:`1px solid ${n>=14?C.greenBorder:n>=8?C.amberBorder:C.redBorder}` }}>
-                  {n}/{tot} sources
-                </span>
-              ); })()}
-            </div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:6, flexShrink:0 }}>
-              {SOURCE_DEFS.map(def => (
-                <SourceCard key={def.key} def={def} data={ds[def.key] || null} />
-              ))}
-            </div>
-
-            {/* Strategy snapshot */}
-            {Object.keys(strats).length > 0 && (
-              <>
-                <div style={{ ...label, flexShrink:0 }}>Strategy Votes (as fed to DeepSeek)</div>
-                <div style={{ ...card, flexShrink:0 }}>
-                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:10 }}>
-                    <thead>
-                      <tr style={{ borderBottom:`2px solid ${C.border}` }}>
-                        {["Strategy","Signal","Conf","Reasoning"].map(h => (
-                          <th key={h} style={{ textAlign:"left", padding:"4px 8px", fontSize:9,
-                            letterSpacing:1, textTransform:"uppercase", color:C.muted }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(strats).map(([key, v]) => {
-                        const m = STRATEGY_META.find(x => x.key === key);
-                        const name = m ? m.name : key;
-                        const sig = v?.signal || "—";
-                        const conf = v?.confidence != null ? `${(v.confidence*100).toFixed(0)}%` : "—";
-                        const reason = v?.reasoning || "";
-                        return (
-                          <tr key={key} style={{ borderBottom:`1px solid ${C.borderSoft}` }}>
-                            <td style={{ ...td, color: m?.color || C.text, fontWeight:700 }}>{name}</td>
-                            <td style={{ ...td, fontWeight:700,
-                              color: sig==="UP" ? C.green : sig==="DOWN" ? C.red : C.amber }}>
-                              {sig==="UP"?"▲ UP":sig==="DOWN"?"▼ DN":sig}
-                            </td>
-                            <td style={td}>{conf}</td>
-                            <td style={{ ...td, color:C.textSec, fontSize:9, maxWidth:260,
-                              whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
-                              {reason}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
 
 // ── Historical Analysis Audit Tab ─────────────────────────────
 function HistoricalAnalysisAuditTab({ deepseekLog }) {
@@ -2172,15 +1954,109 @@ function EmbeddingAuditTab({ embeddingAuditLog, setEmbeddingAuditLog, deepseekIn
     auditStatus === "timeout" ? { label:"AUDIT TIMEOUT (3m) — check logs", bg:C.redBg, fg:C.red, br:C.redBorder } :
     null;
 
+  // ── Build the "flow proof" from the most recent audit ──────────
+  const latest = (embeddingAuditLog || [])[embeddingAuditLog?.length - 1] || null;
+  const stats  = latest?.stats || {};
+  const sim    = stats.sim_stats || {};
+  const sig    = latest?.audit_signal || "UNKNOWN";
+  const sigColor =
+    sig === "GOOD"              ? C.green :
+    sig === "NEEDS_IMPROVEMENT" ? C.amber :
+    sig === "CRITICAL"          ? C.red   : C.muted;
+  const sigBg =
+    sig === "GOOD"              ? C.greenBg :
+    sig === "NEEDS_IMPROVEMENT" ? C.amberBg :
+    sig === "CRITICAL"          ? C.redBg   : C.bg;
+  const sigBorder =
+    sig === "GOOD"              ? C.greenBorder :
+    sig === "NEEDS_IMPROVEMENT" ? C.amberBorder :
+    sig === "CRITICAL"          ? C.redBorder   : C.border;
+
+  // Each stage: { name, did, proof, ok, detail }
+  const haAccPct = stats.ha_accuracy != null ? stats.ha_accuracy * 100 : null;
+  const stages = [
+    {
+      name: "1. Bar closes",
+      did:  "collect OHLCV + indicators + strategy votes + DeepSeek reasoning + postmortem",
+      proof: stats.total_bars != null ? `${stats.total_bars} resolved bars in history` : null,
+      ok:    (stats.total_bars || 0) > 5,
+      fail:  "need ≥ 5 resolved bars",
+    },
+    {
+      name: "2. Compose essay",
+      did:  "render each bar as a rich natural-language essay (full context, no truncation)",
+      proof: latest ? "essay built per bar → see 'last_sent.txt' below" : null,
+      ok:    !!latest,
+      fail:  "no audit run yet",
+    },
+    {
+      name: "3. Cohere embed",
+      did:  "encode essay via embed-english-v3.0 → 1024-dim L2-normalized vector",
+      proof: stats.embedded_bars != null
+        ? `${stats.embedded_bars}/${stats.total_bars} embedded (${stats.coverage_pct}% coverage)`
+        : null,
+      ok:    (stats.coverage_pct || 0) >= 80,
+      fail:  (stats.coverage_pct || 0) < 50
+               ? "low coverage — bootstrap may still be running"
+               : "coverage below 80%",
+    },
+    {
+      name: "4. Store in pgvector",
+      did:  "insert vector into PostgreSQL pgvector with HNSW cosine index",
+      proof: stats.embedded_bars != null ? `${stats.embedded_bars} vectors indexed` : null,
+      ok:    (stats.embedded_bars || 0) > 0,
+      fail:  "no embeddings stored yet",
+    },
+    {
+      name: "5. Query top-50",
+      did:  "at next bar open, embed current conditions and cosine-search pgvector",
+      proof: sim.count != null
+        ? `last search: ${sim.count} hits, similarity ${sim.min?.toFixed(3)}…${sim.max?.toFixed(3)} (p50=${sim.p50?.toFixed(3)})`
+        : "no similarity stats yet",
+      ok:    (sim.count || 0) >= 20,
+      fail:  "<20 similarity scores observed — query stage may be stubbed",
+    },
+    {
+      name: "6. Cohere rerank",
+      did:  "send the 50 candidates to rerank-english-v3.0, keep top 20",
+      proof: latest ? "rerank runs on every bar — inspect 'historical_analyst.last_sent' below" : null,
+      ok:    !!latest,
+      fail:  "verify in files panel",
+    },
+    {
+      name: "7. Send to DeepSeek",
+      did:  "inject top-20 bars (with DS reasoning + postmortem) into the prompt",
+      proof: haAccPct != null
+        ? `historical analyst accuracy: ${haAccPct.toFixed(1)}% (${stats.ha_correct}/${stats.ha_total})`
+        : "no HA votes graded yet — need more resolved bars",
+      ok:    haAccPct != null && haAccPct >= 50,
+      fail:  haAccPct != null && haAccPct < 50
+               ? `HA accuracy ${haAccPct.toFixed(1)}% — worse than coin flip, retrieval not contributing`
+               : "not enough HA-voted resolved bars yet",
+    },
+  ];
+
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100%", overflow:"hidden" }}>
-      {/* Header */}
-      <div style={{ ...card, flexShrink:0, padding:"12px 16px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
-        <div style={{ minWidth:0 }}>
-          <div style={label}>Pipeline Inspection + Embedding Audit</div>
+      {/* Sticky header with verdict + controls */}
+      <div style={{ ...card, flexShrink:0, padding:"12px 16px",
+        display:"flex", gap:12, alignItems:"flex-start", flexWrap:"wrap" }}>
+        <div style={{ flex:"1 1 320px", minWidth:0 }}>
+          <div style={label}>Embedding Pipeline Audit</div>
           <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>
-            Inspect the actual prompts/responses DeepSeek sees. Audit runs every 4h via deepseek-reasoner.
+            What the retrieval pipeline did and whether it worked, with numbers as proof.
+            Auto-audits every 4 h via deepseek-reasoner.
           </div>
+          {latest && (
+            <div style={{ marginTop:8, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+              <span style={{ padding:"3px 10px", borderRadius:4, fontSize:10, fontWeight:800,
+                background:sigBg, color:sigColor, border:`1px solid ${sigBorder}` }}>{sig}</span>
+              <span style={{ fontSize:10, color:C.muted }}>last audit: {latest.timestamp_str}</span>
+              {latest.summary && (
+                <div style={{ fontSize:11, color:C.textSec, flex:"1 1 100%", marginTop:4 }}>{latest.summary}</div>
+              )}
+            </div>
+          )}
         </div>
         <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
           {auditPill && (
@@ -2190,25 +2066,112 @@ function EmbeddingAuditTab({ embeddingAuditLog, setEmbeddingAuditLog, deepseekIn
           <button onClick={refreshInspect}
             style={{ background:C.bg, color:C.textSec, border:`1px solid ${C.border}`,
               padding:"6px 10px", borderRadius:4, cursor:"pointer", fontSize:10, fontFamily:"inherit", fontWeight:600 }}>
-            Refresh Files
+            Refresh files
           </button>
           <button onClick={startAudit} disabled={auditStatus==="running"}
             style={{ background:C.amberBg, color:C.amber, border:`1px solid ${C.amberBorder}`,
               padding:"6px 12px", borderRadius:4, cursor:auditStatus==="running"?"default":"pointer",
               opacity:auditStatus==="running"?0.6:1, fontSize:10, fontFamily:"inherit", fontWeight:600 }}>
-            Run Audit Now
+            Run audit now
           </button>
         </div>
       </div>
 
       {/* Scroll body */}
       <div style={{ flex:1, overflowY:"auto" }}>
-        {/* ── Last DeepSeek Input panel (always visible) ── */}
-        <div style={{ ...card, margin:"12px 0 0 0", borderRadius:0, borderLeft:"none", borderRight:"none", padding:0 }}>
+
+        {/* ── Pipeline flow diagram (7 stages with proof) ── */}
+        <div style={{ ...card, margin:"12px 16px", padding:"14px 16px" }}>
+          <div style={{ ...label, marginBottom:10 }}>
+            Pipeline flow · input → action → proof
+            {!latest && <span style={{ marginLeft:8, color:C.muted, fontWeight:400 }}>(run an audit to populate)</span>}
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))", gap:8 }}>
+            {stages.map((s, i) => {
+              const showOk = latest != null;
+              const okColor     = showOk && s.ok        ? C.green   : showOk ? C.red      : C.muted;
+              const okBg        = showOk && s.ok        ? C.greenBg : showOk ? C.redBg    : C.bg;
+              const okBorder    = showOk && s.ok        ? C.greenBorder : showOk ? C.redBorder : C.border;
+              const proofText   = s.proof;
+              return (
+                <div key={i} style={{ border:`1px solid ${okBorder}`, borderRadius:6, padding:"10px 12px",
+                  background:okBg, display:"flex", flexDirection:"column", gap:4 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                    <span style={{ fontSize:11, fontWeight:800, color:okColor }}>
+                      {showOk ? (s.ok ? "✓" : "✗") : "–"}
+                    </span>
+                    <span style={{ fontSize:11, fontWeight:800, color:C.text }}>{s.name}</span>
+                  </div>
+                  <div style={{ fontSize:10, color:C.textSec, lineHeight:1.4 }}>{s.did}</div>
+                  {proofText ? (
+                    <div style={{ fontSize:10, color:okColor, fontFamily:"monospace",
+                      background:C.surface, padding:"4px 6px", borderRadius:3,
+                      border:`1px solid ${okBorder}`, marginTop:2 }}>
+                      {proofText}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize:9, color:C.muted, fontStyle:"italic", marginTop:2 }}>
+                      {showOk ? s.fail : "awaiting audit"}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {latest && (
+            <div style={{ marginTop:10, fontSize:10, color:C.muted, textAlign:"right" }}>
+              audit ran in {latest.elapsed_s}s · {latest.issues?.length || 0} issue(s) · {latest.suggestions?.length || 0} suggestion(s)
+            </div>
+          )}
+        </div>
+
+        {/* ── Latest audit detail (issues + suggestions + full analysis) ── */}
+        {latest && (
+          <div style={{ ...card, margin:"0 16px 12px 16px", padding:"12px 16px" }}>
+            <div style={{ ...label, marginBottom:8 }}>Latest audit — verdict detail</div>
+            {latest.issues && latest.issues.length > 0 && (
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:C.red, marginBottom:4 }}>
+                  ⚠ Issues found ({latest.issues.length})
+                </div>
+                {latest.issues.map((iss, i) => (
+                  <div key={i} style={{ fontSize:11, color:C.textSec, padding:"6px 8px",
+                    marginBottom:4, background:C.redBg, borderLeft:`3px solid ${C.red}`, borderRadius:3,
+                    whiteSpace:"pre-wrap" }}>{iss}</div>
+                ))}
+              </div>
+            )}
+            {latest.suggestions && latest.suggestions.length > 0 && (
+              <div style={{ marginBottom:10 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:C.blue, marginBottom:4 }}>
+                  💡 Suggestions ({latest.suggestions.length})
+                </div>
+                {latest.suggestions.map((sg, i) => (
+                  <div key={i} style={{ fontSize:11, color:C.textSec, padding:"6px 8px",
+                    marginBottom:4, background:C.blueBg, borderLeft:`3px solid ${C.blue}`, borderRadius:3,
+                    whiteSpace:"pre-wrap" }}>{sg}</div>
+                ))}
+              </div>
+            )}
+            {latest.full_analysis && (
+              <details>
+                <summary style={{ cursor:"pointer", fontSize:10, fontWeight:700, color:C.textSec }}>
+                  Full analysis (DeepSeek chain-of-thought)
+                </summary>
+                <pre style={{ fontSize:10, color:C.textSec, whiteSpace:"pre-wrap",
+                  background:C.bg, padding:10, borderRadius:4, border:`1px solid ${C.borderSoft}`,
+                  maxHeight:320, overflowY:"auto", marginTop:6 }}>{latest.full_analysis}</pre>
+              </details>
+            )}
+          </div>
+        )}
+
+        {/* ── Live pipeline files (prompts/responses) ── */}
+        <div style={{ ...card, margin:"0 16px 12px 16px", padding:0 }}>
           <div style={{ padding:"10px 16px", borderBottom:`1px solid ${C.border}` }}>
-            <div style={label}>Last DeepSeek Input / Output</div>
+            <div style={label}>Pipeline file inspection · actual bytes DeepSeek saw last bar</div>
             <div style={{ fontSize:10, color:C.muted, marginTop:2 }}>
-              Raw files from <span style={{ fontFamily:"monospace" }}>specialists/*/last_*.txt</span>. Click a row to expand.
+              <span style={{ fontFamily:"monospace" }}>specialists/*/last_*.txt</span> — click a row to expand.
               {!anyFilePresent && " — None written yet; wait for a bar to close."}
             </div>
           </div>
@@ -2217,102 +2180,45 @@ function EmbeddingAuditTab({ embeddingAuditLog, setEmbeddingAuditLog, deepseekIn
           ))}
         </div>
 
-        {/* ── Audit log (may be empty) ── */}
-        {(!embeddingAuditLog || embeddingAuditLog.length === 0) ? (
-          <div style={{ padding:"16px 16px", color:C.muted, fontSize:11 }}>
-            No embedding audits in log yet. First auto-audit fires ~4 hours after startup, or click "Run Audit Now" above.
-          </div>
-        ) : (
-          <div style={{ marginTop:8 }}>
-            <div style={{ ...label, padding:"10px 16px 4px 16px" }}>Embedding Audit Log</div>
+        {/* ── Full audit history (collapsed by default) ── */}
+        {(embeddingAuditLog || []).length > 1 && (
+          <div style={{ ...card, margin:"0 16px 12px 16px", padding:"12px 16px" }}>
+            <div style={{ ...label, marginBottom:6 }}>Audit history ({embeddingAuditLog.length})</div>
+            {embeddingAuditLog.slice().reverse().slice(1).map((audit, idx) => {
+              const realIdx = embeddingAuditLog.length - 2 - idx;
+              const isExpanded = expandedAudit === realIdx;
+              const s = audit.stats || {};
+              const c =
+                audit.audit_signal === "GOOD" ? C.green :
+                audit.audit_signal === "NEEDS_IMPROVEMENT" ? C.amber :
+                audit.audit_signal === "CRITICAL" ? C.red : C.muted;
+              return (
+                <div key={realIdx} style={{ borderTop:`1px solid ${C.borderSoft}`, padding:"6px 0" }}>
+                  <div onClick={()=>setExpandedAudit(isExpanded ? null : realIdx)}
+                       style={{ cursor:"pointer", display:"flex", gap:8, alignItems:"center" }}>
+                    <span style={{ fontSize:9, fontWeight:800, color:c, letterSpacing:1 }}>{audit.audit_signal}</span>
+                    <span style={{ fontSize:10, color:C.muted }}>{audit.timestamp_str}</span>
+                    <span style={{ fontSize:10, color:C.textSec, flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{audit.summary}</span>
+                    <span style={{ fontSize:9, color:C.muted, flexShrink:0 }}>cov {s.coverage_pct}% · ha {s.ha_accuracy != null ? (s.ha_accuracy*100).toFixed(0)+"%" : "—"}</span>
+                    <span style={{ fontSize:9, color:C.muted }}>{isExpanded ? "▲" : "▼"}</span>
+                  </div>
+                  {isExpanded && (
+                    <div style={{ marginTop:6, fontSize:10, color:C.textSec, lineHeight:1.5 }}>
+                      {(audit.issues || []).map((x, i) => <div key={"i"+i} style={{ marginBottom:3 }}>• {x.split("\n")[0]}</div>)}
+                      {(audit.suggestions || []).map((x, i) => <div key={"s"+i} style={{ marginBottom:3, color:C.blue }}>→ {x.split("\n")[0]}</div>)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
-      {/* Audit list */}
-      <div style={{ padding:"0" }}>
-        {(embeddingAuditLog || []).map((audit, idx) => {
-          const isExpanded = expandedAudit === idx;
-          const stats = audit.stats || {};
-          return (
-            <div key={idx} style={{ borderBottom:`1px solid ${C.border}`, padding:"0 16px" }}>
-              {/* Summary row */}
-              <div onClick={()=>setExpandedAudit(isExpanded ? null : idx)}
-                style={{ padding:"10px 0", cursor:"pointer", display:"flex", gap:12, alignItems:"center", justifyContent:"space-between" }}>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontWeight:600, fontSize:11, color:
-                    audit.audit_signal === "GOOD" ? C.green :
-                    audit.audit_signal === "NEEDS_IMPROVEMENT" ? C.amber :
-                    audit.audit_signal === "CRITICAL" ? C.red : C.text }}>
-                    {audit.timestamp_str}  —  {audit.audit_signal || "UNKNOWN"}
-                  </div>
-                  <div style={{ fontSize:10, color:C.textSec, marginTop:3, lineHeight:1.4 }}>
-                    {audit.summary || "No summary"}
-                  </div>
-                  <div style={{ fontSize:9, color:C.muted, marginTop:4, display:"flex", gap:16 }}>
-                    <span>Coverage: {stats.coverage_pct}%</span>
-                    <span>HA Acc: {stats.ha_accuracy ? `${(stats.ha_accuracy * 100).toFixed(1)}%` : "N/A"}</span>
-                    <span>Elapsed: {audit.elapsed_s}s</span>
-                  </div>
-                </div>
-                <div style={{ color:C.muted, fontSize:14, flexShrink:0 }}>
-                  {isExpanded ? "▼" : "▶"}
-                </div>
-              </div>
-
-              {/* Expanded details */}
-              {isExpanded && (
-                <div style={{ paddingBottom:12, borderTop:`1px solid ${C.borderSoft}`, marginTop:8, paddingTop:12, fontSize:10, lineHeight:1.6 }}>
-                  {/* Issues */}
-                  {audit.issues && audit.issues.length > 0 && (
-                    <div style={{ marginBottom:12 }}>
-                      <div style={{ fontWeight:600, color:C.red, marginBottom:6 }}>⚠ Issues Found: {audit.issues.length}</div>
-                      {audit.issues.map((issue, i) => (
-                        <div key={i} style={{ background:C.surfaceAlt, padding:"8px", borderRadius:3, marginBottom:6, borderLeft:`3px solid ${C.red}`, whiteSpace:"pre-wrap", wordBreak:"break-word" }}>
-                          {issue}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Suggestions */}
-                  {audit.suggestions && audit.suggestions.length > 0 && (
-                    <div style={{ marginBottom:12 }}>
-                      <div style={{ fontWeight:600, color:C.amber, marginBottom:6 }}>💡 Suggestions: {audit.suggestions.length}</div>
-                      {audit.suggestions.map((sugg, i) => (
-                        <div key={i} style={{ background:C.surfaceAlt, padding:"8px", borderRadius:3, marginBottom:6, borderLeft:`3px solid ${C.amber}`, whiteSpace:"pre-wrap", wordBreak:"break-word" }}>
-                          {sugg}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Full analysis (collapsible) */}
-                  {audit.full_analysis && (
-                    <div>
-                      <details style={{ marginBottom:8 }}>
-                        <summary style={{ cursor:"pointer", fontWeight:600, color:C.textSec, marginBottom:6 }}>
-                          Full Analysis (DeepSeek Reasoning)
-                        </summary>
-                        <div style={{ background:C.surfaceAlt, padding:"10px", borderRadius:3, marginTop:6, whiteSpace:"pre-wrap", wordBreak:"break-word", maxHeight:"300px", overflowY:"auto", fontSize:9 }}>
-                          {audit.full_analysis.substring(0, 3000)}{audit.full_analysis.length > 3000 ? "... (truncated)" : ""}
-                        </div>
-                      </details>
-                    </div>
-                  )}
-
-                  {/* Stats summary */}
-                  <div style={{ background:C.surfaceAlt, padding:"8px", borderRadius:3, marginTop:8, fontSize:9, display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                    <div>Total Bars: {stats.total_bars}</div>
-                    <div>Embedded: {stats.embedded_bars}</div>
-                    <div>HA Correct: {stats.ha_correct}/{stats.ha_total}</div>
-                    <div>Sim Min/Max: {stats.sim_stats?.min}/{stats.sim_stats?.max}</div>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+        {(!embeddingAuditLog || embeddingAuditLog.length === 0) && (
+          <div style={{ padding:"16px", color:C.muted, fontSize:11, textAlign:"center" }}>
+            No embedding audits in the log yet. First auto-audit fires ~4 hours after startup, or click "Run audit now".
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2331,20 +2237,124 @@ const _FLAG_LABEL = {
 
 function ErrorsTab({ errors }) {
   const [expanded, setExpanded] = React.useState(null);
-  if (!errors || errors.length === 0) return (
+  const [suggestions, setSuggestions] = React.useState(null);
+  const [suggExpanded, setSuggExpanded] = React.useState(null);
+
+  // Fetch system-improvement suggestions on mount and every 60s
+  React.useEffect(() => {
+    const load = () => fetch("/api/suggestions").then(r=>r.json()).then(setSuggestions).catch(()=>{});
+    load();
+    const id = setInterval(load, 60000);
+    return () => clearInterval(id);
+  }, []);
+
+  const lessons    = suggestions?.lessons || [];
+  const haSug      = suggestions?.historical_analyst_suggestions || [];
+  const uaSug      = suggestions?.unified_analyst_suggestions || [];
+  const suggTotal  = lessons.length + haSug.length + uaSug.length;
+
+  const errCount  = (errors || []).filter(e => !_FLAG_KINDS.has(e.signal)).length;
+  const flagCount = (errors?.length || 0) - errCount;
+  const hasErrors = (errors || []).length > 0;
+
+  // If no errors AND no suggestions, show empty state
+  if (!hasErrors && suggTotal === 0) return (
     <div style={{ padding:24, color:C.muted, fontSize:12, textAlign:"center" }}>
-      No errors or DeepSeek flags recorded this session.
-      ERROR/UNAVAILABLE bars and any DATA_GAP / FREE_OBS / SUGGESTION raised by any DeepSeek call will appear here.
+      No errors, flags, or system-improvement suggestions recorded yet.
     </div>
   );
-  const errCount  = errors.filter(e => !_FLAG_KINDS.has(e.signal)).length;
-  const flagCount = errors.length - errCount;
+
   return (
     <div style={{ overflow:"auto", height:"100%", padding:"6px 0" }}>
       <div style={{ fontSize:10, color:C.muted, letterSpacing:1, marginBottom:8, paddingLeft:4 }}>
         {errCount} ERROR/UNAVAILABLE BAR{errCount!==1?"S":""} · {flagCount} DEEPSEEK FLAG{flagCount!==1?"S":""}
+        {suggTotal > 0 && <> · {suggTotal} SYSTEM-IMPROVEMENT SUGGESTION{suggTotal!==1?"S":""}</>}
       </div>
-      {errors.map((e, i) => {
+
+      {/* SYSTEM-IMPROVEMENT SUGGESTIONS — derived from postmortems + specialists */}
+      {suggTotal > 0 && (
+        <div style={{ ...card, marginBottom:12, borderLeft:`3px solid ${C.blue}` }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+            <span style={{ fontSize:11, fontWeight:800, color:C.blue, letterSpacing:1.5 }}>💡 SYSTEM IMPROVEMENTS</span>
+            <span style={{ fontSize:9, color:C.muted }}>rules the system has derived from its own mistakes; refreshes every 60s</span>
+          </div>
+
+          {/* Postmortem lessons — the most actionable */}
+          {lessons.length > 0 && (
+            <div style={{ marginBottom: haSug.length || uaSug.length ? 10 : 0 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:4, textTransform:"uppercase" }}>
+                Postmortem lessons ({lessons.length}) — ex-ante rules the system says it should have applied
+              </div>
+              {lessons.map((L, i) => {
+                const isOpen = suggExpanded === "L" + i;
+                const ecColor = (L.error_class || "").includes("IRREDUCIBLE") ? C.muted :
+                                (L.error_class || "").includes("TRAP")        ? C.red   :
+                                (L.error_class || "").includes("BIAS")        ? C.amber : C.blue;
+                return (
+                  <div key={"L"+i} style={{ border:`1px solid ${C.borderSoft}`, borderRadius:4,
+                    marginBottom:4, overflow:"hidden", background: isOpen ? C.blueBg : C.surface }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 8px", cursor:"pointer", flexWrap:"wrap" }}
+                         onClick={() => setSuggExpanded(isOpen ? null : "L" + i)}>
+                      <span style={{ fontSize:10, fontWeight:800, color:C.blue }}>{L.name}</span>
+                      {L.error_class && <span style={{ fontSize:8, fontWeight:700, padding:"1px 5px", borderRadius:3,
+                        color:ecColor, border:`1px solid ${ecColor}`, background:C.surface }}>{L.error_class}</span>}
+                      <span style={{ fontSize:9, color:C.muted }}>{L.window_start_str}</span>
+                      <span style={{ fontSize:9, fontWeight:700, color: L.signal==="UP"?C.green:L.signal==="DOWN"?C.red:C.muted }}>
+                        {L.signal}{L.correct===true ? " ✓" : L.correct===false ? " ✗" : ""}
+                      </span>
+                      <span style={{ marginLeft:"auto", fontSize:9, color:C.muted }}>{isOpen?"▲":"▼"}</span>
+                    </div>
+                    {isOpen && (
+                      <div style={{ padding:"8px 10px", borderTop:`1px solid ${C.borderSoft}`, fontSize:11, color:C.textSec, lineHeight:1.5 }}>
+                        {L.rule         && <div style={{ marginBottom:6 }}><strong style={{ color:C.text }}>Rule:</strong> {L.rule}</div>}
+                        {L.preconditions&& <div style={{ marginBottom:6 }}><strong style={{ color:C.text }}>When:</strong> {L.preconditions}</div>}
+                        {L.effect       && <div style={{ marginBottom:6 }}><strong style={{ color:C.text }}>Effect:</strong> {L.effect}</div>}
+                        {L.root_cause   && <div style={{ marginBottom:0 }}><strong style={{ color:C.text }}>Root cause:</strong> {L.root_cause}</div>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {haSug.length > 0 && (
+            <div style={{ marginBottom: uaSug.length ? 10 : 0 }}>
+              <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:4, textTransform:"uppercase" }}>
+                Historical analyst suggestions ({haSug.length})
+              </div>
+              {haSug.slice(-10).reverse().map((s, i) => (
+                <div key={"h"+i} style={{ fontSize:10, color:C.textSec, padding:"3px 6px",
+                  background:C.bg, border:`1px solid ${C.borderSoft}`, borderRadius:3, marginBottom:3 }}>
+                  {s}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {uaSug.length > 0 && (
+            <div>
+              <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:4, textTransform:"uppercase" }}>
+                Unified analyst suggestions ({uaSug.length})
+              </div>
+              {uaSug.slice(-10).reverse().map((s, i) => (
+                <div key={"u"+i} style={{ fontSize:10, color:C.textSec, padding:"3px 6px",
+                  background:C.bg, border:`1px solid ${C.borderSoft}`, borderRadius:3, marginBottom:3 }}>
+                  {s}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ERRORS + FLAGS below the suggestions */}
+      {hasErrors && (
+        <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1.5, margin:"8px 4px 4px", textTransform:"uppercase" }}>
+          Error log
+        </div>
+      )}
+      {(errors || []).map((e, i) => {
         const isOpen = expanded === i;
         const isFlag = _FLAG_KINDS.has(e.signal);
         const isErr  = e.signal === "ERROR";
@@ -2862,7 +2872,7 @@ function App() {
             </div>
           )}
         </div>
-        {[["live","LIVE"],["history","HISTORY"],["audit","AUDIT"],["ensemble","ENSEMBLE"],["sources","SOURCES"],["embed_audit","EMBED AUDIT"],["timing","TIMING"],["binance_test","BINANCE TEST"],["errors","ERRORS"]].map(([t,label])=>(
+        {[["live","LIVE"],["history","HISTORY"],["ensemble","ENSEMBLE"],["timing","TIMING"],["embed_audit","EMBED AUDIT"],["errors","ERRORS"]].map(([t,label])=>(
           <button key={t} onClick={()=>setTab(t)} style={{
             background:"none", border:"none",
             borderBottom:tab===t?`2px solid ${C.amber}`:"2px solid transparent",
@@ -3243,18 +3253,8 @@ function App() {
         )}
 
         {/* ══ AUDIT TAB ══ */}
-        {tab==="audit" && (
-          <HistoricalAnalysisAuditTab deepseekLog={deepseekLog} />
-        )}
 
         {/* ══ SOURCES TAB ══ */}
-        {tab==="sources" && (
-          <SourceHistoryTab
-            sourceHistory={sourceHistory}
-            selectedSource={selectedSource}
-            setSelectedSource={setSelectedSource}
-          />
-        )}
 
         {tab==="embed_audit" && (
           <EmbeddingAuditTab
@@ -3295,11 +3295,6 @@ function App() {
         )}
 
         {/* ══ BINANCE TEST TAB ══ */}
-        {tab==="binance_test" && (
-          <ErrorBoundary key="binance-test-tab">
-            <BinanceTestTab binanceExpert={binanceExpert} />
-          </ErrorBoundary>
-        )}
 
         {/* ══ ERRORS TAB ══ */}
         {tab==="errors" && (
@@ -3332,205 +3327,7 @@ function App() {
   );
 }
 
-// ── Binance Test Tab ──────────────────────────────────────────
-const BINANCE_ENDPOINTS = [
-  { id:"spot_price",       label:"Spot Price",            url:"https://api.binance.com/api/v3/ticker/price",                                        params:{symbol:"BTCUSDT"},                          desc:"Current BTCUSDT spot price" },
-  { id:"ticker_24hr",      label:"24hr Ticker",           url:"https://api.binance.com/api/v3/ticker/24hr",                                         params:{symbol:"BTCUSDT"},                          desc:"24h volume, price change, statistics" },
-  { id:"order_book",       label:"Order Book Depth",      url:"https://api.binance.com/api/v3/depth",                                               params:{symbol:"BTCUSDT",limit:20},                 desc:"Top 20 bids & asks" },
-  { id:"klines_1m",        label:"1m Klines (OHLCV)",     url:"https://api.binance.com/api/v3/klines",                                              params:{symbol:"BTCUSDT",interval:"1m",limit:10},   desc:"Last 10 × 1-min candles" },
-  { id:"ls_global",        label:"Global L/S Ratio",      url:"https://fapi.binance.com/futures/data/globalLongShortAccountRatio",                  params:{symbol:"BTCUSDT",period:"5m",limit:1},      desc:"Retail long/short account ratio" },
-  { id:"ls_top_acct",      label:"Top Trader L/S Acct",   url:"https://fapi.binance.com/futures/data/topLongShortAccountRatio",                     params:{symbol:"BTCUSDT",period:"5m",limit:1},      desc:"Smart money account positioning" },
-  { id:"ls_top_pos",       label:"Top Trader L/S Pos",    url:"https://fapi.binance.com/futures/data/topLongShortPositionRatio",                    params:{symbol:"BTCUSDT",period:"5m",limit:1},      desc:"Top traders notional long/short" },
-  { id:"taker_flow",       label:"Taker Buy/Sell Ratio",  url:"https://fapi.binance.com/futures/data/takerlongshortRatio",                          params:{symbol:"BTCUSDT",period:"5m",limit:3},      desc:"Aggressive buyer vs seller flow" },
-  { id:"open_interest",    label:"Open Interest",         url:"https://fapi.binance.com/fapi/v1/openInterest",                                      params:{symbol:"BTCUSDT"},                          desc:"Total BTC futures open interest" },
-  { id:"premium_index",    label:"Premium Index",         url:"https://fapi.binance.com/fapi/v1/premiumIndex",                                      params:{symbol:"BTCUSDT"},                          desc:"Mark price, index price, funding rate" },
-  { id:"oi_history",       label:"OI History",            url:"https://fapi.binance.com/futures/data/openInterestHist",                             params:{symbol:"BTCUSDT",period:"5m",limit:6},      desc:"OI change over last 30 min" },
-  { id:"funding_history",  label:"Funding Rate History",  url:"https://fapi.binance.com/fapi/v1/fundingRate",                                       params:{symbol:"BTCUSDT",limit:6},                  desc:"Last 6 funding rates" },
-];
 
-function BinanceTestTab({ binanceExpert }) {
-  const [results, setResults] = React.useState({});
-  const [loading, setLoading] = React.useState(false);
-  const [lastRun, setLastRun] = React.useState(null);
-
-  const buildUrl = (url, params) => {
-    const qs = Object.entries(params).map(([k,v])=>`${k}=${encodeURIComponent(v)}`).join("&");
-    return `${url}?${qs}`;
-  };
-
-  const summarise = (data) => {
-    if (Array.isArray(data)) {
-      const first = data[0];
-      return { _type:`array[${data.length}]`, ...(typeof first==="object"&&first?first:{}) };
-    }
-    return data;
-  };
-
-  const runAll = React.useCallback(async () => {
-    setLoading(true);
-    setResults({});
-    const fresh = {};
-    await Promise.all(BINANCE_ENDPOINTS.map(async (ep) => {
-      const t0 = Date.now();
-      try {
-        const r = await fetch(buildUrl(ep.url, ep.params));
-        const ms = Date.now() - t0;
-        const data = await r.json();
-        fresh[ep.id] = { ok: r.ok, status: r.status, ms, data: summarise(data) };
-      } catch(e) {
-        fresh[ep.id] = { ok: false, status: "ERR", ms: Date.now()-t0, error: String(e) };
-      }
-    }));
-    setResults(fresh);
-    setLastRun(new Date().toLocaleTimeString());
-    setLoading(false);
-  }, []);
-
-  React.useEffect(() => { runAll(); }, []);
-
-  const passed = Object.values(results).filter(r=>r.ok).length;
-  const total  = Object.keys(results).length;
-
-  return (
-    <div style={{ height:"100%", overflowY:"auto", display:"flex", flexDirection:"column", gap:6, paddingBottom:8 }}>
-      {/* Header */}
-      <div style={{ ...card, flexShrink:0, display:"flex", alignItems:"center", gap:12 }}>
-        <div>
-          <div style={{ fontSize:13, fontWeight:800, color:C.text }}>Binance API Connectivity Test</div>
-          <div style={{ fontSize:9, color:C.muted, marginTop:2 }}>
-            {total>0 ? `${passed}/${total} endpoints reachable` : "Press Run to test"}{lastRun?` · last run ${lastRun}`:""}
-          </div>
-        </div>
-        <button onClick={runAll} disabled={loading} style={{
-          marginLeft:"auto", background:C.amberBg, color:C.amber, border:`1px solid ${C.amberBorder}`,
-          padding:"5px 16px", borderRadius:5, cursor:loading?"default":"pointer",
-          fontSize:10, fontFamily:"inherit", fontWeight:700, letterSpacing:0.5, opacity:loading?0.6:1 }}>
-          {loading ? "Testing…" : "Run All"}
-        </button>
-        {total>0 && (
-          <div style={{ fontSize:11, fontWeight:700,
-            color: passed===total ? C.green : passed===0 ? C.red : C.amber }}>
-            {passed===total ? "✓ All OK" : passed===0 ? "✗ All Failed" : `${passed}/${total} OK`}
-          </div>
-        )}
-      </div>
-
-      {/* Latest Binance AI Analysis */}
-      {binanceExpert && (
-        <div style={{ ...card, flexShrink:0, borderLeft:`3px solid ${
-          binanceExpert.signal==="UP" ? C.green : binanceExpert.signal==="DOWN" ? C.red : C.amber}` }}>
-          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
-            <div style={{ fontSize:11, fontWeight:800, color:C.text }}>Latest Binance Expert Analysis</div>
-            <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:6 }}>
-              <div style={{ fontSize:12, fontWeight:900,
-                color: binanceExpert.signal==="UP" ? C.green : binanceExpert.signal==="DOWN" ? C.red : C.amber }}>
-                {binanceExpert.signal==="UP" ? "▲ ABOVE" : binanceExpert.signal==="DOWN" ? "▼ BELOW" : "◆ NEUTRAL"}
-              </div>
-              <div style={{ fontSize:10, fontWeight:700, color:C.textSec,
-                background: binanceExpert.signal==="UP" ? C.greenBg : binanceExpert.signal==="DOWN" ? C.redBg : C.amberBg,
-                border:`1px solid ${binanceExpert.signal==="UP" ? C.greenBorder : binanceExpert.signal==="DOWN" ? C.redBorder : C.amberBorder}`,
-                borderRadius:4, padding:"2px 8px" }}>
-                {binanceExpert.confidence}% confidence
-              </div>
-            </div>
-          </div>
-          {binanceExpert.analysis && (
-            <div style={{ fontSize:10, color:C.textSec, lineHeight:1.5, marginBottom:4 }}>
-              <span style={{ fontWeight:700, color:C.muted, fontSize:9, letterSpacing:1, textTransform:"uppercase" }}>Analysis · </span>
-              {binanceExpert.analysis}
-            </div>
-          )}
-          {binanceExpert.reasoning && (
-            <div style={{ fontSize:10, color:C.textSec, lineHeight:1.5 }}>
-              <span style={{ fontWeight:700, color:C.muted, fontSize:9, letterSpacing:1, textTransform:"uppercase" }}>Reasoning · </span>
-              {binanceExpert.reasoning}
-            </div>
-          )}
-        </div>
-      )}
-      {!binanceExpert && (
-        <div style={{ ...card, flexShrink:0, background:C.amberBg, border:`1px solid ${C.amberBorder}` }}>
-          <div style={{ fontSize:10, color:C.amber, fontWeight:700 }}>Binance Expert Analysis · Waiting for next bar...</div>
-          <div style={{ fontSize:9, color:C.muted, marginTop:2 }}>The AI analysis of Binance microstructure data will appear here after the next 5-minute bar opens.</div>
-        </div>
-      )}
-
-      {/* Grid of endpoint cards */}
-      <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:6 }}>
-        {BINANCE_ENDPOINTS.map(ep => {
-          const r = results[ep.id];
-          const statusColor = !r ? C.muted : r.ok ? C.green : C.red;
-          const bgColor     = !r ? C.surface : r.ok ? C.greenBg : C.redBg;
-          const borderColor = !r ? C.border  : r.ok ? C.greenBorder : C.redBorder;
-
-          // pick a few key fields to show prominently
-          const highlights = [];
-          if (r?.ok && r.data) {
-            const d = r.data;
-            if (d.price)                highlights.push(["Price",  `$${parseFloat(d.price).toLocaleString()}`]);
-            if (d.markPrice)            highlights.push(["Mark",   `$${parseFloat(d.markPrice).toLocaleString()}`]);
-            if (d.openInterest)         highlights.push(["OI",     parseFloat(d.openInterest).toLocaleString()+" BTC"]);
-            if (d.longShortRatio)       highlights.push(["L/S",    parseFloat(d.longShortRatio).toFixed(4)]);
-            if (d.longAccount)          highlights.push(["Long",   `${(parseFloat(d.longAccount)*100).toFixed(1)}%`]);
-            if (d.buySellRatio)         highlights.push(["BSR",    parseFloat(d.buySellRatio).toFixed(4)]);
-            if (d.lastFundingRate!==undefined) highlights.push(["Fund%", (parseFloat(d.lastFundingRate||d.fundingRate||0)*100).toFixed(4)+"%"]);
-            if (d.fundingRate!==undefined && !d.lastFundingRate) highlights.push(["Fund%", (parseFloat(d.fundingRate)*100).toFixed(4)+"%"]);
-            if (d.priceChangePercent)   highlights.push(["24hΔ",   `${parseFloat(d.priceChangePercent).toFixed(2)}%`]);
-            if (d.weightedAvgPrice)     highlights.push(["VWAP",   `$${parseFloat(d.weightedAvgPrice).toLocaleString()}`]);
-            if (d.sumOpenInterest)      highlights.push(["OI",     parseFloat(d.sumOpenInterest).toLocaleString()+" BTC"]);
-            if (d._type)                highlights.push(["Items",  d._type]);
-          }
-
-          return (
-            <div key={ep.id} style={{ background:bgColor, border:`1px solid ${borderColor}`, borderRadius:8, padding:"10px 12px" }}>
-              {/* Title row */}
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:4 }}>
-                <div>
-                  <div style={{ fontSize:11, fontWeight:700, color:C.text }}>{ep.label}</div>
-                  <div style={{ fontSize:8, color:C.muted, marginTop:1 }}>{ep.desc}</div>
-                </div>
-                <div style={{ textAlign:"right", flexShrink:0, marginLeft:6 }}>
-                  <div style={{ fontSize:11, fontWeight:800, color:statusColor }}>
-                    {!r ? "—" : r.ok ? `✓ ${r.status}` : `✗ ${r.status}`}
-                  </div>
-                  {r?.ms!=null && <div style={{ fontSize:8, color:C.muted }}>{r.ms}ms</div>}
-                </div>
-              </div>
-
-              {/* Highlights */}
-              {highlights.length>0 && (
-                <div style={{ display:"flex", flexWrap:"wrap", gap:4, marginBottom:4 }}>
-                  {highlights.slice(0,4).map(([k,v])=>(
-                    <div key={k} style={{ background:C.surface, borderRadius:4, padding:"2px 6px", fontSize:9 }}>
-                      <span style={{ color:C.muted }}>{k} </span>
-                      <span style={{ fontWeight:700, color:C.text }}>{v}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Raw JSON preview */}
-              {r && (
-                <details style={{ marginTop:2 }}>
-                  <summary style={{ fontSize:8, color:C.muted, cursor:"pointer", userSelect:"none" }}>raw response</summary>
-                  <pre style={{ fontSize:8, color:C.textSec, marginTop:4, whiteSpace:"pre-wrap", wordBreak:"break-all",
-                    background:C.bg, padding:4, borderRadius:4, maxHeight:120, overflow:"auto" }}>
-                    {r.error || JSON.stringify(r.data, null, 2)}
-                  </pre>
-                </details>
-              )}
-
-              {/* Loading shimmer */}
-              {loading && !r && (
-                <div style={{ fontSize:9, color:C.muted }}>Testing…</div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 // ── Sub-components ────────────────────────────────────────────
 function Row({ label, val, c }) {
