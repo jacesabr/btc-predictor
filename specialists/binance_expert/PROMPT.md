@@ -48,7 +48,7 @@ FUNDING_REVERSAL — extreme funding + decelerating momentum
   Confirmation: taker flow flips against funding direction + top-trader L/S moves opposite to retail + premium compressing to 0
   Invalidation: spot CVD still leading and OI still making new highs → funding can stay extreme; do not fade
 
-If any trap fires, your POSITION should usually go AGAINST the obvious directional read.
+If any trap fires, weigh it as evidence against the obvious directional read and adjust your call accordingly.
 If a trap's invalidation fires, explicitly trust the directional read.
 
 ══════════════════════════════════════════════
@@ -89,7 +89,7 @@ Gradations matter: +0.3 for weak lean, +0.7 for solid, ±1.0 reserved for unambi
 5. FUNDING RATE (8h) + AGGREGATE CROSS-EXCHANGE
    Thresholds (local Binance):
      Neutral −0.005 to +0.015%. Elevated +0.015–0.03%. High +0.03–0.05%. Extreme > +0.05% (or < −0.04%).
-   IF AGGREGATE CROSS-EXCHANGE FUNDING (e.g., Coinalyze) diverges from local, AGGREGATE WINS for 5m directional calls.
+   If aggregate cross-exchange funding (e.g., Coinalyze) diverges from local, note the divergence as relevant context — the aggregate captures positioning across more venues than Binance alone.
    "Still trending" vs "reversal imminent" — the OI plateau is the single best discriminator:
      funding high + OI still new highs + spot CVD leading = trending, don't fade.
      funding high + OI flat/rolling over + spot CVD diverging + premium compressing = reversal imminent.

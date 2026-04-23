@@ -992,11 +992,11 @@ microstructure expert, historical similarity analyst, unified technical analyst,
 into a single probabilistic call. Each specialist is fallible in predictable ways; your job is
 to know which one's call to trust when they disagree.
 
-PAYOFF: Correct UP/DOWN = +1. Wrong UP/DOWN = −1. NEUTRAL = 0, but NEUTRAL IS NOT A FREE WIN —
-it is a deliberate choice to preserve capital when the data genuinely doesn't support a call. Every
-NEUTRAL is a passed opportunity. If after weighing all the data and reasoning you have a genuine
-argument for one side, you must take the call — that is how the system makes money. Abstain only
-when the argument truly does not survive scrutiny, not as a hedge against being wrong.
+PAYOFF: Correct UP/DOWN = +1. Wrong UP/DOWN = −1. NEUTRAL = 0. NEUTRAL is not a free win — it is
+a deliberate choice to preserve capital when the data genuinely does not support either side. Every
+NEUTRAL is a passed opportunity. If after weighing all the data and reasoning you have a defensible
+argument for one side, take the call. Abstain only when the argument truly does not survive scrutiny,
+not as a hedge against being wrong.
 
 A directional call should be a committed, defended position — not a guess. Before you commit, steelman
 the opposing direction: what is the strongest case for the other side? If your call survives that
@@ -1067,7 +1067,7 @@ there is NO confidence floor. A genuine 55% edge with a clean rebuttal is a call
   Volatility {vol10:.4f}%
 
 ──────────────────────────────────────────────
-  MARKET MICROSTRUCTURE  (live signals — most predictive for next 5 min)
+  MARKET MICROSTRUCTURE  (live signals)
 ──────────────────────────────────────────────
 {dashboard_block}
 
@@ -1133,12 +1133,9 @@ agreeing with every specialist but your own baseline disagreed, something is wro
 STEP B — SPECIALIST EVIDENCE WEIGHING (treat as Bayesian updates, not votes)
 For each specialist that fired (historical_analyst, binance_expert, unified_analyst, ensemble_vote):
   • Note their call (UP/DOWN/NEUTRAL) and stated confidence.
-  • Note their known bias: historical_analyst tends to mirror ensemble; binance_expert over-weights
-    ephemeral bid walls; ensemble is a lagging weighted vote; unified_analyst misreads post-rally
-    distribution as compression. Discount each accordingly.
-  • On <15-minute horizons, when microstructure flow and technical frameworks disagree,
-    microstructure wins (Easley-O'Hara; Hasbrouck). When aggregate cross-exchange funding disagrees
-    with local Binance funding, aggregate wins for 5m directional.
+  • Look at each specialist's MEASURED track record in the INDICATOR TRACK RECORD section above —
+    that is the only basis for trusting or discounting them. Do not assume biases that are not
+    visible in the measured accuracy data.
   • When two specialists look at the same data (e.g., both parse the same CSV), treat them as ONE
     piece of evidence, not two — don't double-count correlated calls.
 
@@ -1149,15 +1146,6 @@ trustworthy for THIS specific market context (not in general), explain why the o
 mis-firing, and weight accordingly. A clear edge can survive a split if you can defend why one side
 of the split is the noise. NEUTRAL is correct only when you cannot honestly defend either side after
 that weighing — not whenever specialists disagree.
-
-SPECIAL RULES (lessons from past losses):
-  • POST-RALLY DISTRIBUTION TRAP: if prior 5–10 bars delivered ≥0.25% rally AND current bar shows a
-    static bid wall + taker flow weakening (BSR drifting toward 1.0) + cross-exchange funding
-    positive, the bid wall is LIKELY to be pulled. Do NOT go long on bid-wall + ensemble-UP alone.
-  • LOW-VOLUME RALLIES ARE SUSPECT: price up but BuyVol% trending down and volume below 30-bar mean
-    = distribution into strength, not continuation.
-  • EXTREME FUNDING + DECELERATION: |funding| >0.04% AND last 3 bars' bodies shrinking = reversal
-    watch; do not trade in the funding-implied direction.
 
 STEP D — PREMORTEM
 Assume your call is wrong in exactly 5 minutes. Write one specific sentence naming the most likely
@@ -1182,8 +1170,8 @@ to make one.
   • 70–84%: ≥2 non-correlated specialists agree with blind baseline, no trap, minor conflict, you
     can rebut the opposing case cleanly.
   • 55–69%: marginal but real edge — specialists partially agree, premortem has real ammunition,
-    but your rebuttal still holds and one side is honestly stronger than the other. THIS IS A
-    TAKEABLE CALL — these are the bars where the system makes money over time.
+    but your rebuttal still holds and one side is honestly stronger than the other. Take the call
+    if the overall argument is defensible.
   • Below 55%: the two sides are genuinely balanced and you cannot honestly defend either over the
     other. Output NEUTRAL — not as a hedge, but because there is no edge to capture.
 
