@@ -993,9 +993,12 @@ into a single probabilistic call. Each specialist is fallible in predictable way
 to know which one's call to trust when they disagree.
 
 ABSTENTION PAYOFF: NEUTRAL = 0 reward. Correct UP/DOWN = +1. Wrong UP/DOWN = −1.
-Therefore any directional call must have expected edge > 0 to be rational. If your honest read is
-below 65% confidence, NEUTRAL is mathematically correct — the system auto-overrides sub-65 calls
-to NEUTRAL anyway, so outputting a weak direction just wastes the confidence signal.
+A directional call should be a committed, defended position — not a guess. Before you commit, steelman
+the opposing direction: what is the strongest case for the other side? If your call survives that
+challenge with a concrete rebuttal grounded in specific fields and numbers, commit with the confidence
+that rebuttal earns. CONFIDENCE should reflect the robustness of your argument *after* weighing the
+opposing case, not raw enthusiasm. Output NEUTRAL only when the two sides genuinely cancel — not as
+a hedge against commitment.
 
 ══════════════════════════════════════════════
   WINDOW #{window_num}
@@ -1161,11 +1164,18 @@ the remaining evidence? If yes: your stated reasoning is solid. If no: your reas
 and fragile → cap confidence at 70%.
 
 STEP F — CONFIDENCE CALIBRATION
+Confidence is the strength of your argument *after* steelmanning the opposing side — not raw
+enthusiasm. Commit to a direction only when you can name a concrete rebuttal to the strongest
+counter-case, citing specific fields and numbers.
   • 85–95%: blind baseline + ≥3 non-correlated specialists all agree AND no trap fires AND premortem
-    reason is weak or not visible in data.
-  • 75–84%: ≥2 non-correlated specialists agree with blind baseline, no trap, minor conflict.
-  • 65–74%: marginal edge — specialists partially agree, premortem has real ammunition.
-  • <65%: do not output a direction — output NEUTRAL.
+    reason is weak or not visible in data. Counter-case is thin.
+  • 75–84%: ≥2 non-correlated specialists agree with blind baseline, no trap, minor conflict. You can
+    rebut the opposing case cleanly.
+  • 65–74%: marginal edge — specialists partially agree, premortem has real ammunition, but your
+    rebuttal still holds.
+  • Below 65%: only commit if you have a specific, defensible reason the opposing case is weaker than
+    it looks — not because "something leans that way." If the two sides are genuinely balanced,
+    output NEUTRAL.
 
 ASYMMETRIC ERROR CHECK: if your recent track record shows a pattern (e.g., "last 10 bars: 4 FALSE_UP,
 1 FALSE_DOWN"), raise the UP-call threshold by +5pp this bar. The cost of another same-direction
@@ -1241,11 +1251,6 @@ def parse_response(text: str) -> Tuple[str, int, str, str, str, str, str]:
         if "POSITION: ABOVE" in tu:     signal = "UP"
         elif "POSITION: BELOW" in tu:   signal = "DOWN"
         elif "POSITION: NEUTRAL" in tu: signal = "NEUTRAL"
-
-    # Hard filter: sub-65% confidence calls have no reliable edge — treat as abstention
-    if signal in ("UP", "DOWN") and confidence < 65:
-        logger.info("parse_response: overriding %s@%d%% → NEUTRAL (below 65%% threshold)", signal, confidence)
-        signal = "NEUTRAL"
 
     reasoning = "\n".join(numbered).strip()
     if not reasoning:
