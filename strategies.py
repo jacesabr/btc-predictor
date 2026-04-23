@@ -961,5 +961,3 @@ def calculate_ev(
     )
 
 
-def required_accuracy_for_odds(market_odds: float) -> float:
-    return 1.0 / (1.0 + market_odds)

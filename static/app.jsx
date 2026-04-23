@@ -2489,7 +2489,6 @@ function App() {
   const [winStartTime,   setWinStartTime]   = useState(null);
   const [timeLeft,       setTimeLeft]       = useState(300);
   const [strategies,     setStrategies]     = useState({});
-  const [ensemble,       setEnsemble]       = useState(null);
   const [ensemblePred,   setEnsemblePred]   = useState(null);
   const [deepseekPred,   setDeepseekPred]   = useState(null);
   const [deepseekAcc,    setDeepseekAcc]    = useState(null);
@@ -2498,10 +2497,8 @@ function App() {
   const [backtest,       setBacktest]       = useState(null);
   const [preds,          setPreds]          = useState([]);
   const [weights,        setWeights]        = useState({});
-  const [microOpen,      setMicroOpen]      = useState(false);
 
   const [polymarket,            setPolymarket]            = useState(null);
-  const [specialistAt,          setSpecialistAt]          = useState(null);
   const [pendingDeepseekReady,  setPendingDeepseekReady]  = useState(false);
   const [pendingDeepseekPred,   setPendingDeepseekPred]   = useState(null);
   const [historicalAnalysis,    setHistoricalAnalysis]    = useState("");
@@ -2556,10 +2553,6 @@ function App() {
         if (d.window_start_price!=null) setWinStartPrice(d.window_start_price);
         if (d.window_start_time!=null)  setWinStartTime(d.window_start_time);
         if (d.strategies && Object.keys(d.strategies).length) setStrategies(d.strategies);
-        if (d.prediction) {
-          const p=d.prediction;
-          setEnsemble({ signal:p.signal, confidence:p.confidence, bullish:p.bullish_count, bearish:p.bearish_count, source:p.source });
-        }
         if (d.ensemble_prediction) {
           const ep=d.ensemble_prediction;
           setEnsemblePred({ signal:ep.signal, confidence:ep.confidence, bullish:ep.bullish_count, bearish:ep.bearish_count, upProb:ep.up_probability });
@@ -2568,7 +2561,6 @@ function App() {
         if (d.pending_deepseek_prediction)            setPendingDeepseekPred(d.pending_deepseek_prediction);
         if (d.agree_accuracy)                         setAgreeAcc(d.agree_accuracy);
         if (d.polymarket)                             setPolymarket(d.polymarket);
-        if (d.specialist_completed_at)                setSpecialistAt(d.specialist_completed_at);
         if (d.pending_deepseek_ready !== undefined)   setPendingDeepseekReady(d.pending_deepseek_ready);
         if (d.bar_historical_analysis !== undefined)  setHistoricalAnalysis(d.bar_historical_analysis || "");
         if (d.bar_historical_context !== undefined)   setHistoricalContext(d.bar_historical_context || "");
@@ -2600,7 +2592,6 @@ function App() {
         if (d.pending_deepseek_prediction) setPendingDeepseekPred(d.pending_deepseek_prediction);
         if (d.pending_deepseek_ready !== undefined) setPendingDeepseekReady(d.pending_deepseek_ready);
         if (d.deepseek_prediction)         setDeepseekPred(d.deepseek_prediction);
-        if (d.specialist_completed_at)     setSpecialistAt(d.specialist_completed_at);
         if (d.bar_historical_analysis !== undefined) setHistoricalAnalysis(d.bar_historical_analysis || "");
         if (d.bar_historical_context !== undefined)  setHistoricalContext(d.bar_historical_context || "");
         if (d.service_unavailable !== undefined)     setServiceUnavailable(!!d.service_unavailable);

@@ -1,37 +1,9 @@
 """
-FastAPI Server
-==============
-Thin HTTP + WebSocket layer. All prediction logic lives in engine.py.
-
-Endpoints:
-  GET  /                     — serve dashboard HTML
-  GET  /price                — current price + window info
-  GET  /predict              — instant ensemble prediction (on-demand)
-  GET  /deepseek-status      — lightweight DeepSeek state poll
-  GET  /backtest             — rolling + all-time accuracy
-  GET  /predictions/recent   — recent resolved predictions
-  GET  /candles              — tick-aggregated OHLC
-  GET  /candles/binance      — cached 1m Binance klines
-  GET  /polymarket           — Polymarket market state
-  GET  /weights              — ensemble weights + accuracy
-  GET  /deepseek/accuracy    — DeepSeek accuracy stats
-  GET  /deepseek/predictions — recent DeepSeek predictions
-  GET  /deepseek/source-history — full data-source audit per prediction
-  GET  /audit                — full prediction audit table
-  GET  /audit/export         — download audit as JSON
-  GET  /accuracy/all         — structured accuracy leaderboard
-  GET  /accuracy/agree       — accuracy when ensemble + DeepSeek agree
-  GET  /best-indicator       — win/loss leaderboard for every tracked signal
-  GET  /backend              — last prediction pipeline snapshot
-  POST /ev                   — expected value calculator
-  POST /weights/update       — trigger ensemble weight refresh
-  POST /force-predict        — dry-run prediction (no DB write)
-  POST /admin/reset          — clear all local data files
-  WS   /ws                   — live price + strategy state stream
+FastAPI Server — thin HTTP + WebSocket layer. All prediction logic lives in
+engine.py. See the route table by grepping `@app.` — it's short.
 """
 
 import asyncio
-import io
 import json
 import logging
 import os
@@ -41,7 +13,7 @@ from typing import Dict, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -56,7 +28,6 @@ from engine import (
     _error_log, load_embedding_audit_log, _trigger_embedding_bootstrap,
 )
 from signals import fetch_dashboard_signals, extract_signal_directions
-from strategies import get_all_predictions, calculate_ev, required_accuracy_for_odds
 from semantic_store import compute_all_indicator_accuracy, compute_dashboard_accuracy, load_all as load_pattern_history
 
 logger = logging.getLogger(__name__)
@@ -81,15 +52,6 @@ async def startup():
 
 # ── Pydantic models ───────────────────────────────────────────
 
-class PredictionResponse(BaseModel):
-    signal: str
-    confidence: float
-    up_probability: float
-    bullish_count: int
-    bearish_count: int
-    strategies: Dict
-    ev: Optional[Dict] = None
-
 class BacktestResponse(BaseModel):
     total_predictions: int
     correct_predictions: int
@@ -99,11 +61,6 @@ class BacktestResponse(BaseModel):
     all_time_accuracy: float
     all_time_neutral: int
     strategy_accuracies: Dict[str, float]
-
-class EVRequest(BaseModel):
-    market_odds: float
-    model_probability: Optional[float] = None
-
 
 # ── REST endpoints ────────────────────────────────────────────
 
@@ -138,46 +95,6 @@ async def deepseek_status():
         "service_unavailable_reason":  current_state.get("service_unavailable_reason", ""),
     }
 
-@app.get("/predict", response_model=PredictionResponse)
-async def get_prediction():
-    prices = collector.get_prices(400)
-    if len(prices) < 30:
-        return PredictionResponse(
-            signal="WAIT", confidence=0, up_probability=0.5,
-            bullish_count=0, bearish_count=0, strategies={},
-        )
-    poly_prob      = polymarket_feed.implied_prob if polymarket_feed.is_live else None
-    strategy_preds = get_all_predictions(prices, ohlcv=list(binance_klines), polymarket_prob=poly_prob)
-    strategy_preds["ml_logistic"] = lr_strategy.predict(prices, ohlcv=list(binance_klines))
-    result = ensemble.predict(strategy_preds)
-    return PredictionResponse(
-        signal=result["signal"], confidence=float(result["confidence"]),
-        up_probability=float(result["up_probability"]),
-        bullish_count=int(result["bullish_count"]), bearish_count=int(result["bearish_count"]),
-        strategies=_json_safe(strategy_preds),
-    )
-
-
-@app.post("/ev")
-async def calculate_expected_value(req: EVRequest):
-    model_prob = req.model_probability
-    if model_prob is None and current_state["prediction"]:
-        model_prob = current_state["prediction"].get("confidence", 0.5)
-    if model_prob is None:
-        model_prob = 0.5
-    result = calculate_ev(model_prob, req.market_odds)
-    return {
-        "ev":                   result.expected_value,
-        "edge":                 result.edge,
-        "implied_probability":  result.implied_probability,
-        "model_probability":    result.model_probability,
-        "kelly_fraction":       result.kelly_fraction,
-        "signal":               result.signal,
-        "reasoning":            result.reasoning,
-        "min_accuracy_needed":  required_accuracy_for_odds(req.market_odds),
-    }
-
-
 @app.get("/backtest", response_model=BacktestResponse)
 async def get_backtest():
     total, correct, accuracy = _safe_storage(storage.get_rolling_accuracy, config.rolling_window_size, default=(0, 0, 0.0))
@@ -194,44 +111,6 @@ async def get_backtest():
 @app.get("/predictions/recent")
 async def get_recent_predictions(n: int = 50):
     return _safe_storage(storage.get_recent_predictions, n, default=[])
-
-
-@app.get("/candles")
-async def get_candles(resolution: int = 60, limit: int = 200):
-    try:
-        all_ticks = storage.get_ticks_raw(limit=limit * resolution * 2)
-    except Exception as exc:
-        logger.warning("Candles: could not read ticks: %s", exc)
-        return []
-    if not all_ticks:
-        return []
-    candles = {}
-    for doc in all_ticks:
-        bucket = int(doc["timestamp"] // resolution) * resolution
-        p = doc["mid_price"]
-        if bucket not in candles:
-            candles[bucket] = {"time": bucket, "open": p, "high": p, "low": p, "close": p}
-        else:
-            c = candles[bucket]
-            c["high"] = max(c["high"], p); c["low"] = min(c["low"], p); c["close"] = p
-    return sorted(candles.values(), key=lambda c: c["time"])[-limit:]
-
-
-@app.get("/candles/binance")
-async def get_binance_candles():
-    if not binance_klines:
-        return []
-    return [
-        {"time": int(k[0] / 1000), "open": float(k[1]),
-         "high": float(k[2]), "low": float(k[3]), "close": float(k[4])}
-        for k in binance_klines
-    ]
-
-
-@app.get("/polymarket")
-async def get_polymarket():
-    return polymarket_feed.to_dict()
-
 
 
 @app.get("/api/proxy/coinalyze")
@@ -322,14 +201,6 @@ async def get_deepseek_predictions(n: int = 50):
 
 _HEAVY_FIELDS = {"full_prompt", "raw_response"}
 
-@app.get("/deepseek/predictions/list")
-async def get_deepseek_predictions_list(n: int = 300):
-    """Lean list for history UI — strips full_prompt and raw_response to keep payload small.
-    Those fields are fetched on demand via /deepseek/predictions/{window_start}."""
-    docs = _safe_storage(storage.get_recent_deepseek_predictions, n, default=[])
-    return [{k: v for k, v in doc.items() if k not in _HEAVY_FIELDS} for doc in docs]
-
-
 @app.get("/deepseek/predictions/{window_start}")
 async def get_deepseek_prediction_detail(window_start: float):
     """Single record with all fields including full_prompt and raw_response."""
@@ -338,12 +209,6 @@ async def get_deepseek_prediction_detail(window_start: float):
         if doc.get("window_start") == window_start:
             return doc
     return {}
-
-
-@app.get("/history/all")
-async def get_all_history():
-    """All DeepSeek prediction summaries (lean — no prompt/raw) for history overview."""
-    return _safe_storage(storage.get_all_deepseek_summaries, default=[])
 
 
 @app.get("/historical-analysis/{window_start}")
@@ -413,17 +278,6 @@ async def get_historical_analysis(window_start: float):
     }
 
 
-@app.post("/admin/clean-incomplete")
-async def admin_clean_incomplete():
-    """Remove unresolved bars (no actual_direction) from all storage tables."""
-    result = _safe_storage(storage.clean_incomplete_records, default={})
-    if result and result.get("removed_window_starts"):
-        from semantic_store import clean_incomplete_windows
-        removed_ph = clean_incomplete_windows(set(result["removed_window_starts"]))
-        result["removed_pattern_history"] = removed_ph
-    return result or {}
-
-
 @app.get("/deepseek/source-history")
 async def get_deepseek_source_history(n: int = 20):
     docs    = _safe_storage(storage.get_recent_deepseek_predictions, n, default=[])
@@ -458,60 +312,6 @@ async def get_deepseek_source_history(n: int = 20):
             "strategy_snapshot":          doc.get("strategy_snapshot", {}),
         })
     return results
-
-
-@app.get("/neutral-analysis")
-async def get_neutral_analysis():
-    """Stats on NEUTRAL predictions — use to tune the neutral confidence threshold."""
-    return _safe_storage(storage.get_neutral_analysis, default={
-        "total": 0, "market_went_up": 0, "market_went_down": 0,
-        "pct_up": 0.0, "pct_down": 0.0,
-        "would_have_won_if_traded_up": 0, "would_have_won_if_traded_down": 0,
-        "records": [],
-    })
-
-
-@app.get("/audit")
-async def get_audit(n: int = 500):
-    records  = _safe_storage(storage.get_audit_records, n, default=[])
-    neutrals = [r for r in records if r.get("signal") == "NEUTRAL"]
-    resolved = [r for r in records if r.get("correct") is not None]
-    wins     = sum(1 for r in resolved if r["correct"])
-    return {
-        "summary": {
-            "total_predictions":    len(records),
-            "resolved_predictions": len(resolved),
-            "neutrals":             len(neutrals),
-            "wins":                 wins,
-            "losses":               len(resolved) - wins,
-            "win_rate": round(wins / len(resolved), 4) if resolved else None,
-        },
-        "records": records,
-    }
-
-
-@app.get("/audit/export")
-async def export_audit(n: int = 500):
-    records  = _safe_storage(storage.get_audit_records, n, default=[])
-    neutrals = [r for r in records if r.get("signal") == "NEUTRAL"]
-    resolved = [r for r in records if r.get("correct") is not None]
-    wins     = sum(1 for r in resolved if r["correct"])
-    payload  = {
-        "exported_at": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
-        "summary": {
-            "total_predictions": len(records), "resolved_predictions": len(resolved),
-            "neutrals": len(neutrals),
-            "wins": wins, "losses": len(resolved) - wins,
-            "win_rate": round(wins / len(resolved), 4) if resolved else None,
-        },
-        "records": records,
-    }
-    body     = json.dumps(payload, indent=2, default=str)
-    filename = f"audit_{int(time.time())}.json"
-    return StreamingResponse(
-        io.BytesIO(body.encode()), media_type="application/json",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
 
 
 @app.get("/api/timings")

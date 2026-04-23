@@ -164,29 +164,6 @@ def append_resolved_window(
         _put(conn)
 
 
-def clean_incomplete_windows(window_starts) -> int:
-    """Delete pattern_history rows whose window_start is in the given set.
-    Returns the number of rows removed. Used by /admin/clean-incomplete to
-    drop unresolved bar snapshots that were abandoned by a crash/restart.
-    """
-    ws_set = set(window_starts)
-    if not ws_set:
-        return 0
-    _init()
-    conn = _conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "DELETE FROM pattern_history WHERE window_start = ANY(%s)",
-                (list(ws_set),),
-            )
-            removed = cur.rowcount or 0
-        conn.commit()
-    finally:
-        _put(conn)
-    return removed
-
-
 # ── Read ──────────────────────────────────────────────────────────────────────
 
 def load_all(limit: int = 10000) -> List[Dict]:

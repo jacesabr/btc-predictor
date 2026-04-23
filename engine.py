@@ -1142,7 +1142,6 @@ async def _resolve_window(
         except Exception as bi_exc:
             logger.warning("Best-indicator snapshot failed: %s", bi_exc, exc_info=True)
 
-        await _safe_storage_async(storage.store_accuracy_snapshot, window_start_time, accuracy_snapshot)
 
         # Reset bar-level state (historical analysis cleared at next bar open, not here)
         current_state["bar_specialist_signals"]  = {}
