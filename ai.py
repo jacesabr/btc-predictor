@@ -358,29 +358,6 @@ def _rsi(closes: np.ndarray, period: int = 4) -> np.ndarray:
     return out
 
 
-def _mfi_series(highs, lows, closes, vols, period=4):
-    n = len(closes)
-    out = np.full(n, 50.0)
-    if n <= period:
-        return out
-    tp  = (highs + lows + closes) / 3.0
-    rmf = tp * vols
-    dtp = np.diff(tp)
-    pos = float(np.sum(rmf[1:period+1][dtp[:period] > 0]))
-    neg = float(np.sum(rmf[1:period+1][dtp[:period] < 0]))
-    def _mfi_val(p, ng):
-        if ng == 0: return 100.0 if p > 0 else 50.0
-        return 100.0 - 100.0 / (1.0 + p / ng)
-    out[period] = _mfi_val(pos, neg)
-    for i in range(period, n - 1):
-        new_pos = float(rmf[i+1]) if dtp[i] > 0 else 0.0
-        new_neg = float(rmf[i+1]) if dtp[i] < 0 else 0.0
-        pos = (pos * (period - 1) + new_pos) / period
-        neg = (neg * (period - 1) + new_neg) / period
-        out[i+1] = _mfi_val(pos, neg)
-    return out
-
-
 def _linreg(y: np.ndarray) -> Tuple[float, float, float]:
     n = len(y)
     if n < 2:
@@ -1675,61 +1652,6 @@ def _symbolize_indicators(ind: Dict) -> Dict[str, str]:
         "bb":   bb(ind.get("bollinger_pct_b")),
         "mfi":  mfi(ind.get("mfi_14")),
     }
-
-
-# ── STEP 2: Feature vector extractor ──────────────────────────────────────────
-# Converts a bar record into a compact normalized numpy vector.
-# This is what we use for the MATH (cosine similarity) — not the LLM.
-# Each feature is scaled to [-1, +1] so no single indicator dominates.
-# Dashboard signals (order book, taker flow, etc.) are encoded as -1/0/+1.
-
-_DASH_KEYS_VEC = [
-    "order_book", "long_short", "taker_flow", "fear_greed",
-    "mempool", "oi_funding", "okx_funding", "btc_dominance",
-]
-
-def _bar_feature_vector(record: Dict) -> Optional[np.ndarray]:
-    """Return a unit-normalized feature vector for a bar record, or None if data missing."""
-    ind  = record.get("indicators", {}) or {}
-    dash = record.get("dashboard_signals_raw", {}) or {}
-
-    def norm(v, lo, hi):
-        """Scale v from [lo, hi] → [-1, +1]. Missing → 0 (neutral)."""
-        if v is None: return 0.0
-        return max(-1.0, min(1.0, (float(v) - lo) / (hi - lo) * 2.0 - 1.0))
-
-    def dsig(key):
-        """Encode UP→+1, DOWN→-1, anything else→0."""
-        raw_v = dash.get(key)
-        v = raw_v.get("signal", "") if isinstance(raw_v, dict) else (raw_v or "")
-        v = v.upper() if isinstance(v, str) else ""
-        return 1.0 if v == "UP" else -1.0 if v == "DOWN" else 0.0
-
-    features = np.array([
-        # ── Technical indicators ───────────────────────────────
-        norm(ind.get("rsi_14"),          0,   100),
-        norm(ind.get("macd_histogram"), -20,   20),
-        norm(ind.get("stoch_k_14"),      0,   100),
-        norm(ind.get("bollinger_pct_b"), 0,     1),
-        norm(ind.get("mfi_14"),          0,   100),
-        norm(ind.get("price_vs_vwap"),  -1,     1),
-        norm(ind.get("volume_surge"),    0,     5),
-        norm(ind.get("obv_slope"),      -1,     1),
-        # ── Microstructure / dashboard signals ─────────────────
-        dsig("order_book"),
-        dsig("long_short"),
-        dsig("taker_flow"),
-        dsig("fear_greed"),
-        dsig("mempool"),
-        dsig("oi_funding"),
-        dsig("okx_funding"),
-        dsig("btc_dominance"),
-    ], dtype=np.float32)
-
-    norm_val = np.linalg.norm(features)
-    if norm_val < 1e-8:
-        return None          # all-zero vector — bar has no usable data
-    return features / norm_val   # unit vector → dot product == cosine similarity
 
 
 def _bar_embed_text(record: Dict) -> str:

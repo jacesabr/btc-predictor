@@ -35,7 +35,8 @@ weights_snapshot.json
 # Secrets
 .env
 *.env
-.render_db_url
+# .render_db_url, .render_internal_db_url, .render_service_id, .render_deploy_id
+.render_*
 
 # DB migration dump (large, ephemeral)
 db_backup/
