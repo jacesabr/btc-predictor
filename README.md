@@ -39,6 +39,53 @@ Five decisions drive the structure:
 
 ---
 
+## What's actually novel here
+
+There are thousands of BTC direction-prediction projects. Most are either pure-ML black boxes, rule-based technical systems, or stateless "ask GPT what BTC will do" wrappers. Here's where this one differs — stated plainly, with the bits that are NOT novel called out so you can judge.
+
+### The closed feedback loop
+
+The architecturally unusual thing is a **closed loop between prediction and memory**. Every bar goes through:
+
+```
+ predict  →  resolve (grade right/wrong)  →  postmortem (DeepSeek writes why)
+     ↑                                                       ↓
+     └── retrieve as precedent ← embed as memory ← enrich ──┘
+```
+
+Each resolved bar is re-embedded into pgvector *with its own post-mortem attached* as part of the embedding text. The post-mortem is a structured LLM analysis (VERDICT, ERROR_CLASS, ROOT_CAUSE, LESSON_RULE, LESSON_PRECONDITIONS) that explains what went wrong. When a similar setup appears next week, retrieval doesn't just surface "last time this looked like this, it went UP" — it surfaces *"last time this looked like this, we called UP and lost because we over-weighted the bid wall; watch for that."*
+
+Most LLM-trading projects use the LLM as a stateless analyser — each bar is a fresh call, prior mistakes don't inform future ones. This system accumulates its own failure modes, in human-readable form, keyed by situational embedding. That's the piece that took the longest to imagine and to make work.
+
+### Prose-level retrieval, not feature vectors
+
+Both the current bar and the historical precedents are rendered as full essays — technical state, volatility regime, microstructure reads, strategy votes, specialist conclusions, Binance expert verdict — and the essay is what gets embedded. Cohere's embedding model can then rank precedents by *narrative similarity* ("similar situation, similar conflicting signals, similar regime") rather than by raw feature Euclidean distance. Precedents and the current bar speak the same language. Most similarity-search systems embed structured feature vectors; this one embeds prose.
+
+### Calibration discipline baked into prompts
+
+The historical analyst's rubric reasons explicitly about variance: *"A 70% confidence call that loses 30% of the time is calibrated, not broken."* The `ENSEMBLE_WARNING` only fires when observed wrong rate *exceeds* the rate the claimed confidence implies, with a minimum sample size. Most LLM trading prompts either lack calibration language entirely or use rigid fixed thresholds that mistake normal variance for a pattern failure. It seems small; it's one of the largest wins in practice.
+
+### What is NOT unique
+
+To be clear on what could be replicated by anyone in a weekend:
+
+- The data sources — all free and public; no premium feed advantage.
+- The LLMs — DeepSeek-chat and Cohere embed/rerank are commodity APIs.
+- The prediction target — countless attempts at BTC 5-minute direction already exist.
+- The technical stack — FastAPI + Postgres + pgvector is a textbook RAG setup.
+
+### Where the actual moat lives
+
+Not in the code. The code is replicable in 3-5 days by a capable engineer.
+
+The defensible asset is **the accumulated data**: a growing corpus of BTC bars with full DeepSeek reasoning, narrative, post-mortem, microstructure snapshot, strategy vote pattern, and graded outcome — all embedded for semantic retrieval. Bootstrapping that from scratch requires weeks of real-time observation across multiple market regimes. You cannot scrape it and you cannot buy it. It grows automatically as the system runs.
+
+The secondary asset is the **prompt-engineering lineage** — dozens of small tuning decisions encoded into the rubrics (NEUTRAL-is-a-cost, calibrated ENSEMBLE_WARNING, top-10 retrieval, prose current-bar, Binance-expert-before-historical). Each decision is a small bet; the collection is a style that's hard to reproduce by reading the final files alone.
+
+If you are considering using, forking, or valuing this repo: the interesting question is not "does the code work" (it does) but "how much history does it have, and does the prompt style survive regime changes." That takes time to answer honestly. It's why the realistic-expectations section below urges a 1,000-bar minimum sample before drawing any conclusion.
+
+---
+
 ## Architecture
 
 ```
