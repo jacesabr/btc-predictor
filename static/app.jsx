@@ -3256,11 +3256,13 @@ function App() {
                              onClick={(e)=>e.stopPropagation()}>↗ {meta.source.label}</a>
                         )}
                       </span>
-                      {/* Layman one-liner */}
+                      {/* Layman one-liner prefixed with "what this means:" to tell the
+                            trader WHY this metric matters. Bumped font so it reads cleanly. */}
                       {meta.layman && (
-                        <span style={{ fontSize:11, color:"#475569", fontStyle:"italic",
-                          marginLeft:10, lineHeight:1.4, maxWidth:480 }}>
-                          {meta.layman}
+                        <span style={{ fontSize:13, color:"#334155",
+                          marginLeft:10, lineHeight:1.45, maxWidth:520 }}>
+                          <span style={{ fontWeight:800, color:C.text, marginRight:4 }}>what this means:</span>
+                          <span style={{ fontStyle:"italic" }}>{meta.layman}</span>
                         </span>
                       )}
                     </span>
