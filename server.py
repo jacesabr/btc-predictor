@@ -32,7 +32,7 @@ from semantic_store import compute_all_indicator_accuracy, compute_dashboard_acc
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="BTC Oracle Predictor", version="2.0.0")
+app = FastAPI(title="Simple Analysis", version="2.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.mount("/charts", StaticFiles(directory=str(CHARTS_DIR)), name="charts")
@@ -94,6 +94,7 @@ async def deepseek_status():
         "bar_historical_analysis":     current_state.get("bar_historical_analysis", ""),
         "bar_historical_context":      current_state.get("bar_historical_context", ""),
         "bar_binance_expert":          current_state.get("bar_binance_expert", {}),   # <-- ADD THIS LINE
+        "trader_summary":              current_state.get("trader_summary"),
         "service_unavailable":         current_state.get("service_unavailable", False),
         "service_unavailable_reason":  current_state.get("service_unavailable_reason", ""),
     }
@@ -674,6 +675,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "bar_historical_analysis":     current_state.get("bar_historical_analysis", ""),
                         "bar_historical_context":      current_state.get("bar_historical_context", ""),
                         "bar_binance_expert":          current_state.get("bar_binance_expert", {}),
+                        "trader_summary":              current_state.get("trader_summary"),
                         "service_unavailable":         current_state.get("service_unavailable", False),
                         "service_unavailable_reason":  current_state.get("service_unavailable_reason", ""),
                     })

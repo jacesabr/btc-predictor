@@ -1,5 +1,5 @@
 /* @jsxRuntime classic */
-// BTC Oracle Predictor — integrated dashboard + microstructure
+// Simple Analysis — integrated dashboard + microstructure
 
 const { useState, useEffect, useRef, useCallback } = React;
 
@@ -876,7 +876,7 @@ function AccuracySection({ title, rows, showWeight, emptyMsg }) {
   );
 }
 
-function EnsembleTab({ weights, ob, ls, tk, oif, lq, fg, mp, cz, cg, dots, price, allAccuracy, allAccuracyErr, onRefreshAccuracy }) {
+function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, cz, cg, dots, price, allAccuracy, allAccuracyErr, onRefreshAccuracy }) {
   // Build micro accuracy lookup for inline display: dash key → {accuracy, correct, total}
   const microAcc = {};
   (allAccuracy?.microstructure || []).forEach(r => {
@@ -917,8 +917,26 @@ function EnsembleTab({ weights, ob, ls, tk, oif, lq, fg, mp, cz, cg, dots, price
       {/* LEFT: comprehensive accuracy table */}
       <div style={{ flex:"0 0 54%", overflowY:"auto", paddingRight:2 }}>
         <div style={{ ...card, borderLeft:`3px solid ${C.amber}` }}>
-          <div style={{ marginBottom:10 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
             <div style={{ ...label, fontSize:10 }}>Prediction Accuracy — All Sources</div>
+            <button
+              onClick={() => {
+                if (!confirm("Reset all win/loss scores? Historical bars are kept but scores restart from now.")) return;
+                fetch("/reset-scores",{method:"POST"})
+                  .then(()=>fetch("/weights/update",{method:"POST"}))
+                  .then(()=>Promise.all([
+                    fetch("/weights").then(r=>r.json()).then(setWeights).catch(()=>{}),
+                    fetch("/accuracy/all?n=200").then(r=>r.json()).then(d=>{ if(d&&!d.error) setAllAccuracy(d); }).catch(()=>{}),
+                    fetch("/deepseek/accuracy").then(r=>r.json()).then(setDeepseekAcc).catch(()=>{}),
+                    fetch("/accuracy/agree").then(r=>r.json()).then(setAgreeAcc).catch(()=>{}),
+                    fetch("/predictions/recent?n=500").then(r=>r.json()).then(setPreds).catch(()=>{}),
+                  ]));
+              }}
+              style={{ fontSize:9, padding:"2px 8px", borderRadius:3,
+                border:`1px solid ${C.border}`, background:C.surface,
+                color:C.textSec, cursor:"pointer", fontFamily:"inherit", letterSpacing:1 }}>
+              RECALIBRATE
+            </button>
           </div>
 
           {!hasAccuracy ? (
@@ -2076,6 +2094,23 @@ function EmbeddingAuditTab({ embeddingAuditLog, setEmbeddingAuditLog, deepseekIn
             </div>
           )}
         </div>
+        <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
+          {auditPill && (
+            <span style={{ background:auditPill.bg, color:auditPill.fg, border:`1px solid ${auditPill.br}`,
+              padding:"4px 8px", borderRadius:4, fontSize:9, fontWeight:600 }}>{auditPill.label}</span>
+          )}
+          <button onClick={refreshInspect}
+            style={{ background:C.bg, color:C.textSec, border:`1px solid ${C.border}`,
+              padding:"6px 10px", borderRadius:4, cursor:"pointer", fontSize:10, fontFamily:"inherit", fontWeight:600 }}>
+            Refresh files
+          </button>
+          <button onClick={startAudit} disabled={auditStatus==="running"}
+            style={{ background:C.amberBg, color:C.amber, border:`1px solid ${C.amberBorder}`,
+              padding:"6px 12px", borderRadius:4, cursor:auditStatus==="running"?"default":"pointer",
+              opacity:auditStatus==="running"?0.6:1, fontSize:10, fontFamily:"inherit", fontWeight:600 }}>
+            Run audit now
+          </button>
+        </div>
       </div>
 
       {/* Scroll body */}
@@ -2217,7 +2252,7 @@ function EmbeddingAuditTab({ embeddingAuditLog, setEmbeddingAuditLog, deepseekIn
 
         {(!embeddingAuditLog || embeddingAuditLog.length === 0) && (
           <div style={{ padding:"16px", color:C.muted, fontSize:11, textAlign:"center" }}>
-            No embedding audits in the log yet. Auto-audit fires every 4 hours via deepseek-reasoner.
+            No embedding audits in the log yet. First auto-audit fires ~4 hours after startup, or click "Run audit now".
           </div>
         )}
       </div>
@@ -2448,6 +2483,7 @@ function App() {
   const [pendingDeepseekPred,   setPendingDeepseekPred]   = useState(null);
   const [historicalAnalysis,    setHistoricalAnalysis]    = useState("");
   const [historicalContext,     setHistoricalContext]     = useState("");
+  const [traderSummary,         setTraderSummary]         = useState(null);
   const [serviceUnavailable,    setServiceUnavailable]    = useState(false);
   const [serviceUnavailReason,  setServiceUnavailReason]  = useState("");
   const [binanceExpert,         setBinanceExpert]         = useState(null);
@@ -2509,6 +2545,7 @@ function App() {
         if (d.pending_deepseek_ready !== undefined)   setPendingDeepseekReady(d.pending_deepseek_ready);
         if (d.bar_historical_analysis !== undefined)  setHistoricalAnalysis(d.bar_historical_analysis || "");
         if (d.bar_historical_context !== undefined)   setHistoricalContext(d.bar_historical_context || "");
+        if (d.trader_summary !== undefined)           setTraderSummary(d.trader_summary);
         if (d.service_unavailable !== undefined)      setServiceUnavailable(!!d.service_unavailable);
         if (d.service_unavailable_reason !== undefined) setServiceUnavailReason(d.service_unavailable_reason || "");
         if (d.bar_binance_expert && d.bar_binance_expert.signal) setBinanceExpert(d.bar_binance_expert);
@@ -2539,6 +2576,7 @@ function App() {
         if (d.deepseek_prediction)         setDeepseekPred(d.deepseek_prediction);
         if (d.bar_historical_analysis !== undefined) setHistoricalAnalysis(d.bar_historical_analysis || "");
         if (d.bar_historical_context !== undefined)  setHistoricalContext(d.bar_historical_context || "");
+        if (d.trader_summary !== undefined)          setTraderSummary(d.trader_summary);
         if (d.service_unavailable !== undefined)     setServiceUnavailable(!!d.service_unavailable);
         if (d.service_unavailable_reason !== undefined) setServiceUnavailReason(d.service_unavailable_reason || "");
       } catch(_) {}
@@ -2999,6 +3037,69 @@ function App() {
                 );
               })()}
 
+              {/* TRADER BRIEFING — Venice-summarized Edge/Watch/Actions, rendered above
+                  the DeepSeek Analysis card. Only shows when the Venice summary arrived
+                  for the current bar; falls back silently to raw blocks below. */}
+              {traderSummary && pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR" && (() => {
+                const toneColor = (t) => t==="bullish" ? C.green : t==="bearish" ? C.red : C.muted;
+                const toneBg    = (t) => t==="bullish" ? C.greenBg : t==="bearish" ? C.redBg : C.surface;
+                const toneBorder= (t) => t==="bullish" ? C.greenBorder : t==="bearish" ? C.redBorder : C.borderSoft;
+                const toneLabel = (t) => t==="bullish" ? "BULL" : t==="bearish" ? "BEAR" : "—";
+                const Bullet = ({ tone, text }) => (
+                  <div style={{ display:"flex", gap:8, alignItems:"flex-start",
+                    padding:"7px 10px", borderRadius:5,
+                    background: toneBg(tone),
+                    borderLeft: `3px solid ${toneColor(tone)}`,
+                    border: `1px solid ${toneBorder(tone)}` }}>
+                    <span style={{ fontSize:8, fontWeight:800, color: toneColor(tone),
+                      letterSpacing:0.8, minWidth:30, flexShrink:0, paddingTop:2 }}>
+                      {toneLabel(tone)}
+                    </span>
+                    <span style={{ fontSize:13, fontWeight: tone==="neutral"?500:700,
+                      color: tone==="neutral" ? C.textSec : toneColor(tone), lineHeight:1.55 }}>
+                      {text}
+                    </span>
+                  </div>
+                );
+                return (
+                  <div style={{ ...card, flexShrink:0, padding:"12px 14px",
+                    background:"#FAFAF9", border:`2px solid ${C.borderSoft}` }}>
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
+                      <span style={{ fontSize:10, fontWeight:900, color:C.text,
+                        letterSpacing:1.2, textTransform:"uppercase" }}>⚡ Trader Briefing</span>
+                      <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>
+                        ~30s read · decision-ready
+                      </span>
+                    </div>
+                    {/* Edge — 1-2 sentence headline */}
+                    <div style={{ fontSize:14, fontWeight:600, color:C.text, lineHeight:1.55,
+                      marginBottom: (traderSummary.watch?.length || traderSummary.actions?.length) ? 10 : 0 }}>
+                      {traderSummary.edge}
+                    </div>
+                    {/* Watch — conditions / levels */}
+                    {traderSummary.watch?.length > 0 && (
+                      <div style={{ marginTop:8 }}>
+                        <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1,
+                          textTransform:"uppercase", marginBottom:5 }}>Watch</div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                          {traderSummary.watch.map((b, i) => <Bullet key={`w${i}`} {...b} />)}
+                        </div>
+                      </div>
+                    )}
+                    {/* Actions — concrete IF/THEN */}
+                    {traderSummary.actions?.length > 0 && (
+                      <div style={{ marginTop:10 }}>
+                        <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1,
+                          textTransform:"uppercase", marginBottom:5 }}>Actions</div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                          {traderSummary.actions.map((b, i) => <Bullet key={`a${i}`} {...b} />)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* ② DEEPSEEK ANALYSIS */}
               <div style={{ ...card, flexShrink:0 }}>
                 {/* Header row: label + timing info */}
@@ -3230,7 +3331,7 @@ function App() {
         {/* ══ ENSEMBLE TAB ══ */}
         {tab==="ensemble" && (
           <EnsembleTab
-            weights={weights}
+            weights={weights} setWeights={setWeights}
             ob={ob} ls={ls} tk={tk} oif={oif} lq={lq}
             fg={fg} mp={mp} cz={cz} cg={cg}
             dots={dots} price={price}
@@ -3268,7 +3369,7 @@ function App() {
 
       <div style={{ textAlign:"center", fontSize:8, color:C.muted, letterSpacing:2, padding:"3px 0",
         flexShrink:0, borderTop:`1px solid ${C.borderSoft}`, background:C.surface }}>
-        BTC ORACLE · NOT FINANCIAL ADVICE · performance recorded at bar close only
+        SIMPLE ANALYSIS · NOT FINANCIAL ADVICE · performance recorded at bar close only
       </div>
 
       <style>{`

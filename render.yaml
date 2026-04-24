@@ -28,3 +28,5 @@ services:
         sync: false
       - key: COINGLASS_KEY
         sync: false
+      - key: VENICE_API_KEY
+        sync: false
