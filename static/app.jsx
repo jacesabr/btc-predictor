@@ -3318,121 +3318,116 @@ function App() {
       else if (narrative)  { bg = "#F5F5F4"; border = C.borderSoft;   leftBar = C.muted;  msgColor = "#57534E"; actionLabel = "INFO";  actionIcon = "ⓘ"; }
       else if (active)     { bg = "#F5F5F4"; border = C.borderSoft;   leftBar = C.muted;  msgColor = "#57534E"; actionLabel = "PAUSE"; actionIcon = "⏸"; }
       else                 { bg = "#FAFAF9"; border = C.borderSoft;   leftBar = C.muted;  msgColor = C.muted;   actionLabel = null;    actionIcon = "⏸"; }
+      // Source lookup (direct from a condition's metric, or inferred from
+      // bullet prose for narrative-only bullets that name a known family).
+      const conds = conditions || [];
+      let sourced = conds.map(c => METRIC_META[c.metric]).find(m => m && m.source);
+      let inferredSrc = false;
+      if (!sourced) {
+        for (const { rx, metrics } of TEXT_FAMILY_RULES) {
+          if (rx.test(text || "")) {
+            for (const m of metrics) {
+              const meta = METRIC_META[m];
+              if (meta && meta.source) { sourced = meta; inferredSrc = true; break; }
+            }
+            if (sourced) break;
+          }
+        }
+      }
+      // Should we render the if_met consequence line? Only on fired bullets,
+      // and skip when the text already carries the implication via an arrow
+      // or em-dash of its own.
+      const showIfMet = (() => {
+        if (!if_met || !fired) return false;
+        const textHasArrow = /→|—/.test(text || "");
+        const textLongEnough = (text || "").length >= 60;
+        return !(textHasArrow && textLongEnough);
+      })();
+      const hasRightColumn = (conds && conds.length > 0) || sourced || !sourced;
       return (
-        <div style={{ display:"flex", flexDirection:"column", gap:6,
-          padding:"8px 12px", borderRadius:6,
+        <div style={{ display:"flex", gap:12, alignItems:"stretch",
+          padding:"10px 14px", borderRadius:6,
           background: bg,
           borderLeft: `4px solid ${leftBar}`,
           border: `1px solid ${border}`,
           transition: "background-color 400ms ease, border-color 400ms ease, border-left-color 400ms ease" }}>
-          <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
-            {actionLabel ? (
-              <span style={{ display:"inline-flex", alignItems:"center", gap:4,
-                fontSize:12, fontWeight:900, color:msgColor,
-                background:"#FFFFFF", border:`2px solid ${border}`,
-                borderRadius:4, padding:"2px 8px", letterSpacing:1.5,
-                flexShrink:0, lineHeight:1.2, minWidth:64, justifyContent:"center" }}>
-                <span style={{ fontSize:13 }}>{actionIcon}</span>
-                {actionLabel}
-              </span>
-            ) : (
-              <span style={{ fontSize:14, color:C.muted, opacity:0.6, flexShrink:0, paddingTop:2, minWidth:64, textAlign:"center" }}>
-                ⏸
-              </span>
-            )}
-            <span style={{ flex:1 }}>
-              <BullBearText text={text} size={14} baseColor={C.text} />
-            </span>
-            {(() => {
-              // 1) Prefer the source of any condition metric — most specific.
-              const conds = conditions || [];
-              let sourced = conds.map(c => METRIC_META[c.metric]).find(m => m && m.source);
-              let inferredSrc = false;
-              // 2) Fallback: narrative-only bullet (empty conditions) that
-              // names a recognized signal family in prose. Use the family's
-              // registered source so the trader still gets a ↗ SOURCE link.
-              // This was the "? UNKNOWN" case that dominated narrative bullets
-              // for BSR / bid-depth / funding / RSI which DO have sources.
-              if (!sourced) {
-                for (const { rx, metrics } of TEXT_FAMILY_RULES) {
-                  if (rx.test(text || "")) {
-                    for (const m of metrics) {
-                      const meta = METRIC_META[m];
-                      if (meta && meta.source) { sourced = meta; inferredSrc = true; break; }
-                    }
-                    if (sourced) break;
-                  }
-                }
-              }
-              if (sourced) {
-                const title = inferredSrc
-                  ? `Inferred source: ${sourced.source.label} (bullet prose names this family)`
-                  : `Verify at ${sourced.source.label}`;
-                return (
-                  <a href={sourced.source.url} target="_blank" rel="noopener noreferrer"
-                     title={title}
-                     onClick={(e)=>e.stopPropagation()}
-                     style={{ color:"#B91C1C", textDecoration:"none",
-                       fontSize:9, fontWeight:800, letterSpacing:1,
-                       padding:"2px 7px",
-                       border: inferredSrc ? "1px dashed #DC2626" : "1px solid #DC2626",
-                       borderRadius:3, background:"#FFFFFF",
-                       flexShrink:0, lineHeight:1.3, whiteSpace:"nowrap" }}>
-                    ↗ SOURCE
-                  </a>
-                );
-              }
-              return (
-                <span title="No verifiable source mapped for this claim — flag for audit"
-                      style={{ color:C.muted, fontSize:9, fontWeight:700, letterSpacing:1,
-                        padding:"2px 7px", border:`1px dashed ${C.muted}`,
-                        borderRadius:3, background:"transparent",
-                        flexShrink:0, lineHeight:1.3, whiteSpace:"nowrap", fontStyle:"italic" }}>
-                  ? UNKNOWN
+          {/* LEFT COLUMN — action chip + bullet narrative + if_met consequence */}
+          <div style={{ flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:6 }}>
+            <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+              {actionLabel ? (
+                <span style={{ display:"inline-flex", alignItems:"center", gap:4,
+                  fontSize:12, fontWeight:900, color:msgColor,
+                  background:"#FFFFFF", border:`2px solid ${border}`,
+                  borderRadius:4, padding:"3px 9px", letterSpacing:1.5,
+                  flexShrink:0, lineHeight:1.2, minWidth:64, justifyContent:"center" }}>
+                  <span style={{ fontSize:13 }}>{actionIcon}</span>
+                  {actionLabel}
                 </span>
-              );
-            })()}
+              ) : (
+                <span style={{ fontSize:14, color:C.muted, opacity:0.6, flexShrink:0, paddingTop:3, minWidth:64, textAlign:"center" }}>
+                  ⏸
+                </span>
+              )}
+              <span style={{ flex:1, minWidth:0, overflowWrap:"anywhere" }}>
+                <BullBearText text={text} size={16} baseColor={C.text} />
+              </span>
+            </div>
+            {showIfMet && (
+              <div style={{ marginLeft:28, lineHeight:1.4,
+                display:"flex", flexWrap:"wrap", alignItems:"baseline", gap:6 }}>
+                <span style={{ fontSize:14, fontWeight:800, color:C.muted, letterSpacing:0.2 }}>→</span>
+                <span style={{ fontSize:15, fontWeight:700, color: msgColor, overflowWrap:"anywhere" }}>
+                  {if_met}
+                </span>
+              </div>
+            )}
           </div>
-          {(conditions && conditions.length > 0) && (
-            <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginLeft:28 }}>
+
+          {/* RIGHT COLUMN — live values + source, contained on the right so
+              the eye can sweep [narrative ← | → live data] at a glance. */}
+          {hasRightColumn && (
+            <div style={{ flex:"0 0 auto", width:260, maxWidth:"42%",
+              display:"flex", flexDirection:"column", gap:6,
+              paddingLeft:10, borderLeft:`1px solid ${C.borderSoft}` }}>
               {__inferred && (
-                <span title="The bullet text mentions this signal without attaching a formal threshold. The NUMBER you see below is the live reading pulled straight from the backend feed — NOT made up. We just added the pill so you can see the current value at a glance without digging."
+                <span title="The bullet text mentions this signal without attaching a formal threshold. The NUMBER below is the live reading pulled straight from the backend feed — NOT made up. We just added the pill so you can see the current value at a glance without digging."
                       style={{ fontSize:9, fontWeight:800, color:C.muted, letterSpacing:1,
                         padding:"2px 7px", border:`1px dashed ${C.borderSoft}`,
-                        borderRadius:3, background:"#FFFFFF", alignSelf:"center",
+                        borderRadius:3, background:"#FFFFFF", alignSelf:"flex-start",
                         textTransform:"uppercase" }}>
                   live reading (no threshold)
                 </span>
               )}
-              {conditions.map((c, i) => (
-                <ConditionPill key={i} cond={c}
-                  stableMet={(__condResults && __condResults[i]) ? __condResults[i].stable : undefined} />
+              {(conds && conds.length > 0) && conds.map((c, i) => (
+                <div key={i} style={{ display:"flex", alignItems:"flex-start" }}>
+                  <ConditionPill cond={c}
+                    stableMet={(__condResults && __condResults[i]) ? __condResults[i].stable : undefined} />
+                </div>
               ))}
+              {sourced ? (
+                <a href={sourced.source.url} target="_blank" rel="noopener noreferrer"
+                   title={inferredSrc
+                     ? `Inferred source: ${sourced.source.label} (bullet prose names this family)`
+                     : `Verify at ${sourced.source.label}`}
+                   onClick={(e)=>e.stopPropagation()}
+                   style={{ color:"#B91C1C", textDecoration:"none",
+                     fontSize:9, fontWeight:800, letterSpacing:1,
+                     padding:"3px 8px", alignSelf:"flex-start",
+                     border: inferredSrc ? "1px dashed #DC2626" : "1px solid #DC2626",
+                     borderRadius:3, background:"#FFFFFF", lineHeight:1.3, whiteSpace:"nowrap" }}>
+                  ↗ SOURCE
+                </a>
+              ) : (
+                <span title="No verifiable source mapped for this claim — flag for audit"
+                      style={{ color:C.muted, fontSize:9, fontWeight:700, letterSpacing:1,
+                        padding:"3px 8px", border:`1px dashed ${C.muted}`, alignSelf:"flex-start",
+                        borderRadius:3, background:"transparent",
+                        lineHeight:1.3, whiteSpace:"nowrap", fontStyle:"italic" }}>
+                  ? UNKNOWN
+                </span>
+              )}
             </div>
           )}
-          {if_met && (() => {
-            // Only render the if_met consequence line when the bullet's
-            // condition has actually FIRED — that's the moment the reader
-            // wants the plain-English "so what". For unfired bullets
-            // (WAITING / not-yet-actionable) the "if fires:" restatement
-            // just restates the main text, takes up vertical space, and
-            // adds no new information. Hide it entirely in those cases.
-            if (!fired) return null;
-            // And on fired bullets: suppress the duplicate line if the
-            // main text already carries an arrow/em-dash implication.
-            const textHasArrow = /→|—/.test(text || "");
-            const textLongEnough = (text || "").length >= 60;
-            if (textHasArrow && textLongEnough) return null;
-            return (
-              <div style={{ marginLeft:28, marginTop:3, lineHeight:1.35,
-                display:"flex", flexWrap:"wrap", alignItems:"baseline", gap:5 }}>
-                <span style={{ fontSize:13, fontWeight:800, color:C.muted, letterSpacing:0.2 }}>→</span>
-                <span style={{ fontSize:14, fontWeight:700, color: msgColor }}>
-                  {if_met}
-                </span>
-              </div>
-            );
-          })()}
         </div>
       );
     };
@@ -3487,16 +3482,16 @@ function App() {
               const edgeStyle = {
                 width: "100%", maxWidth: "100%",
                 overflowWrap: "anywhere", wordBreak: "break-word",
-                fontSize: 15, color: C.text, lineHeight: 1.45,
+                fontSize: 17, color: C.text, lineHeight: 1.5,
               };
               return (
-                <div style={{ marginBottom: hasMore ? 10 : 0 }}>
+                <div style={{ marginBottom: hasMore ? 12 : 0 }}>
                   <div style={{ ...edgeStyle, fontWeight: 700 }}>
-                    <BullBearText text={takeaway} size={15} baseColor={C.text} />
+                    <BullBearText text={takeaway} size={17} baseColor={C.text} />
                   </div>
                   {detail && (
-                    <div style={{ ...edgeStyle, marginTop: 6, fontWeight: 400 }}>
-                      <BullBearText text={detail} size={15} baseColor={C.text} />
+                    <div style={{ ...edgeStyle, marginTop: 8, fontWeight: 400 }}>
+                      <BullBearText text={detail} size={17} baseColor={C.text} />
                     </div>
                   )}
                 </div>
