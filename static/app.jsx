@@ -2848,51 +2848,9 @@ function App() {
     <div style={{ fontFamily:"'JetBrains Mono','Fira Code',monospace", background:C.bg, color:C.text,
       height:"100vh", overflow:"hidden", fontSize:15, display:"flex", flexDirection:"column" }}>
 
-      {/* ── COMPACT TOP BAR: countdown + bias chip + tabs all on one row ── */}
-      <div style={{ display:"flex", alignItems:"center", gap:14, borderBottom:`1px solid ${C.border}`,
-        padding:"6px 14px", flexShrink:0, background:C.surface }}>
-        {/* Countdown — inline, "mm:ss bar closes" in one compact line */}
-        <div style={{ display:"flex", alignItems:"baseline", gap:6 }}>
-          <span style={{ fontSize:20, fontWeight:900, color:timeLeft<60?C.red:timeLeft<120?C.amber:C.green,
-            letterSpacing:1.5, fontVariantNumeric:"tabular-nums", lineHeight:1 }}>{mins}:{secs}</span>
-          <span style={{ fontSize:9, color:C.muted, letterSpacing:1, textTransform:"uppercase" }}>bar closes</span>
-        </div>
-        {/* Bias chip — current signal for this bar, color-coded. Hidden when nothing to show. */}
-        {activeDeepseekPred?.signal && activeDeepseekPred.signal !== "ERROR" && (() => {
-          const s    = activeDeepseekPred.signal;
-          const conf = activeDeepseekPred.confidence;
-          const col  = s==="UP" ? C.green : s==="DOWN" ? C.red : C.amber;
-          const bg   = s==="UP" ? C.greenBg : s==="DOWN" ? C.redBg : C.amberBg;
-          const bd   = s==="UP" ? C.greenBorder : s==="DOWN" ? C.redBorder : C.amberBorder;
-          const icon = s==="UP" ? "▲" : s==="DOWN" ? "▼" : "—";
-          return (
-            <span style={{ display:"inline-flex", alignItems:"center", gap:6,
-              fontSize:12, fontWeight:800, padding:"3px 10px", borderRadius:4,
-              background:bg, color:col, border:`1px solid ${bd}`, letterSpacing:0.5 }}>
-              <span style={{ fontSize:11 }}>{icon}</span>
-              <span>{s}</span>
-              {conf != null && <span style={{ color:C.muted, fontWeight:600 }}>· {conf}%</span>}
-            </span>
-          );
-        })()}
-        {/* Tabs pinned right */}
-        <div style={{ marginLeft:"auto", display:"flex" }}>
-          {[["live","LIVE"],["admin","ADMIN"]].map(([t,label])=>{
-            const active = t==="admin" ? (tab==="admin" || !!expandedAdminSection) : tab===t;
-            return (
-              <button key={t} onClick={()=>{
-                if (t === "admin") { setTab("admin"); setExpandedAdminSection(""); }
-                else { setTab("live"); setExpandedAdminSection(""); }
-              }} style={{
-                background:"none", border:"none",
-                borderBottom:active?`2px solid ${C.amber}`:"2px solid transparent",
-                color:active?C.amber:C.muted, fontWeight:active?700:400,
-                padding:"4px 14px", cursor:"pointer",
-                fontSize:11, fontFamily:"inherit", letterSpacing:2 }}>{label}</button>
-            );
-          })}
-        </div>
-      </div>
+      {/* (compact top bar removed — timer + tabs moved INTO the DeepSeek AI Analysis
+          card header below, next to the accuracy %, per user request. Admin tab
+          has its own absolute "← Back to Live" button in its top-right.) */}
 
       {/* ── BODY ── */}
       <div style={{ flex:1, overflow:"hidden", padding:"6px 10px", background:C.bg }}>
@@ -2976,7 +2934,33 @@ function App() {
 
                 return (
                   <div style={{ ...card, flexShrink:0, padding:"8px 12px" }}>
-                    <div style={colTitle}>DeepSeek AI Analysis</div>
+                    {/* HEADER ROW — title left; countdown + LIVE/ADMIN tabs right */}
+                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, marginBottom:4 }}>
+                      <div style={colTitle}>DeepSeek AI Analysis</div>
+                      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                        <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>
+                          <span style={{ fontSize:17, fontWeight:900, fontVariantNumeric:"tabular-nums", lineHeight:1,
+                            color:timeLeft<60?C.red:timeLeft<120?C.amber:C.green, letterSpacing:1 }}>{mins}:{secs}</span>
+                          <span style={{ fontSize:8, color:C.muted, letterSpacing:1, textTransform:"uppercase" }}>bar closes</span>
+                        </div>
+                        <div style={{ display:"flex" }}>
+                          {[["live","LIVE"],["admin","ADMIN"]].map(([t,label])=>{
+                            const active = t==="admin" ? (tab==="admin" || !!expandedAdminSection) : tab===t;
+                            return (
+                              <button key={t} onClick={()=>{
+                                if (t === "admin") { setTab("admin"); setExpandedAdminSection(""); }
+                                else { setTab("live"); setExpandedAdminSection(""); }
+                              }} style={{
+                                background:"none", border:"none",
+                                borderBottom:active?`2px solid ${C.amber}`:"2px solid transparent",
+                                color:active?C.amber:C.muted, fontWeight:active?700:400,
+                                padding:"3px 10px", cursor:"pointer",
+                                fontSize:10, fontFamily:"inherit", letterSpacing:2 }}>{label}</button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
                     {dsErr ? <div style={{ fontSize:11, color:C.red }}>{activeDeepseekPred.reasoning||"API error"}</div>
                       : c2sig ? <SignalRow sig={c2sig} conf={c2conf} />
                       : <div style={{ fontSize:11, color:C.muted }}>Analyzing…</div>}
