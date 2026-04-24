@@ -2947,7 +2947,11 @@ function App() {
     ]);
     const BullBearText = ({ text, size, baseColor }) => {
       const refSize = size + 2;
-      const REF = /(\$\d[\d,]*(?:\.\d+)?[kKmM]?|\d+(?:\.\d+)?%|\d+(?:\.\d+)?\s*BTC\b)/gi;
+      // Bold numeric references ($-prices, percentages, and BTC amounts). All
+      // three forms need to support COMMA-grouped integers (e.g. "34,642.1 BTC",
+      // "1,234.5%", "$77,500"); otherwise "34,642.1 BTC" splits to "34," (prose)
+      // + "642.1 BTC" (bold) and the first digits lose their bold.
+      const REF = /(\$\d[\d,]*(?:\.\d+)?[kKmM]?|\d[\d,]*(?:\.\d+)?%|\d[\d,]*(?:\.\d+)?\s*BTC\b)/gi;
       const segments = [];
       let last = 0, m;
       while ((m = REF.exec(text)) !== null) {
