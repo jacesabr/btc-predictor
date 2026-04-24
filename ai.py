@@ -2751,8 +2751,22 @@ async def run_embedding_audit(
     ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
 
     # ── Embedding coverage stats ──────────────────────────────────
+    # CRITICAL: coverage must be read from pgvector, not the JSON blob.
+    # pattern_history stores the bar snapshot as JSON AND the vector as a
+    # separate `embedding` column; the JSON does NOT mirror the column, so a
+    # naive r.get("embedding") check counts every bar as unembedded. The same
+    # bug previously caused mass-embed to burn Cohere budget on every deploy.
     total_bars = len(history_records)
-    embedded_bars = sum(1 for r in history_records if r.get("_has_embedding") or r.get("embedding"))
+    try:
+        from semantic_store import embedded_window_starts
+        embedded_ws = embedded_window_starts()
+        embedded_bars = sum(
+            1 for r in history_records
+            if float(r.get("window_start") or 0.0) in embedded_ws
+        )
+    except Exception as exc:
+        logger.warning("embedding coverage lookup failed, using JSON-blob fallback: %s", exc)
+        embedded_bars = sum(1 for r in history_records if r.get("_has_embedding") or r.get("embedding"))
     resolved_bars = [r for r in history_records if r.get("actual_direction")]
 
     # Historical analyst accuracy from resolved bars
