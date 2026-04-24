@@ -35,18 +35,18 @@ SYSTEM_PROMPT = """You compress a BTC 5-minute prediction analysis into a trader
 
 OUTPUT STRICT JSON ONLY, exactly this shape:
 {
-  "edge": "1-2 plain-English sentences describing what the setup IS — the 'story of the chart' right now. NEVER just echo the signal direction. Every factual claim MUST be traceable to a specific line in the INPUT (reasoning, narrative, free_observation, historical_pattern, or binance_expert). If the INPUT flags data as UNAVAILABLE, say so here.",
+  "edge": "One punchy sentence — what is the dominant setup RIGHT NOW? Max 25 words. Lead with the strongest directional read. Do NOT cram every signal. If data is missing, say so here. If signal is NEUTRAL with no edge, say that plainly.",
   "watch": [{
     "tone": "bullish|bearish|neutral",
-    "text": "a condition, level, or bar-level event that would confirm or invalidate the setup. Copy the SPECIFIC signal name from the INPUT (e.g. 'taker flow', 'spot whale buy', 'bid imbalance') — do NOT paraphrase into a different signal.",
+    "text": "ONE complete sentence (not a phrase fragment). State what to watch and WHY it matters. Reference the specific signal by name. Example: 'If taker buy volume surges above 50 BTC, the zero-flow regime breaks and bulls regain control.' NOT 'taker flow'. Max 22 words.",
     "conditions": [{"metric": "<name>", "op": ">"|">="|"<"|"<="|"==", "value": <number>, "unit": "<unit>"}],
-    "if_met": "short plain-English phrase (<=15 words) — the DIRECT consequence that the INPUT text states or strongly implies when ALL conditions fire. NEVER invent sentiment beyond what the INPUT supports. Omit if the text already states the consequence."
+    "if_met": "short phrase (<=12 words) stating the DIRECT consequence the INPUT text supports. Omit if text already says it."
   }],
   "actions": [{
     "tone": "bullish|bearish|neutral",
-    "text": "concrete IF-THEN guidance — 'if price breaks X do Y', 'stand aside unless Z'. NEVER a bare 'buy' or 'sell'.",
+    "text": "ONE complete IF-THEN sentence. 'If price breaks X with Y confirmation, enter long with stop Z.' Never a bare phrase. Max 25 words.",
     "conditions": [same shape as watch],
-    "if_met": "short plain-English phrase (<=15 words) — the direct action the trader should take when conditions fire. Usually this IS the action in the text's 'then' clause."
+    "if_met": "the trader's concrete action when conditions fire (<=12 words)."
   }]
 }
 
@@ -55,8 +55,10 @@ HARD RULES:
 - If the source is NEUTRAL or has no setup, say so plainly in edge — do not manufacture one.
 - Include numbers only when they carry trading meaning (price levels, bar IDs, ranges, time to close). Drop confidence percentages, latencies, and data-source labels.
 - Tag each bullet by which SIDE of the trade it implies (bullish, bearish, or neutral).
-- Each bullet <= 2 sentences. No hedging, no meta-commentary, no "the model says".
-- watch: max 4 bullets. actions: max 3 bullets.
+- **BULLET TEXT MUST BE A COMPLETE SENTENCE.** Never emit a bullet whose text is just the signal name ("taker flow", "spot whale buy"). If you have something to say about a signal, write a full sentence. If you don't, OMIT the bullet entirely. Empty conditions does NOT mean empty text — the text carries the trader-usable info either way.
+- Each bullet = ONE sentence. Total briefing <=120 words across edge + all bullets. Scannable in 30s.
+- watch: max 3 bullets. actions: max 3 bullets. Less is more.
+- No hedging, no meta-commentary, no "the model says".
 
 SCOPE-MATCHING (CRITICAL):
 - Every metric in the INPUT is scope-tagged (e.g. "Binance-perp 5m", "aggregate 5-venue
