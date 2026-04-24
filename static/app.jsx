@@ -2928,7 +2928,17 @@ function App() {
       );
     };
     const fmt = {
-      btc:  (v) => `${v.toFixed(1)} BTC`,
+      // Adaptive precision: small values (< 10 BTC) need 2 decimals so
+      // 0.63 doesn't collapse to "0.6"; mid values (10-999 BTC) get 1
+      // decimal; large values (≥ 1000 BTC, e.g. OI) get comma-grouped
+      // integers. Keeps pill values aligned with what the bullet text
+      // cites verbatim.
+      btc:  (v) => {
+        const a = Math.abs(v);
+        if (a >= 1000)  return `${v.toLocaleString(undefined,{maximumFractionDigits:0})} BTC`;
+        if (a >= 10)    return `${v.toFixed(1)} BTC`;
+        return `${v.toFixed(2)} BTC`;
+      },
       usd:  (v) => `$${v.toLocaleString(undefined,{maximumFractionDigits:0})}`,
       pct:  (v) => `${v.toFixed(2)}%`,
       num:  (v) => v.toFixed(2),
