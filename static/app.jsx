@@ -2934,14 +2934,16 @@ function App() {
 
                 return (
                   <div style={{ ...card, flexShrink:0, padding:"8px 12px" }}>
-                    {/* HEADER ROW — title left; countdown + LIVE/ADMIN tabs right */}
+                    {/* HEADER ROW — title left; countdown + LIVE/ADMIN tabs right.
+                        Timer + tabs bumped up since they're the primary always-on UI
+                        nav; user wants them prominent. */}
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, marginBottom:4 }}>
                       <div style={colTitle}>DeepSeek AI Analysis</div>
-                      <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-                        <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>
-                          <span style={{ fontSize:17, fontWeight:900, fontVariantNumeric:"tabular-nums", lineHeight:1,
-                            color:timeLeft<60?C.red:timeLeft<120?C.amber:C.green, letterSpacing:1 }}>{mins}:{secs}</span>
-                          <span style={{ fontSize:8, color:C.muted, letterSpacing:1, textTransform:"uppercase" }}>bar closes</span>
+                      <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+                        <div style={{ display:"flex", alignItems:"baseline", gap:7 }}>
+                          <span style={{ fontSize:24, fontWeight:900, fontVariantNumeric:"tabular-nums", lineHeight:1,
+                            color:timeLeft<60?C.red:timeLeft<120?C.amber:C.green, letterSpacing:1.5 }}>{mins}:{secs}</span>
+                          <span style={{ fontSize:10, color:C.muted, letterSpacing:1.2, textTransform:"uppercase", fontWeight:700 }}>bar closes</span>
                         </div>
                         <div style={{ display:"flex" }}>
                           {[["live","LIVE"],["admin","ADMIN"]].map(([t,label])=>{
@@ -2952,10 +2954,10 @@ function App() {
                                 else { setTab("live"); setExpandedAdminSection(""); }
                               }} style={{
                                 background:"none", border:"none",
-                                borderBottom:active?`2px solid ${C.amber}`:"2px solid transparent",
-                                color:active?C.amber:C.muted, fontWeight:active?700:400,
-                                padding:"3px 10px", cursor:"pointer",
-                                fontSize:10, fontFamily:"inherit", letterSpacing:2 }}>{label}</button>
+                                borderBottom:active?`3px solid ${C.amber}`:"3px solid transparent",
+                                color:active?C.amber:C.muted, fontWeight:active?800:500,
+                                padding:"5px 14px", cursor:"pointer",
+                                fontSize:14, fontFamily:"inherit", letterSpacing:2 }}>{label}</button>
                             );
                           })}
                         </div>
@@ -3167,7 +3169,7 @@ function App() {
                           {emoji}
                         </span>
                         <span style={{ flex:1 }}>
-                          <BullBearText text={text} size={13} baseColor={C.text} />
+                          <BullBearText text={text} size={12} baseColor={C.text} />
                         </span>
                         {fired && (
                           <span style={{ fontSize:9, fontWeight:900, color:msgColor,
@@ -3208,9 +3210,9 @@ function App() {
                           </span>
                         </div>
                         {/* Edge — 1-2 sentence headline with inline bull/bear coloring */}
-                        <div style={{ marginBottom: (traderSummary.watch?.length || traderSummary.actions?.length) ? 12 : 0,
+                        <div style={{ marginBottom: (traderSummary.watch?.length || traderSummary.actions?.length) ? 10 : 0,
                           fontWeight:600 }}>
-                          <BullBearText text={traderSummary.edge} size={17} baseColor={C.text} />
+                          <BullBearText text={traderSummary.edge} size={15} baseColor={C.text} />
                         </div>
                         {/* Re-categorize bullets by CONDITION STATE, not Venice's original
                             watch/actions split. Trader mental model:

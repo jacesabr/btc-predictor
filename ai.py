@@ -510,8 +510,10 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
     oif = ds.get("oi_funding") or {}
     lines = []
 
-    ob = ds.get("order_book")
-    if ob:
+    ob = ds.get("order_book") or {}
+    if ob.get("data_available") is False or ob.get("signal") == "UNAVAILABLE":
+        lines += [f"  [ORDER BOOK] unavailable — {ob.get('interpretation','fetch failed')}", ""]
+    elif ob:
         imb = ob.get("imbalance_pct", 0); bv = ob.get("bid_vol_btc", 0); av = ob.get("ask_vol_btc", 0)
         lines += [
             "  [ORDER BOOK DEPTH — Binance spot, top-20 levels]",
@@ -522,8 +524,10 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
     else:
         lines += ["  [ORDER BOOK] unavailable", ""]
 
-    ls = ds.get("long_short")
-    if ls:
+    ls = ds.get("long_short") or {}
+    if ls.get("data_available") is False or ls.get("signal") == "UNAVAILABLE":
+        lines += [f"  [LONG/SHORT RATIO] unavailable — {ls.get('interpretation','fetch failed')}", ""]
+    elif ls:
         lines += [
             "  [LONG / SHORT RATIO — Binance Futures 5m]",
             f"  Retail     : L/S = {ls.get('retail_lsr',1):.3f}   Long {ls.get('retail_long_pct',50):.1f}%  /  Short {ls.get('retail_short_pct',50):.1f}%   "
@@ -552,8 +556,10 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
     else:
         lines += ["  [TAKER FLOW] unavailable", ""]
 
-    lq = ds.get("liquidations")
-    if lq:
+    lq = ds.get("liquidations") or {}
+    if lq.get("data_available") is False or lq.get("signal") == "UNAVAILABLE":
+        lines += [f"  [LIQUIDATIONS] unavailable — {lq.get('interpretation','fetch failed')}", ""]
+    elif lq:
         lines += [
             "  [LIQUIDATIONS — Binance Futures, last 5 min]",
             f"  Long liquidated : {lq.get('long_liq_count',0)} orders  ({_fmt_usd(lq.get('long_liq_usd',0))})    "
@@ -564,7 +570,9 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
     else:
         lines += ["  [LIQUIDATIONS] unavailable", ""]
 
-    if oif:
+    if oif.get("data_available") is False or oif.get("signal") == "UNAVAILABLE":
+        lines += [f"  [OI + FUNDING] unavailable — {oif.get('interpretation','fetch failed')}", ""]
+    elif oif:
         lines += [
             "  [OPEN INTEREST + FUNDING — Binance Futures perpetual]",
             f"  OI: {oif.get('open_interest_btc',0):,.0f} BTC    Funding (8h): {oif.get('funding_rate_8h_pct',0):+.5f}%  [{oif.get('funding_signal','NEUTRAL')}{_acc_tag('oi_funding')}]",
@@ -613,8 +621,10 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
             f"  → {cg.get('interpretation','')}", "",
         ]
 
-    mp = ds.get("mempool")
-    if mp:
+    mp = ds.get("mempool") or {}
+    if mp.get("data_available") is False or mp.get("signal") == "UNAVAILABLE":
+        lines += [f"  [MEMPOOL] unavailable — {mp.get('interpretation','fetch failed')}", ""]
+    elif mp:
         lines += [
             "  [MEMPOOL — mempool.space on-chain fee pressure]",
             f"  Fastest: {mp.get('fastest_fee_sat_vb',0)} sat/vB   30min: {mp.get('half_hour_fee_sat_vb',0)} sat/vB   1hr: {mp.get('hour_fee_sat_vb',0)} sat/vB",
@@ -2455,8 +2465,10 @@ def _build_binance_expert_block(ds: Optional[Dict]) -> str:
 
     lines = []
 
-    ob = ds.get("order_book")
-    if ob:
+    ob = ds.get("order_book") or {}
+    if ob.get("data_available") is False or ob.get("signal") == "UNAVAILABLE":
+        lines += [f"[ORDER BOOK — Binance spot, top-20 levels] unavailable — {ob.get('interpretation','fetch failed')}", ""]
+    elif ob:
         lines += [
             "[ORDER BOOK — Binance spot, top-20 levels]",
             f"  Bid vol: {ob.get('bid_vol_btc', 0):.1f} BTC  Ask vol: {ob.get('ask_vol_btc', 0):.1f} BTC  Imbalance: {ob.get('imbalance_pct', 0):+.2f}%",
@@ -2464,8 +2476,10 @@ def _build_binance_expert_block(ds: Optional[Dict]) -> str:
             "",
         ]
 
-    ls = ds.get("long_short")
-    if ls:
+    ls = ds.get("long_short") or {}
+    if ls.get("data_available") is False or ls.get("signal") == "UNAVAILABLE":
+        lines += [f"[LONG/SHORT RATIO — Binance Futures 5m] unavailable — {ls.get('interpretation','fetch failed')}", ""]
+    elif ls:
         lines += [
             "[LONG/SHORT RATIO — Binance Futures 5m]",
             f"  Retail L/S: {ls.get('retail_lsr', 1):.3f}  Long {ls.get('retail_long_pct', 50):.1f}% / Short {ls.get('retail_short_pct', 50):.1f}%  Contrarian: {ls.get('retail_signal_contrarian', 'NEUTRAL')}",
@@ -2488,7 +2502,9 @@ def _build_binance_expert_block(ds: Optional[Dict]) -> str:
         ]
 
     oif = ds.get("oi_funding") or {}
-    if oif:
+    if oif.get("data_available") is False or oif.get("signal") == "UNAVAILABLE":
+        lines += [f"[OPEN INTEREST + FUNDING — Binance perpetual] unavailable — {oif.get('interpretation','fetch failed')}", ""]
+    elif oif:
         lines += [
             "[OPEN INTEREST + FUNDING — Binance perpetual]",
             f"  OI: {oif.get('open_interest_btc', 0):,.0f} BTC  Funding (8h): {oif.get('funding_rate_8h_pct', 0):+.5f}%  [{oif.get('funding_signal', 'NEUTRAL')}]",
