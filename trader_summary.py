@@ -94,11 +94,22 @@ CONDITIONS — machine-checkable thresholds that back the bullet:
   "" otherwise.
 - If the bullet is pure narrative with no cited number, omit conditions.
 
-DATA AVAILABILITY:
-- If the INPUT includes lines like "[TAKER FLOW] unavailable" or "data_requests: X", the
-  trader must know the setup is incomplete. Flag it in the edge (e.g. "Note: backend
-  taker-flow unavailable — assessment relies on order book only"). Do NOT silently fill
-  the gap with assumptions.
+DATA AVAILABILITY (HARD RULES):
+- If the INPUT flags ANY signal as unavailable ("[TAKER FLOW] unavailable", "[ORDER BOOK] unavailable",
+  "data unavailable", "fetch failed", etc.), you MUST NOT emit a `conditions` entry that references
+  that signal's metrics. The backend's thresholds for that signal are calibrated on a broken or
+  zero baseline — a condition like `taker_buy_volume > 5 BTC` will be trivially always-met (or
+  always-not-met) against reality, producing false confirmation signals.
+  Mapping of signal-unavailability → metrics to DROP from conditions:
+    * taker flow unavailable    → drop taker_buy_volume, taker_sell_volume, taker_volume, taker_ratio
+    * order book unavailable    → drop bid_imbalance, ask_imbalance, bid_depth_05pct, ask_depth_05pct
+    * OI / funding unavailable  → drop open_interest, funding_rate, basis_pct
+    * long/short unavailable    → drop long_short_ratio
+    * liquidations unavailable  → drop (no aggregate_liquidations metric in whitelist anyway)
+- KEEP the narrative reference in the bullet TEXT (the trader should still see "if taker flow
+  resumes above the 5 BTC baseline..."), but OMIT the condition so no ✓/✗ pill lies to them.
+- Flag the unavailability in the EDGE text (e.g. "Note: backend taker-flow unavailable —
+  assessment relies on order book only"). Never silently fill the gap with assumptions.
 
 NO JARGON WITHOUT EVIDENCE:
 - Do NOT use technical-analysis terminology (Wyckoff, Elliott wave, harmonic patterns, distribution phase, accumulation phase, liquidity grab, stop hunt, market structure break, order block, fair value gap, etc.) unless the INPUT gives a concrete price level, bar index, or measured condition that backs it. A percentage alone is NOT evidence. A name alone is NOT evidence.
