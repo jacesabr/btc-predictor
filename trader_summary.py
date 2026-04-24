@@ -76,42 +76,34 @@ SCOPE-MATCHING (CRITICAL):
   INPUT may only appear in `edge` as background, never in `conditions`.
 
 CONDITIONS — machine-checkable thresholds that back the bullet:
-- Emit a condition ONLY when (a) the bullet text cites a specific number/range from the
-  INPUT verbatim, AND (b) the signal that number describes has a DIRECT match in the
-  whitelist below. NEVER substitute a near-metric because the exact one isn't in the
-  whitelist — that creates false signals (e.g. mapping "whale buy flow" to
-  "taker_buy_volume" conflates two different data sources).
-- Valid "metric" values ONLY (exact strings): price, price_change_pct
-  (percent move from the current bar's open), taker_buy_volume, taker_sell_volume,
-  taker_volume, taker_ratio, bid_imbalance, ask_imbalance, funding_rate, open_interest,
-  rsi, long_short_ratio, basis_pct, perp_cvd_1h, spot_cvd_1h, aggregate_cvd_1h,
-  bid_depth_05pct, ask_depth_05pct, rr_25d_30d, iv_30d_atm.
-- If the INPUT references a signal NOT in this list (whale flow, OI velocity, SOPR,
-  MVRV, fear/greed, mempool, cross-exchange premium, etc.), keep the reference in the
-  bullet TEXT but OMIT the conditions array — do NOT force it into a near-metric.
+- PRESERVE ALL DEEPSEEK INTELLIGENCE. If the bullet text cites a specific threshold, emit
+  a condition for it even if the metric is niche or not in the common whitelist. The UI
+  will say "source unavailable" for metrics it can't verify live — that's better than
+  dropping the claim entirely (which loses the edge DeepSeek worked to derive).
+- "metric": use a clear snake_case name matching the signal the text references. Prefer
+  these common names when they fit: price, price_change_pct, taker_buy_volume,
+  taker_sell_volume, taker_volume, taker_ratio, bid_imbalance, ask_imbalance,
+  funding_rate, open_interest, rsi, long_short_ratio, basis_pct, perp_cvd_1h,
+  spot_cvd_1h, aggregate_cvd_1h, bid_depth_05pct, ask_depth_05pct, rr_25d_30d,
+  iv_30d_atm, spot_whale_buy_btc, spot_whale_sell_btc, aggregate_funding_rate,
+  aggregate_liquidations_usd, oi_velocity_pct. If the input uses a different signal,
+  use a sensible snake_case name (e.g. "coinbase_whale_buy_btc") — UI will mark it
+  "source unavailable" and the trader can still see the threshold.
 - "op" must be one of: ">", ">=", "<", "<=", "==".
-- "value" must be a plain number matching what the INPUT stated. No ranges — for
-  "between X and Y", emit TWO conditions: op ">=" X and op "<=" Y.
-- "unit": "USD" for price levels, "BTC" for volume, "%" for imbalance/funding/ratios,
-  "" otherwise.
+- "value" must be a plain number from the INPUT (do not fabricate). For "between X
+  and Y", emit TWO conditions: op ">=" X and op "<=" Y.
+- "unit": "USD" for price, "BTC" for volume, "%" for rates/ratios, "" otherwise.
 - If the bullet is pure narrative with no cited number, omit conditions.
+- CROSS-SIGNAL PROTECTION: do not emit a condition on taker_* when the signal the
+  text describes is actually whale_flow (different data source). Pick the metric
+  that matches what the text is actually about.
 
-DATA AVAILABILITY (HARD RULES):
-- If the INPUT flags ANY signal as unavailable ("[TAKER FLOW] unavailable", "[ORDER BOOK] unavailable",
-  "data unavailable", "fetch failed", etc.), you MUST NOT emit a `conditions` entry that references
-  that signal's metrics. The backend's thresholds for that signal are calibrated on a broken or
-  zero baseline — a condition like `taker_buy_volume > 5 BTC` will be trivially always-met (or
-  always-not-met) against reality, producing false confirmation signals.
-  Mapping of signal-unavailability → metrics to DROP from conditions:
-    * taker flow unavailable    → drop taker_buy_volume, taker_sell_volume, taker_volume, taker_ratio
-    * order book unavailable    → drop bid_imbalance, ask_imbalance, bid_depth_05pct, ask_depth_05pct
-    * OI / funding unavailable  → drop open_interest, funding_rate, basis_pct
-    * long/short unavailable    → drop long_short_ratio
-    * liquidations unavailable  → drop (no aggregate_liquidations metric in whitelist anyway)
-- KEEP the narrative reference in the bullet TEXT (the trader should still see "if taker flow
-  resumes above the 5 BTC baseline..."), but OMIT the condition so no ✓/✗ pill lies to them.
-- Flag the unavailability in the EDGE text (e.g. "Note: backend taker-flow unavailable —
-  assessment relies on order book only"). Never silently fill the gap with assumptions.
+DATA AVAILABILITY HANDLING:
+- Preserve every signal the INPUT provides. If a signal is flagged "unavailable" in
+  the INPUT, still surface it in the bullet text so the trader sees the gap — e.g.
+  "Taker flow unavailable from backend — monitor independently; bullish move invalid
+  until confirmed." The UI will render the condition pill as "source unavailable" if
+  no live feed can verify it.
 
 NO JARGON WITHOUT EVIDENCE:
 - Do NOT use technical-analysis terminology (Wyckoff, Elliott wave, harmonic patterns, distribution phase, accumulation phase, liquidity grab, stop hunt, market structure break, order block, fair value gap, etc.) unless the INPUT gives a concrete price level, bar index, or measured condition that backs it. A percentage alone is NOT evidence. A name alone is NOT evidence.
@@ -226,8 +218,14 @@ async def _call_venice(
             return data["choices"][0]["message"]["content"]
 
 
+import re as _re
+_METRIC_NAME_OK = _re.compile(r"^[a-z][a-z0-9_]{1,60}$")
+
 def _norm_conditions(raw: Any) -> list:
-    """Validate + normalize a bullet's conditions array. Drops anything malformed."""
+    """Validate + normalize a bullet's conditions array. Drops anything malformed,
+    but accepts ANY snake_case metric name (not only the common whitelist) so
+    DeepSeek's intelligence is preserved even when a signal has no frontend live
+    feed — the UI will just render "source unavailable" for unknown metrics."""
     if not isinstance(raw, list):
         return []
     out = []
@@ -238,7 +236,7 @@ def _norm_conditions(raw: Any) -> list:
         op     = c.get("op")
         val    = c.get("value")
         unit   = c.get("unit", "")
-        if metric not in _VALID_METRICS:
+        if not isinstance(metric, str) or not _METRIC_NAME_OK.match(metric):
             continue
         if op not in _VALID_OPS:
             continue
@@ -250,7 +248,7 @@ def _norm_conditions(raw: Any) -> list:
             "metric": metric, "op": op, "value": val,
             "unit":   str(unit or "")[:16],
         })
-        if len(out) >= 4:   # a single bullet shouldn't have more than 4 thresholds
+        if len(out) >= 4:
             break
     return out
 

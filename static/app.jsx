@@ -3168,11 +3168,15 @@ function App() {
                   const isMet = live ? opCheck[cond.op](live.v, cond.value) : null;
                   const ok = isMet === true;
                   const bad = isMet === false;
-                  const borderC = ok ? C.green : bad ? C.red : C.muted;
-                  const bgC     = ok ? C.greenBg : bad ? C.redBg : C.surface;
-                  const fgC     = ok ? "#166534" : bad ? "#991B1B" : C.muted;
-                  const icon    = ok ? "✓" : bad ? "✗" : "—";
+                  // No live feed for this metric → still show the threshold (preserves
+                  // DeepSeek's intelligence) but mark "source unavailable" so the
+                  // trader doesn't mistake it for a verified signal.
+                  const borderC = ok ? C.green : bad ? C.red : C.borderSoft;
+                  const bgC     = ok ? C.greenBg : bad ? C.redBg : "#F5F5F4";
+                  const fgC     = ok ? "#166534" : bad ? "#991B1B" : C.textSec;
+                  const icon    = ok ? "✓" : bad ? "✗" : "?";
                   const meta    = METRIC_META[cond.metric] || {};
+                  const labelText = meta.label || cond.metric.replace(/_/g," ");
                   return (
                     <span style={{ display:"inline-flex", flexDirection:"column", gap:2 }}>
                       {/* Pill — big bold numbers, source ↗ */}
@@ -3180,19 +3184,23 @@ function App() {
                         fontSize:13, fontWeight:700, padding:"4px 10px", borderRadius:5,
                         background: bgC, color: fgC, border:`1px solid ${borderC}` }}>
                         <span style={{ fontSize:15, fontWeight:900 }}>{icon}</span>
-                        <span>{meta.label || cond.metric} {cond.op}{" "}
+                        <span>{labelText} {cond.op}{" "}
                           <strong style={{ fontSize:17, color:C.text }}>{thresholdStr}</strong>
                         </span>
-                        {live && (
+                        {live ? (
                           <span style={{ color:C.muted, fontWeight:600 }}>· now{" "}
                             <strong style={{ color:C.text, fontWeight:900, fontSize:17 }}>{live.f(live.v)}</strong>
                           </span>
+                        ) : (
+                          <span style={{ color:C.muted, fontWeight:600, fontStyle:"italic" }}>· source unavailable</span>
                         )}
                         {meta.source && (
                           <a href={meta.source.url} target="_blank" rel="noopener noreferrer"
                              title={`Live source: ${meta.source.label}`}
-                             style={{ color:C.muted, textDecoration:"none", fontSize:10, fontWeight:700,
-                               marginLeft:4, letterSpacing:0.5 }}
+                             style={{ color:C.red, textDecoration:"none", fontSize:12, fontWeight:800,
+                               marginLeft:4, letterSpacing:0.5,
+                               padding:"2px 7px", border:`1px solid ${C.red}`, borderRadius:4,
+                               background:"#FFFFFF" }}
                              onClick={(e)=>e.stopPropagation()}>↗ source</a>
                         )}
                       </span>
@@ -3230,8 +3238,15 @@ function App() {
                   // narrative like "stand aside") OR all its conditions have fired.
                   const fired     = __allMet;
                   const active    = __actionable;     // no-conditions immediate OR fired
-                  const firedBull = active && tone === "bullish";
-                  const firedBear = active && tone === "bearish";
+                  // Venice sometimes labels oversold/overbought state as bullish/bearish
+                  // tone even when the if_met reads as "continuation of indecision" — only
+                  // paint green/red when the bullet actually names a trade direction.
+                  const phrase         = `${if_met || ""} ${text || ""}`.toLowerCase();
+                  const DIRECTIONAL_RE = /\b(long|short|buy|sell|enter|exit|rally|drop|breakout|breakdown|upside|downside|bullish|bearish)\b/;
+                  const NEUTRAL_RE     = /\b(indecision|no breakout|no breakdown|range-?bound|consolidation|stand aside|sidelines?|neutral)\b/;
+                  const directional    = DIRECTIONAL_RE.test(phrase) && !NEUTRAL_RE.test(phrase);
+                  const firedBull = active && tone === "bullish" && directional;
+                  const firedBear = active && tone === "bearish" && directional;
                   // Color policy: ONLY directional (BUY/SELL) uses colored backgrounds.
                   // PAUSE and waiting use neutral gray — nothing to act on, no need to shout.
                   let bg, border, leftBar, msgColor, actionLabel, actionIcon;
