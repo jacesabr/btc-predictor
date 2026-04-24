@@ -3157,6 +3157,35 @@ function App() {
                                        source: null },
                   long_short_ratio:  { label: "L/S",        layman: "Retail longs vs shorts on Binance futures. Often a contrarian indicator at extremes.",
                                        source: { label: "Coinglass", url: "https://www.coinglass.com/LongShortRatio" } },
+                  // Niche metrics DeepSeek may cite — no live frontend feed yet, but the
+                  // source link still points to the upstream dashboard where the signal
+                  // originated so the trader can verify DeepSeek's claim.
+                  basis_pct:             { label: "basis",           layman: "Spot-perp premium. Positive = perp trades above spot (bullish speculation).",
+                                           source: { label: "Coinglass", url: "https://www.coinglass.com/Basis" } },
+                  perp_cvd_1h:           { label: "perp CVD 1h",     layman: "Cumulative volume delta on perp over last hour — net aggressor pressure.",
+                                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                  spot_cvd_1h:           { label: "spot CVD 1h",     layman: "Spot cumulative volume delta 1h — net buying vs selling at market.",
+                                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                  aggregate_cvd_1h:      { label: "aggregate CVD 1h",layman: "Cross-venue cumulative volume delta — net aggressor pressure across exchanges.",
+                                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                  bid_depth_05pct:       { label: "bid depth ±0.5%", layman: "BTC liquidity on the bid side within 0.5% of mid — buyer support wall.",
+                                           source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+                  ask_depth_05pct:       { label: "ask depth ±0.5%", layman: "BTC liquidity on the ask side within 0.5% of mid — seller supply overhead.",
+                                           source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+                  rr_25d_30d:            { label: "RR 25d/30d",      layman: "Risk reversal — difference in 25-delta call vs put IV. Positive = bullish skew.",
+                                           source: { label: "Deribit", url: "https://metrics.deribit.com" } },
+                  iv_30d_atm:            { label: "IV 30d ATM",      layman: "30-day at-the-money implied volatility — market's expected move range.",
+                                           source: { label: "Deribit", url: "https://metrics.deribit.com" } },
+                  spot_whale_buy_btc:    { label: "whale buy",       layman: "BTC bought in single trades ≥5 BTC on spot — institutional accumulation proxy.",
+                                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinWhaleIndex" } },
+                  spot_whale_sell_btc:   { label: "whale sell",      layman: "BTC sold in single trades ≥5 BTC on spot — institutional distribution proxy.",
+                                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinWhaleIndex" } },
+                  aggregate_funding_rate:{ label: "agg funding",     layman: "Cross-exchange aggregated funding rate — avoids single-venue bias.",
+                                           source: { label: "Coinglass", url: "https://www.coinglass.com/FundingRate" } },
+                  aggregate_liquidations_usd:{label:"agg liqs",      layman: "Cross-exchange liquidation cascade in USD — forced-close pressure.",
+                                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinLiquidations" } },
+                  oi_velocity_pct:       { label: "OI velocity",     layman: "% change in open interest over 30 min — new positioning entering or exiting.",
+                                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinOpenInterest" } },
                 };
                 const metricLabel = Object.fromEntries(Object.entries(METRIC_META).map(([k,v]) => [k, v.label]));
 
@@ -3196,12 +3225,11 @@ function App() {
                         )}
                         {meta.source && (
                           <a href={meta.source.url} target="_blank" rel="noopener noreferrer"
-                             title={`Live source: ${meta.source.label}`}
-                             style={{ color:C.red, textDecoration:"none", fontSize:12, fontWeight:800,
-                               marginLeft:4, letterSpacing:0.5,
-                               padding:"2px 7px", border:`1px solid ${C.red}`, borderRadius:4,
-                               background:"#FFFFFF" }}
-                             onClick={(e)=>e.stopPropagation()}>↗ source</a>
+                             title={`Verify at ${meta.source.label}`}
+                             style={{ color:C.muted, textDecoration:"underline",
+                               textDecorationColor:C.borderSoft, textUnderlineOffset:2,
+                               fontSize:10, fontWeight:700, marginLeft:4, letterSpacing:0.3 }}
+                             onClick={(e)=>e.stopPropagation()}>↗ {meta.source.label}</a>
                         )}
                       </span>
                       {/* Layman one-liner */}
