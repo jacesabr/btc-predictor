@@ -8,7 +8,6 @@ Background tasks started at startup:
   run_binance_feed()       — 1-min OHLCV klines, refreshed every 60s (Bybit→OKX→Kraken→Binance)
   run_indicator_refresh()  — strategy signals refreshed every 15s
   run_prediction_loop()    — 5-minute bar loop: predict → wait → resolve
-  polymarket_feed.run()    — polls Polymarket Gamma API for BTC Up/Down market
 
 Key state object: current_state dict — read by WebSocket and REST endpoints.
 """
@@ -35,7 +34,7 @@ except ImportError:
     pass
 
 from config import Config
-from data_feed import BinanceCollector, FeatureEngine, PolymarketFeed
+from data_feed import BinanceCollector, FeatureEngine
 from signals import fetch_dashboard_signals, extract_signal_directions
 from storage_pg import StoragePG as Storage, get_storage
 from semantic_store import (
@@ -80,7 +79,6 @@ storage         = get_storage()
 ensemble        = EnsemblePredictor(config.initial_weights)
 lr_strategy     = LinearRegressionChannel()
 feature_engine  = FeatureEngine()
-polymarket_feed = PolymarketFeed(poll_interval=1.0)
 
 # Read max stored bar count so window_count persists across restarts
 _ds_bar_init: int = 0
@@ -989,7 +987,7 @@ async def _run_full_prediction(prices, is_force=False):
                 window_start_time=window_start_time,
                 window_end_time=window_start_time + config.window_duration_seconds,
                 window_start_price=window_start_price,
-                ensemble_result=pred, polymarket_slug=polymarket_feed.active_slug,
+                ensemble_result=pred, polymarket_slug=None,
                 dashboard_signals=dashboard_signals,
                 indicator_accuracy=indicator_acc_full,
                 ensemble_weights=ensemble.get_weights(),

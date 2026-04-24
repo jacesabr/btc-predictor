@@ -2854,7 +2854,6 @@ class DeepSeekPredictor:
         self.window_count += 1
         t0 = time.time()
 
-        polymarket_url   = (f"https://polymarket.com/event/{polymarket_slug}" if polymarket_slug else "")
         window_start_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(window_start_time))
         window_end_str   = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(window_start_time + 300))
 
@@ -2887,7 +2886,7 @@ class DeepSeekPredictor:
             return {
                 "signal": "ERROR", "confidence": 0, "reasoning": error_msg,
                 "data_received": "", "data_requests": "", "narrative": "", "free_observation": "",
-                "raw_response": "", "full_prompt": prompt, "polymarket_url": polymarket_url,
+                "raw_response": "", "full_prompt": prompt,
                 "window_start": window_start_str, "window_end": window_end_str,
                 "latency_ms": int((time.time() - t0) * 1000), "completed_at": time.time(),
                 "window_count": self.window_count,
@@ -2918,7 +2917,7 @@ class DeepSeekPredictor:
             "data_received": data_received, "data_requests": data_requests,
             "narrative": narrative, "free_observation": free_observation,
             "raw_response": raw_response, "full_prompt": prompt,
-            "polymarket_url": polymarket_url, "window_start": window_start_str,
+            "window_start": window_start_str,
             "window_end": window_end_str, "latency_ms": latency_ms,
             "completed_at": time.time(), "window_count": self.window_count,
         }

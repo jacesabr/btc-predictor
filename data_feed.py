@@ -1,15 +1,13 @@
 """
 Data Feed
 =========
-Three data sources bundled together:
+Two data sources bundled together:
 
   BinanceCollector — polls BTCUSDT spot price every poll_interval seconds via REST.
   FeatureEngine    — computes RSI, MACD, Bollinger, EMAs, VWAP, OBV, volatility, etc.
-  PolymarketFeed   — polls the BTC Up/Down 5-minute Polymarket market for crowd odds.
 """
 
 import asyncio
-import json
 import logging
 import time
 from dataclasses import dataclass
@@ -360,136 +358,3 @@ class FeatureEngine:
             v = float(ohlcv[i][5])
             obv += v if c > cp else (-v if c < cp else 0.0)
         return obv
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# PolymarketFeed
-# ══════════════════════════════════════════════════════════════════════════════
-
-GAMMA_API = "https://gamma-api.polymarket.com"
-
-
-class PolymarketFeed:
-    """
-    Polls the Polymarket BTC Up/Down 5-minute prediction market.
-    Slug: btc-updown-5m-{window_start_unix}
-    """
-
-    def __init__(self, poll_interval: float = 5.0):
-        self.poll_interval  = poll_interval
-        self.yes_price:     float = 0.5
-        self.implied_prob:  float = 0.5
-        self.market_odds:   float = 1.0
-        self.market_question: Optional[str] = None
-        self.volume_24hr:   float = 0.0
-        self.open_interest: float = 0.0
-        self.liquidity:     float = 0.0
-        self.active_slug:   Optional[str] = None
-        self._last_update:  float = 0.0
-        self._running = False
-        self._warned_window: int = 0  # throttle "no active market" warning per 5m window
-
-    @property
-    def is_live(self) -> bool:
-        return (time.time() - self._last_update) < 30
-
-    def to_dict(self) -> dict:
-        return {
-            "yes_price":       round(self.yes_price, 4),
-            "implied_prob":    round(self.implied_prob, 4),
-            "market_odds":     round(self.market_odds, 4),
-            "market_question": self.market_question,
-            "volume_24hr":     round(self.volume_24hr, 2),
-            "open_interest":   round(self.open_interest, 2),
-            "liquidity":       round(self.liquidity, 2),
-            "is_live":         self.is_live,
-            "last_update":     self._last_update,
-            "active_slug":     self.active_slug,
-            "embed_url":       (
-                f"https://embed.polymarket.com/market?market={self.active_slug}"
-                "&theme=light&chart=true&buttons=true&fit=true"
-                if self.active_slug else None
-            ),
-        }
-
-    async def run(self):
-        self._running = True
-        while self._running:
-            try:
-                await self._poll()
-            except Exception as exc:
-                logger.error("Polymarket feed error: %s", exc)
-            await asyncio.sleep(self.poll_interval)
-
-    async def stop(self):
-        self._running = False
-
-    async def _poll(self):
-        now          = int(time.time())
-        window_start = (now // 300) * 300
-        connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
-        async with aiohttp.ClientSession(connector=connector) as session:
-            for offset in [0, 300, -300]:
-                slug = f"btc-updown-5m-{window_start + offset}"
-                up_price = await self._fetch_slug(session, slug)
-                if up_price is not None:
-                    self.active_slug = slug
-                    was_stale = not self.is_live
-                    self._update_price(up_price)
-                    if was_stale:
-                        logger.info(
-                            "Polymarket: LIVE | %s | UP=%.1f%% odds=1:%.3f OI=$%.0f",
-                            self.market_question, up_price * 100, self.market_odds, self.open_interest,
-                        )
-                    return
-        if self._warned_window != window_start:
-            logger.warning("Polymarket: no active BTC 5-min market found for window %d", window_start)
-            self._warned_window = window_start
-
-    async def _fetch_slug(self, session: aiohttp.ClientSession, slug: str) -> Optional[float]:
-        url = f"{GAMMA_API}/events"
-        try:
-            async with session.get(url, params={"slug": slug}, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status != 200:
-                    return None
-                events = await resp.json()
-        except Exception as exc:
-            logger.debug("Gamma API error for slug %s: %s", slug, exc)
-            return None
-
-        if not events:
-            return None
-        event = events[0]
-        if event.get("closed") or not event.get("active"):
-            return None
-        markets = event.get("markets", [])
-        if not markets:
-            return None
-        market = markets[0]
-        self.market_question = event.get("title") or market.get("question")
-        self.volume_24hr   = float(event.get("volume24hr") or 0)
-        self.open_interest = float(market.get("openInterest") or event.get("openInterest") or 0)
-        self.liquidity     = float(event.get("liquidity") or 0)
-
-        outcomes_raw = market.get("outcomes", "[]")
-        prices_raw   = market.get("outcomePrices", "[]")
-        try:
-            outcomes = json.loads(outcomes_raw) if isinstance(outcomes_raw, str) else outcomes_raw
-            prices   = json.loads(prices_raw)   if isinstance(prices_raw, str)   else prices_raw
-        except Exception:
-            return None
-
-        if not prices:
-            return None
-        for i, outcome in enumerate(outcomes):
-            if str(outcome).upper() in ("UP", "YES", "HIGHER", "RISE"):
-                if i < len(prices):
-                    return float(prices[i])
-        return float(prices[0])
-
-    def _update_price(self, up_price: float):
-        up_price       = max(0.01, min(0.99, up_price))
-        self.yes_price = up_price
-        self.implied_prob = up_price
-        self.market_odds  = (1.0 - up_price) / up_price
-        self._last_update = time.time()

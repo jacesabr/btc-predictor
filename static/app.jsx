@@ -2461,8 +2461,6 @@ function App() {
 
   const [pendingDeepseekReady,  setPendingDeepseekReady]  = useState(false);
   const [pendingDeepseekPred,   setPendingDeepseekPred]   = useState(null);
-  const [historicalAnalysis,    setHistoricalAnalysis]    = useState("");
-  const [historicalContext,     setHistoricalContext]     = useState("");
   const [traderSummary,         setTraderSummary]         = useState(null);
   // Collapsed by default — users said "waiting" section was too much scroll.
   // Keep one dense summary visible with expand toggle for the full list.
@@ -2546,8 +2544,6 @@ function App() {
         if (d.pending_deepseek_prediction)            setPendingDeepseekPred(d.pending_deepseek_prediction);
         if (d.agree_accuracy)                         setAgreeAcc(d.agree_accuracy);
         if (d.pending_deepseek_ready !== undefined)   setPendingDeepseekReady(d.pending_deepseek_ready);
-        if (d.bar_historical_analysis !== undefined)  setHistoricalAnalysis(d.bar_historical_analysis || "");
-        if (d.bar_historical_context !== undefined)   setHistoricalContext(d.bar_historical_context || "");
         if (d.trader_summary !== undefined) {
           // Stabilize reference: only setState when content actually changes.
           // WS delivers the same summary every tick otherwise, and the new
@@ -2608,9 +2604,13 @@ function App() {
         if (d.pending_deepseek_prediction) setPendingDeepseekPred(d.pending_deepseek_prediction);
         if (d.pending_deepseek_ready !== undefined) setPendingDeepseekReady(d.pending_deepseek_ready);
         if (d.deepseek_prediction)         setDeepseekPred(d.deepseek_prediction);
-        if (d.bar_historical_analysis !== undefined) setHistoricalAnalysis(d.bar_historical_analysis || "");
-        if (d.bar_historical_context !== undefined)  setHistoricalContext(d.bar_historical_context || "");
-        if (d.trader_summary !== undefined)          setTraderSummary(d.trader_summary);
+        // Only accept TRUTHY trader_summary updates. If the backend briefly
+        // reports null (new bar open, Venice hasn't generated yet), DON'T
+        // clobber the previous bar's summary — that was causing the
+        // "analysis appearing and disappearing" flash at every bar
+        // boundary. The WS handler bound at line ~2551 also guards via
+        // JSON-equality; this poll now mirrors that safety.
+        if (d.trader_summary)                        setTraderSummary(d.trader_summary);
         if (d.service_unavailable !== undefined)     setServiceUnavailable(!!d.service_unavailable);
         if (d.service_unavailable_reason !== undefined) setServiceUnavailReason(d.service_unavailable_reason || "");
       } catch(_) {}
@@ -3627,9 +3627,10 @@ function App() {
         {tab==="live" && (
           <div style={{ display:"flex", gap:6, height:"100%" }}>
 
-            {/* LEFT: Chart — takes 60% so it's the dominant viewport item
-                (user is watching price first, reading analysis second). */}
-            <div style={{ flex:"0 0 60%", minWidth:0, display:"flex", flexDirection:"column" }}>
+            {/* LEFT: Chart — 50/50 split with analysis. Chart is still the
+                priority viewport item but the analysis column now gets
+                enough room to breathe. */}
+            <div style={{ flex:"0 0 50%", minWidth:0, display:"flex", flexDirection:"column" }}>
               <div style={{ ...card, flex:1, display:"flex", flexDirection:"column", minHeight:0 }}>
                 <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1.5,
                   textTransform:"uppercase", marginBottom:4, flexShrink:0 }}>
@@ -3639,12 +3640,12 @@ function App() {
               </div>
             </div>
 
-            {/* RIGHT: Trader briefing + DeepSeek header — compact at 40%
-                of the screen. Removed the 0.87 zoom: now that the column
-                is narrower the content fits natively at 100% zoom, which
-                renders crisper text and keeps the 2-column Bullet layout
-                from re-wrapping because of artificial shrink. */}
-            <div style={{ flex:"0 0 40%", minWidth:0, display:"flex", flexDirection:"column", gap:5, overflowY:"auto" }}>
+            {/* RIGHT: Trader briefing + DeepSeek header — 50% of screen,
+                with a subtle zoom:0.85 to scale everything down ~15% since
+                user noted the text was feeling big at native size. The
+                2-column Bullet layout + 50% width absorbs the scale cleanly
+                (pills don't re-wrap). */}
+            <div style={{ flex:"0 0 50%", minWidth:0, display:"flex", flexDirection:"column", gap:5, overflowY:"auto", zoom:0.85 }}>
 
               {/* ① PREDICTION BAR — DeepSeek only */}
               {(() => {

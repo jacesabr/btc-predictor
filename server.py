@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from engine import (
     config, collector, storage, ensemble, lr_strategy, feature_engine,
-    polymarket_feed, deepseek, binance_klines, current_state, ws_clients,
+    deepseek, binance_klines, current_state, ws_clients,
     STATIC_DIR, CHARTS_DIR,
     _json_safe, _safe_storage, _dashboard_signals_to_preds,
     _pred_for_ws, _run_full_prediction, _run_deepseek,
@@ -91,7 +91,6 @@ app.mount("/charts", StaticFiles(directory=str(CHARTS_DIR)), name="charts")
 async def startup():
     asyncio.create_task(run_collector())
     asyncio.create_task(run_prediction_loop())
-    asyncio.create_task(polymarket_feed.run())
     asyncio.create_task(run_binance_feed())
     asyncio.create_task(run_indicator_refresh())
     asyncio.create_task(run_embedding_audit_loop())
