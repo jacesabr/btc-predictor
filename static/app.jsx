@@ -2993,21 +2993,34 @@ function App() {
                   "lower","ll","lh","weak","short","shorts","down","failing","losing",
                 ]);
                 const BullBearText = ({ text, size, baseColor }) => {
-                  const parts = text.split(/(\s+|[,;:.!?()\[\]])/);
                   // Numeric refs ($X,XXX, X%, X BTC) get bumped one step bigger than the
                   // surrounding prose so the trader's eye latches onto them first.
                   const refSize = size + 2;
+                  // Extract numeric refs whole so commas inside e.g. "$78,375" don't
+                  // split the number in half. Prior approach split on "," at top level
+                  // and rendered "$78" bold + ",375" plain.
+                  const REF = /(\$\d[\d,]*(?:\.\d+)?[kKmM]?|\d+(?:\.\d+)?%|\d+(?:\.\d+)?\s*BTC\b)/gi;
+                  const segments = [];
+                  let last = 0, m;
+                  while ((m = REF.exec(text)) !== null) {
+                    if (m.index > last) segments.push({ k: "prose", t: text.slice(last, m.index) });
+                    segments.push({ k: "ref", t: m[0] });
+                    last = REF.lastIndex;
+                  }
+                  if (last < text.length) segments.push({ k: "prose", t: text.slice(last) });
+                  let key = 0;
+                  const renderProse = (s) => s.split(/(\s+|[,;:.!?()\[\]])/).map((p) => {
+                    const clean = p.toLowerCase().replace(/[^a-z]/g, "");
+                    if (clean && BULL_WORDS.has(clean)) return <strong key={key++} style={{ color:"#16A34A", fontWeight:800 }}>{p}</strong>;
+                    if (clean && BEAR_WORDS.has(clean)) return <strong key={key++} style={{ color:"#DC2626", fontWeight:800 }}>{p}</strong>;
+                    return <span key={key++}>{p}</span>;
+                  });
                   return (
                     <span style={{ fontSize:size, color:baseColor, lineHeight:1.55 }}>
-                      {parts.map((p, i) => {
-                        const clean = p.toLowerCase().replace(/[^a-z]/g, "");
-                        if (clean && BULL_WORDS.has(clean)) return <strong key={i} style={{ color:"#16A34A", fontWeight:800 }}>{p}</strong>;
-                        if (clean && BEAR_WORDS.has(clean)) return <strong key={i} style={{ color:"#DC2626", fontWeight:800 }}>{p}</strong>;
-                        if (/^\$[\d,]+(\.\d+)?(k|K)?$/.test(p) || /^\d+(\.\d+)?%$/.test(p)) {
-                          return <strong key={i} style={{ color:C.text, fontWeight:900, fontSize:refSize }}>{p}</strong>;
-                        }
-                        return <span key={i}>{p}</span>;
-                      })}
+                      {segments.map((seg) => seg.k === "ref"
+                        ? <strong key={key++} style={{ color:C.text, fontWeight:900, fontSize:refSize }}>{seg.t}</strong>
+                        : renderProse(seg.t)
+                      )}
                     </span>
                   );
                 };
