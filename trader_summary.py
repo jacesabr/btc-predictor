@@ -196,6 +196,24 @@ HARD RULES:
   volume, do not invent a neighboring round number as a reversal threshold.
   All numbers must be copied verbatim from the INPUT body; numbers in
   THIS SYSTEM PROMPT are format illustrations, never usable as data.
+- DON'T FLIP TONE FROM A WEAK OBSERVATION. If the observation itself is
+  directionally one-sided (e.g. "spot whales are all buying, 0.63 BTC
+  buys / 0.00 BTC sells"), the bullet MUST be tagged with the MATCHING
+  tone — here, bullish or neutral. Do not manufacture a contrary tone
+  by tacking on "but too small to matter, price will still drop".
+  If the signal is genuinely too small to matter, either:
+    (a) tag the bullet neutral and state the observation as context, OR
+    (b) OMIT the bullet — a microscopic reading that needs a narrative
+        crutch to become a trade signal isn't a trade signal.
+  Bullish observations with bearish tone (and vice-versa) read as broken
+  reasoning to the trader and erode trust in the whole briefing.
+- NO EQUALITY THRESHOLDS ON CONTINUOUS FLOATS. Do not emit
+  `whale_buy == 0.63` or `funding_rate == -0.00161` — equality on a live
+  numeric that ticks continuously is either trivially true right now and
+  false the next tick (brittle) or never true (useless). Use `>=` / `<=`
+  for volume/ratio/rate triggers, and reserve `==` only for regime-
+  boundary values like `BSR == 1.000` where the number has literal
+  semantic meaning (equal buy/sell).
 - NO DEGENERATE THRESHOLDS. Do not emit `taker_buy_volume > 0`, `whale_buy > 0`,
   `open_interest > 0`, or any `> 0` threshold on a quantity that is always
   non-negative. If INPUT says a regime is absent or zero (e.g. "zero taker
@@ -920,6 +938,21 @@ def _norm_conditions(raw: Any, input_canons: Set[str], input_raw: List[str]) -> 
         if (val == 0 or val == 0.0) and metric in _NON_NEGATIVE_METRICS:
             if op in (">", ">=", "=="):
                 notes.append(f"degenerate_trivial_threshold:{metric}{op}{val}")
+                continue
+        # Reject `==` on a continuous float metric where the value isn't a
+        # natural regime boundary. `whale_buy == 0.63` ticks false the
+        # moment the live value moves to 0.70 — brittle and useless. Let
+        # `==` through only for:
+        #   * ratio metrics at their regime boundary (taker_ratio/bsr at 1.0,
+        #     long_short_ratio at 1.0) — these have meaningful semantics
+        #   * integer-like values (price rounds/levels, RSI rounded to int)
+        # For everything else convert to a useful `>=` / `<=` equivalent
+        # would require knowing direction intent, so just drop.
+        if op == "==" and val != 0:
+            _ratio_boundary = metric in ("taker_ratio", "bsr", "long_short_ratio") and abs(val - 1.0) < 0.001
+            _integer_level = (abs(val - round(val)) < 0.001) and metric in ("price", "rsi")
+            if not (_ratio_boundary or _integer_level):
+                notes.append(f"fragile_equality_on_float:{metric}=={val}")
                 continue
         # Magnitude sanity: if Venice picks the wrong metric family but copies
         # a value from INPUT (e.g. "open_interest > 0.5" when the 0.5 was a
