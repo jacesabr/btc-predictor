@@ -80,6 +80,19 @@ def set_flag_callback(fn: Optional[Callable[[str, str, str, Dict[str, Any]], Non
     _flag_callback = fn
 
 
+# ── Embedding audit persistence callback ──────────────────────────
+# Render's container FS is ephemeral, so NDJSON on disk is not durable. Engine
+# registers a sink here that persists each audit to Postgres AND pushes it into
+# current_state so the UI can read it back even if the NDJSON write fails.
+_audit_persist_callback: Optional[Callable[[Dict[str, Any]], None]] = None
+
+
+def set_audit_persist_callback(fn: Optional[Callable[[Dict[str, Any]], None]]) -> None:
+    """Register a sink that receives every successful embedding audit result."""
+    global _audit_persist_callback
+    _audit_persist_callback = fn
+
+
 def _emit_flags(source: str, raw_text: str, **ctx: Any) -> None:
     """Scan a DeepSeek response for flagged content and dispatch to the registered sink.
 
@@ -2955,16 +2968,36 @@ FULL_ANALYSIS:
         },
     }
 
+    # ── Durable persistence (Postgres) ────────────────────────────
+    # Primary path — the UI reads from here. Runs BEFORE the NDJSON write so a
+    # filesystem failure can't prevent the audit from reaching the dashboard.
+    if _audit_persist_callback is not None:
+        try:
+            _audit_persist_callback(result)
+        except Exception:
+            logger.exception("Embedding audit persist callback FAILED")
+
+    # ── Best-effort local caches ──────────────────────────────────
     _save(_AUDIT_LAST_RAW, f"# {ts_str}  elapsed={elapsed:.1f}s\n\n{raw}")
     try:
         _AUDIT_LOG.parent.mkdir(parents=True, exist_ok=True)
         line = json.dumps(result, default=str, ensure_ascii=False) + "\n"
         with _AUDIT_LOG.open("a", encoding="utf-8") as f:
             f.write(line)
-    except Exception:
-        # Surface the full traceback — this was silently failing and leaving the
-        # NDJSON log at 0 bytes even though last_raw.txt was being updated.
-        logger.exception("Embedding audit log write FAILED — audit_log.ndjson not updated")
+    except Exception as exc:
+        # NDJSON is a local cache only — Postgres is authoritative. Still log
+        # and surface as an ERROR event so the failure is visible in /errors
+        # instead of only in Render's runtime logs.
+        logger.exception("Embedding audit NDJSON write failed (non-fatal, PG is primary)")
+        if _flag_callback:
+            try:
+                _flag_callback(
+                    "embedding_audit", "ERROR",
+                    f"audit_log.ndjson write failed: {type(exc).__name__}: {exc}",
+                    {"raw_excerpt": f"path={_AUDIT_LOG}"},
+                )
+            except Exception:
+                pass
 
     logger.info("Embedding audit %.1fs | %s | %d issues | %d suggestions",
                 elapsed, audit_signal, len(issues), len(suggestions))

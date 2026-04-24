@@ -53,8 +53,8 @@ from ai import (
     DeepSeekPredictor, run_specialists, run_historical_analyst,
     run_binance_expert, SPECIALIST_KEYS, _build_current_bar, run_postmortem,
     embed_text, _bar_embed_text, CohereUnavailableError,
-    run_embedding_audit, load_embedding_audit_log,
-    set_flag_callback,
+    run_embedding_audit, load_embedding_audit_log as _load_embedding_audit_ndjson,
+    set_flag_callback, set_audit_persist_callback,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -175,6 +175,48 @@ def _hydrate_error_log_from_db() -> None:
 
 _hydrate_error_log_from_db()
 set_flag_callback(_record_deepseek_flag)
+
+
+def _record_embedding_audit(audit: dict) -> None:
+    """Persist an embedding audit to Postgres and push it into current_state so
+    the /api/embedding-audit poller sees it immediately — regardless of whether
+    the NDJSON write (ephemeral FS) succeeded."""
+    try:
+        current_state["embedding_audit_log"] = [
+            audit,
+            *current_state.get("embedding_audit_log", [])[:19],
+        ]
+    except Exception:
+        logger.exception("push to current_state.embedding_audit_log failed")
+    try:
+        ok = storage.store_embedding_audit(audit)
+        if not ok:
+            logger.warning("embedding audit PG insert returned False")
+    except Exception:
+        logger.exception("embedding audit PG insert raised")
+
+
+set_audit_persist_callback(_record_embedding_audit)
+
+
+def load_embedding_audit_log(n: int = 20) -> list:
+    """Read recent audits for the dashboard. Postgres is primary (durable across
+    deploys); current_state fills in anything not yet committed; the local
+    NDJSON cache is last-resort fallback for backwards compatibility.
+    """
+    try:
+        rows = storage.load_embedding_audits(limit=n)
+        if rows:
+            return rows
+    except Exception:
+        logger.exception("load_embedding_audits (PG) failed — falling back")
+    live = current_state.get("embedding_audit_log") or []
+    if live:
+        return live[:n]
+    try:
+        return _load_embedding_audit_ndjson(n=n)
+    except Exception:
+        return []
 
 def _trigger_embedding_bootstrap():
     """Startup: count unembedded RESOLVED bars and log a warning event if any.
@@ -1366,12 +1408,9 @@ async def run_embedding_audit_loop():
 
             history = _safe_storage(load_pattern_history, default=[])
             audit_result = await run_embedding_audit(config.deepseek_api_key, history)
-
+            # Persistence + current_state push are handled by the
+            # set_audit_persist_callback hook — see _record_embedding_audit.
             if audit_result:
-                current_state["embedding_audit_log"] = [
-                    audit_result,
-                    *current_state.get("embedding_audit_log", [])[:19]
-                ]
                 logger.info("Embedding audit completed: %s", audit_result.get("audit_signal"))
             else:
                 logger.warning("Embedding audit failed or was skipped")

@@ -130,6 +130,23 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_logged_at ON events (logged_at DESC);
 CREATE INDEX IF NOT EXISTS idx_events_kind_logged_at ON events (kind, logged_at DESC);
+
+-- Embedding pipeline audit log. Persisted in Postgres (not the ephemeral
+-- container FS) so the UI can read audit history after any Render redeploy.
+CREATE TABLE IF NOT EXISTS embedding_audits (
+    id             BIGSERIAL PRIMARY KEY,
+    logged_at      DOUBLE PRECISION NOT NULL,
+    timestamp_str  TEXT NOT NULL,
+    elapsed_s      DOUBLE PRECISION,
+    audit_signal   TEXT,
+    summary        TEXT,
+    issues         JSONB,
+    suggestions    JSONB,
+    full_analysis  TEXT,
+    stats          JSONB,
+    raw            TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_embedding_audits_logged_at ON embedding_audits (logged_at DESC);
 """
 
 
@@ -727,6 +744,69 @@ class StoragePG:
             return [dict(r) for r in rows]
         except Exception as exc:
             logger.warning("load_recent_events failed: %s", exc)
+            return []
+        finally:
+            _put(conn)
+
+    def store_embedding_audit(self, audit: Dict) -> bool:
+        """Persist one embedding audit result. Returns True on success."""
+        conn = _conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO embedding_audits "
+                    "(logged_at, timestamp_str, elapsed_s, audit_signal, summary, "
+                    " issues, suggestions, full_analysis, stats, raw) "
+                    "VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s, %s::jsonb, %s)",
+                    (
+                        float(audit.get("timestamp") or time.time()),
+                        str(audit.get("timestamp_str") or ""),
+                        float(audit.get("elapsed_s") or 0.0),
+                        str(audit.get("audit_signal") or ""),
+                        str(audit.get("summary") or ""),
+                        json.dumps(audit.get("issues") or [], default=str, ensure_ascii=False),
+                        json.dumps(audit.get("suggestions") or [], default=str, ensure_ascii=False),
+                        str(audit.get("full_analysis") or ""),
+                        json.dumps(audit.get("stats") or {}, default=str, ensure_ascii=False),
+                        str(audit.get("raw") or ""),
+                    ),
+                )
+            conn.commit()
+            return True
+        except Exception as exc:
+            logger.warning("store_embedding_audit failed: %s", exc)
+            return False
+        finally:
+            _put(conn)
+
+    def load_embedding_audits(self, limit: int = 20) -> List[Dict]:
+        """Return recent embedding audits (newest first)."""
+        conn = _conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT logged_at, timestamp_str, elapsed_s, audit_signal, summary, "
+                    "       issues, suggestions, full_analysis, stats, raw "
+                    "FROM embedding_audits ORDER BY logged_at DESC LIMIT %s",
+                    (limit,),
+                )
+                rows = cur.fetchall()
+            result = []
+            for r in rows:
+                d = dict(r)
+                # psycopg2 returns JSONB as dict/list already, but be defensive
+                for k in ("issues", "suggestions", "stats"):
+                    v = d.get(k)
+                    if isinstance(v, str):
+                        try:
+                            d[k] = json.loads(v)
+                        except Exception:
+                            pass
+                d["timestamp"] = d.pop("logged_at", 0.0)
+                result.append(d)
+            return result
+        except Exception as exc:
+            logger.warning("load_embedding_audits failed: %s", exc)
             return []
         finally:
             _put(conn)
