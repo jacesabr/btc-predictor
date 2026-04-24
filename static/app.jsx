@@ -2854,6 +2854,400 @@ function App() {
     () => (pendingDeepseekReady && pendingDeepseekPred) ? pendingDeepseekPred : deepseekPred,
     [pendingDeepseekReady, pendingDeepseekPred, deepseekPred]
   );
+
+  // briefingJSX — memoized rendering of the trader briefing. Computed once per
+  // meaningful state change, cached across 500ms timer ticks so the
+  // Bullet/ConditionPill/BullBearText components defined inside the IIFE don't
+  // get re-instantiated on every render (root cause of the "entire tab flashes"
+  // symptom). `timeLeft` intentionally OMITTED from deps — the Closes-badge
+  // color in the status strip may lag up to 500ms, an acceptable trade for
+  // component-identity stability.
+  const briefingJSX = useMemo(() => {
+    const BULL_WORDS = new Set([
+      "bullish","uptrend","upside","upward","breakout","bounce","rally","surge",
+      "buyers","buying","accumulation","accumulating","support","higher","hh","hl",
+      "strong","long","longs","rising","rose","up","aligned","holding",
+    ]);
+    const BEAR_WORDS = new Set([
+      "bearish","downtrend","downside","downward","breakdown","rejection","selloff",
+      "drop","drops","falling","fell","sellers","selling","distribution","resistance",
+      "lower","ll","lh","weak","short","shorts","down","failing","losing",
+    ]);
+    const BullBearText = ({ text, size, baseColor }) => {
+      const refSize = size + 2;
+      const REF = /(\$\d[\d,]*(?:\.\d+)?[kKmM]?|\d+(?:\.\d+)?%|\d+(?:\.\d+)?\s*BTC\b)/gi;
+      const segments = [];
+      let last = 0, m;
+      while ((m = REF.exec(text)) !== null) {
+        if (m.index > last) segments.push({ k: "prose", t: text.slice(last, m.index) });
+        segments.push({ k: "ref", t: m[0] });
+        last = REF.lastIndex;
+      }
+      if (last < text.length) segments.push({ k: "prose", t: text.slice(last) });
+      let key = 0;
+      return (
+        <span style={{ fontSize:size, color:baseColor, lineHeight:1.55 }}>
+          {segments.map((seg) => seg.k === "ref"
+            ? <strong key={key++} style={{ color:C.text, fontWeight:900, fontSize:refSize }}>{seg.t}</strong>
+            : <span key={key++}>{seg.t}</span>
+          )}
+        </span>
+      );
+    };
+    const fmt = {
+      btc:  (v) => `${v.toFixed(1)} BTC`,
+      usd:  (v) => `$${v.toLocaleString(undefined,{maximumFractionDigits:0})}`,
+      pct:  (v) => `${v.toFixed(2)}%`,
+      num:  (v) => v.toFixed(2),
+    };
+    const ds     = (backendSnap?.snapshot?.dashboard_signals) || {};
+    const spb    = ds.spot_perp_basis;
+    const cvdBlk = ds.cvd;
+    const obFull = ds.order_book;
+    const skew   = ds.deribit_skew_term;
+    const metric = (m) => {
+      switch (m) {
+        case "price":             return price != null ? { v: price, f: fmt.usd } : null;
+        case "price_change_pct":  return (price != null && winStartPrice) ? { v: (price - winStartPrice) / winStartPrice * 100, f: fmt.pct } : null;
+        case "taker_buy_volume":  return tk?.bv  != null ? { v: tk.bv,  f: fmt.btc } : null;
+        case "taker_sell_volume": return tk?.sv  != null ? { v: tk.sv,  f: fmt.btc } : null;
+        case "taker_volume":      return tk?.bv!=null && tk?.sv!=null ? { v: tk.bv + tk.sv, f: fmt.btc } : null;
+        case "taker_ratio":       return tk?.bsr != null ? { v: tk.bsr, f: fmt.num } : null;
+        case "bid_imbalance":     return (obFull?.imbalance_05pct_pct != null) ? { v: obFull.imbalance_05pct_pct, f: fmt.pct } : (ob?.imb != null ? { v: ob.imb, f: fmt.pct } : null);
+        case "ask_imbalance":     return (obFull?.imbalance_05pct_pct != null) ? { v: -obFull.imbalance_05pct_pct, f: fmt.pct } : (ob?.imb != null ? { v: -ob.imb, f: fmt.pct } : null);
+        case "funding_rate":      return oif?.fr != null ? { v: oif.fr*100, f: fmt.pct } : null;
+        case "open_interest":     return oif?.oi != null ? { v: oif.oi, f: fmt.btc } : null;
+        case "rsi":               return strategies?.rsi?.value != null ? { v: parseFloat(strategies.rsi.value), f: fmt.num } : null;
+        case "long_short_ratio":  return ls?.lsr != null ? { v: ls.lsr, f: fmt.num } : null;
+        case "basis_pct":         return spb?.basis_pct != null ? { v: spb.basis_pct, f: fmt.pct } : null;
+        case "perp_cvd_1h":       return cvdBlk?.perp_cvd_1h_btc != null ? { v: cvdBlk.perp_cvd_1h_btc, f: fmt.btc } : null;
+        case "spot_cvd_1h":       return cvdBlk?.spot_cvd_1h_btc != null ? { v: cvdBlk.spot_cvd_1h_btc, f: fmt.btc } : null;
+        case "aggregate_cvd_1h":  return cvdBlk?.aggregate_cvd_1h_btc != null ? { v: cvdBlk.aggregate_cvd_1h_btc, f: fmt.btc } : null;
+        case "bid_depth_05pct":   return obFull?.bid_depth_05pct_btc != null ? { v: obFull.bid_depth_05pct_btc, f: fmt.btc } : null;
+        case "ask_depth_05pct":   return obFull?.ask_depth_05pct_btc != null ? { v: obFull.ask_depth_05pct_btc, f: fmt.btc } : null;
+        case "rr_25d_30d":        return skew?.rr_25d_30d_pct != null ? { v: skew.rr_25d_30d_pct, f: fmt.pct } : null;
+        case "iv_30d_atm":        return skew?.iv_30d_atm_pct != null ? { v: skew.iv_30d_atm_pct, f: fmt.pct } : null;
+        default: return null;
+      }
+    };
+    const opCheck = { ">": (a,b)=>a>b, ">=": (a,b)=>a>=b, "<": (a,b)=>a<b, "<=": (a,b)=>a<=b, "==": (a,b)=>Math.abs(a-b)<1e-9 };
+    const METRIC_META = {
+      price:             { label: "price",      layman: "Current BTC/USDT spot price.",
+                           source: { label: "Binance spot", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+      price_change_pct:  { label: "Δ price",    layman: "% change from this bar's open — positive = up move so far, negative = down.",
+                           source: { label: "Binance spot", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+      taker_buy_volume:  { label: "taker buy",  layman: "BTC bought by traders crossing the ask in the last 5 min (aggressive buyers).",
+                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+      taker_sell_volume: { label: "taker sell", layman: "BTC sold by traders hitting the bid in the last 5 min (aggressive sellers).",
+                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+      taker_volume:      { label: "taker vol",  layman: "Total aggressor volume (buys + sells) in the last 5 min — pure noise when near zero.",
+                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+      taker_ratio:       { label: "BSR",        layman: "Buy-to-sell aggressor ratio. >1 = buyers dominating, <1 = sellers dominating.",
+                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+      bid_imbalance:     { label: "bid imb",    layman: "Positive = more bids than asks in the top 20 book levels. Shows buyer support depth.",
+                           source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+      ask_imbalance:     { label: "ask imb",    layman: "Positive = more asks than bids in the top 20 book levels. Shows seller supply overhead.",
+                           source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+      funding_rate:      { label: "funding",    layman: "% longs pay shorts every 8h. Positive = bullish crowd (longs paying to stay long).",
+                           source: { label: "Coinglass", url: "https://www.coinglass.com/FundingRate" } },
+      open_interest:     { label: "OI",         layman: "Total open BTC perpetual futures contracts on Binance — proxy for speculative engagement.",
+                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinOpenInterest" } },
+      rsi:               { label: "RSI",        layman: "Momentum oscillator. >70 overbought (pullback risk), <30 oversold (bounce risk).",
+                           source: null },
+      long_short_ratio:  { label: "L/S",        layman: "Retail longs vs shorts on Binance futures. Often a contrarian indicator at extremes.",
+                           source: { label: "Coinglass", url: "https://www.coinglass.com/LongShortRatio" } },
+      basis_pct:             { label: "basis",           layman: "Spot-perp premium. Positive = perp trades above spot (bullish speculation).",
+                               source: { label: "Coinglass", url: "https://www.coinglass.com/Basis" } },
+      perp_cvd_1h:           { label: "perp CVD 1h",     layman: "Cumulative volume delta on perp over last hour — net aggressor pressure.",
+                               source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+      spot_cvd_1h:           { label: "spot CVD 1h",     layman: "Spot cumulative volume delta 1h — net buying vs selling at market.",
+                               source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+      aggregate_cvd_1h:      { label: "aggregate CVD 1h",layman: "Cross-venue cumulative volume delta — net aggressor pressure across exchanges.",
+                               source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+      bid_depth_05pct:       { label: "bid depth ±0.5%", layman: "BTC liquidity on the bid side within 0.5% of mid — buyer support wall.",
+                               source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+      ask_depth_05pct:       { label: "ask depth ±0.5%", layman: "BTC liquidity on the ask side within 0.5% of mid — seller supply overhead.",
+                               source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+      rr_25d_30d:            { label: "RR 25d/30d",      layman: "Risk reversal — difference in 25-delta call vs put IV. Positive = bullish skew.",
+                               source: { label: "Deribit", url: "https://metrics.deribit.com" } },
+      iv_30d_atm:            { label: "IV 30d ATM",      layman: "30-day at-the-money implied volatility — market's expected move range.",
+                               source: { label: "Deribit", url: "https://metrics.deribit.com" } },
+      spot_whale_buy_btc:    { label: "whale buy",       layman: "BTC bought in single trades ≥5 BTC on spot — institutional accumulation proxy.",
+                               source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinWhaleIndex" } },
+      spot_whale_sell_btc:   { label: "whale sell",      layman: "BTC sold in single trades ≥5 BTC on spot — institutional distribution proxy.",
+                               source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinWhaleIndex" } },
+      aggregate_funding_rate:{ label: "agg funding",     layman: "Cross-exchange aggregated funding rate — avoids single-venue bias.",
+                               source: { label: "Coinglass", url: "https://www.coinglass.com/FundingRate" } },
+      aggregate_liquidations_usd:{label:"agg liqs",      layman: "Cross-exchange liquidation cascade in USD — forced-close pressure.",
+                               source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinLiquidations" } },
+      oi_velocity_pct:       { label: "OI velocity",     layman: "% change in open interest over 30 min — new positioning entering or exiting.",
+                               source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinOpenInterest" } },
+    };
+    const ConditionPill = ({ cond, stableMet }) => {
+      const live = metric(cond.metric);
+      const thresholdStr = live ? live.f(cond.value) : `${cond.value}${cond.unit||""}`;
+      const rawMet = live ? opCheck[cond.op](live.v, cond.value) : null;
+      const isMet = (stableMet !== undefined && stableMet !== null) ? stableMet : rawMet;
+      const ok = isMet === true;
+      const bad = isMet === false;
+      const borderC = ok ? C.green : bad ? C.red : C.borderSoft;
+      const bgC     = ok ? C.greenBg : bad ? C.redBg : "#F5F5F4";
+      const fgC     = ok ? "#166534" : bad ? "#991B1B" : C.textSec;
+      const icon = !live        ? "ⓘ"
+                 : cond.op === ">" || cond.op === ">=" ? "▲"
+                 : cond.op === "<" || cond.op === "<=" ? "▼"
+                 : "●";
+      const meta    = METRIC_META[cond.metric] || {};
+      const labelText = meta.label || cond.metric.replace(/_/g," ");
+      return (
+        <span style={{ display:"inline-flex", flexDirection:"column", gap:2 }}>
+          <span style={{ display:"inline-flex", alignItems:"center", gap:7,
+            fontSize:13, fontWeight:700, padding:"4px 10px", borderRadius:5,
+            background: bgC, color: fgC, border:`1px solid ${borderC}` }}>
+            <span style={{ fontSize:15, fontWeight:900 }}>{icon}</span>
+            <span>{labelText} {cond.op}{" "}
+              <strong style={{ fontSize:17, color:C.text }}>{thresholdStr}</strong>
+            </span>
+            {live ? (
+              <span style={{ color:C.muted, fontWeight:600 }}>· now{" "}
+                <strong style={{ color:C.text, fontWeight:900, fontSize:17 }}>{live.f(live.v)}</strong>
+              </span>
+            ) : (
+              <span style={{ color:C.muted, fontWeight:600, fontStyle:"italic" }}>· source unavailable</span>
+            )}
+            {meta.source && (
+              <a href={meta.source.url} target="_blank" rel="noopener noreferrer"
+                 title={`Verify at ${meta.source.label}`}
+                 style={{ color:C.muted, textDecoration:"underline",
+                   textDecorationColor:C.borderSoft, textUnderlineOffset:2,
+                   fontSize:10, fontWeight:700, marginLeft:4, letterSpacing:0.3 }}
+                 onClick={(e)=>e.stopPropagation()}>↗ {meta.source.label}</a>
+            )}
+          </span>
+          {meta.layman && (
+            <span style={{ fontSize:12, color:"#475569",
+              marginLeft:10, lineHeight:1.4, maxWidth:520 }}>
+              <span style={{ color:C.muted, fontWeight:700, marginRight:5,
+                fontSize:11, letterSpacing:0.3 }}>ℹ this measures</span>
+              <span style={{ fontStyle:"italic" }}>{meta.layman}</span>
+            </span>
+          )}
+        </span>
+      );
+    };
+    const stableMet = (condKey, rawMet) => {
+      const now = Date.now();
+      const ref = hysteresisRef.current;
+      let t = ref[condKey];
+      if (!t) {
+        t = { committed: rawMet, raw: rawMet, changeAt: now };
+        ref[condKey] = t;
+        return rawMet;
+      }
+      if (rawMet !== t.raw) {
+        t.raw = rawMet;
+        t.changeAt = now;
+      }
+      if (rawMet !== t.committed && (now - t.changeAt) >= HYSTERESIS_MS) {
+        t.committed = rawMet;
+      }
+      return t.committed;
+    };
+    const evalBullet = (b) => {
+      const results = (b.conditions || []).map((c) => {
+        const live = metric(c.metric);
+        const raw  = live ? opCheck[c.op](live.v, c.value) : null;
+        if (raw === null) return { raw: null, stable: null };
+        const key  = `${b.text || ""}|${c.metric}|${c.op}|${c.value}`;
+        return { raw, stable: stableMet(key, raw) };
+      });
+      const hasConds = results.length > 0;
+      const allMet = hasConds && results.every(r => r.stable === true);
+      const actionable = !hasConds || allMet;
+      return { ...b, __allMet: allMet, __hasConds: hasConds, __actionable: actionable, __condResults: results };
+    };
+    const Bullet = ({ tone, text, conditions, if_met, __allMet, __hasConds, __actionable, __condResults }) => {
+      const fired     = __allMet;
+      const active    = __actionable;
+      const phrase         = `${if_met || ""} ${text || ""}`.toLowerCase();
+      const DIRECTIONAL_RE = /\b(long|short|buy|sell|enter|exit|rally|drop|breakout|breakdown|upside|downside|bullish|bearish)\b/;
+      const NEUTRAL_RE     = /\b(indecision|no breakout|no breakdown|no break|not breaking|fails to break|range-?bound|consolidation|consolidating|stand aside|sidelines?|chop(?:py)?|neutral)\b/;
+      const directional    = DIRECTIONAL_RE.test(phrase) && !NEUTRAL_RE.test(phrase);
+      const firedBull = active && tone === "bullish" && directional;
+      const firedBear = active && tone === "bearish" && directional;
+      const pureInfo = active && !__hasConds && tone === "neutral";
+      let bg, border, leftBar, msgColor, actionLabel, actionIcon;
+      if (firedBull)       { bg = "#ECFDF5"; border = C.green;        leftBar = C.green;  msgColor = "#15803D"; actionLabel = "BUY";   actionIcon = "▲"; }
+      else if (firedBear)  { bg = "#FEF2F2"; border = C.red;          leftBar = C.red;    msgColor = "#B91C1C"; actionLabel = "SELL";  actionIcon = "▼"; }
+      else if (pureInfo)   { bg = "#F5F5F4"; border = C.borderSoft;   leftBar = C.muted;  msgColor = "#57534E"; actionLabel = "INFO";  actionIcon = "ⓘ"; }
+      else if (active)     { bg = "#F5F5F4"; border = C.borderSoft;   leftBar = C.muted;  msgColor = "#57534E"; actionLabel = "PAUSE"; actionIcon = "⏸"; }
+      else                 { bg = "#FAFAF9"; border = C.borderSoft;   leftBar = C.muted;  msgColor = C.muted;   actionLabel = null;    actionIcon = "⏸"; }
+      return (
+        <div style={{ display:"flex", flexDirection:"column", gap:6,
+          padding:"8px 12px", borderRadius:6,
+          background: bg,
+          borderLeft: `4px solid ${leftBar}`,
+          border: `1px solid ${border}`,
+          transition: "background-color 400ms ease, border-color 400ms ease, border-left-color 400ms ease" }}>
+          <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+            {actionLabel ? (
+              <span style={{ display:"inline-flex", alignItems:"center", gap:4,
+                fontSize:12, fontWeight:900, color:msgColor,
+                background:"#FFFFFF", border:`2px solid ${border}`,
+                borderRadius:4, padding:"2px 8px", letterSpacing:1.5,
+                flexShrink:0, lineHeight:1.2, minWidth:64, justifyContent:"center" }}>
+                <span style={{ fontSize:13 }}>{actionIcon}</span>
+                {actionLabel}
+              </span>
+            ) : (
+              <span style={{ fontSize:14, color:C.muted, opacity:0.6, flexShrink:0, paddingTop:2, minWidth:64, textAlign:"center" }}>
+                ⏸
+              </span>
+            )}
+            <span style={{ flex:1 }}>
+              <BullBearText text={text} size={12} baseColor={C.text} />
+            </span>
+            {(() => {
+              const conds = conditions || [];
+              const sourced = conds.map(c => METRIC_META[c.metric]).find(m => m && m.source);
+              if (sourced) {
+                return (
+                  <a href={sourced.source.url} target="_blank" rel="noopener noreferrer"
+                     title={`Verify at ${sourced.source.label}`}
+                     onClick={(e)=>e.stopPropagation()}
+                     style={{ color:"#B91C1C", textDecoration:"none",
+                       fontSize:9, fontWeight:800, letterSpacing:1,
+                       padding:"2px 7px", border:"1px solid #DC2626",
+                       borderRadius:3, background:"#FFFFFF",
+                       flexShrink:0, lineHeight:1.3, whiteSpace:"nowrap" }}>
+                    ↗ SOURCE
+                  </a>
+                );
+              }
+              return (
+                <span title="No verifiable source mapped for this claim — flag for audit"
+                      style={{ color:C.muted, fontSize:9, fontWeight:700, letterSpacing:1,
+                        padding:"2px 7px", border:`1px dashed ${C.muted}`,
+                        borderRadius:3, background:"transparent",
+                        flexShrink:0, lineHeight:1.3, whiteSpace:"nowrap", fontStyle:"italic" }}>
+                  ? UNKNOWN
+                </span>
+              );
+            })()}
+          </div>
+          {__hasConds && (
+            <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginLeft:28 }}>
+              {conditions.map((c, i) => (
+                <ConditionPill key={i} cond={c}
+                  stableMet={(__condResults && __condResults[i]) ? __condResults[i].stable : undefined} />
+              ))}
+            </div>
+          )}
+          {if_met && (
+            <div style={{ marginLeft:28, marginTop:3, lineHeight:1.4,
+              display:"flex", flexWrap:"wrap", alignItems:"baseline", gap:6 }}>
+              <span style={{ fontSize:15, fontWeight:900, color:C.text, letterSpacing:0.3 }}>
+                {fired ? "→ what this means:" : "→ if conditions fire:"}
+              </span>
+              <span style={{
+                fontSize: fired ? 14 : 12,
+                fontWeight: fired ? 800 : 600,
+                color: fired ? msgColor : C.textSec,
+                fontStyle: fired ? "normal" : "italic" }}>
+                {if_met}
+              </span>
+            </div>
+          )}
+        </div>
+      );
+    };
+    const briefingReady = traderSummary && pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR";
+    return (
+      <div style={{ width:"100%", minWidth:360, display:"flex", flexDirection:"column", gap:8 }}>
+        {briefingReady && (
+          <div style={{ ...card, flexShrink:0, padding:"14px 16px",
+            background:"#FAFAF9", border:`2px solid ${C.borderSoft}` }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+              <span style={{ fontSize:12, fontWeight:900, color:C.text,
+                letterSpacing:1.2, textTransform:"uppercase" }}>⚡ Trader Briefing</span>
+              <span style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>
+                ~30s read · decision-ready
+              </span>
+            </div>
+            <div style={{ marginBottom: (traderSummary.watch?.length || traderSummary.actions?.length) ? 10 : 0,
+              fontWeight:600 }}>
+              <BullBearText text={traderSummary.edge} size={15} baseColor={C.text} />
+            </div>
+            {(() => {
+              const all = [
+                ...(traderSummary.watch   || []).map(b => ({ ...b, __src: "w" })),
+                ...(traderSummary.actions || []).map(b => ({ ...b, __src: "a" })),
+              ].map(evalBullet);
+              const actionable = all.filter(b => b.__actionable);
+              const waiting    = all.filter(b => !b.__actionable);
+              return (<>
+                {actionable.length > 0 && (
+                  <div style={{ marginTop:10 }}>
+                    <div style={{ fontSize:11, fontWeight:800, color:"#15803D", letterSpacing:1.2,
+                      textTransform:"uppercase", marginBottom:6 }}>Actionable · {actionable.length} live now</div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                      {actionable.map((b, i) => <Bullet key={`act${b.__src}${i}`} {...b} />)}
+                    </div>
+                  </div>
+                )}
+                {waiting.length > 0 && (
+                  <div style={{ marginTop:12 }}>
+                    <button onClick={() => setWaitingOpen(v => !v)}
+                      style={{ width:"100%", display:"flex", alignItems:"center",
+                        justifyContent:"space-between", gap:8,
+                        background:"none", border:"none", padding:"4px 0",
+                        cursor:"pointer", fontFamily:"inherit" }}>
+                      <span style={{ fontSize:11, fontWeight:700, color:C.muted,
+                        letterSpacing:1.2, textTransform:"uppercase" }}>
+                        {waitingOpen ? "▾" : "▸"} Waiting for conditions · {waiting.length}
+                      </span>
+                      <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>
+                        {waitingOpen ? "hide" : "show"}
+                      </span>
+                    </button>
+                    {waitingOpen && (
+                      <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:6 }}>
+                        {waiting.map((b, i) => <Bullet key={`w${b.__src}${i}`} {...b} />)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>);
+            })()}
+          </div>
+        )}
+        {!briefingReady && (
+          <div style={{ ...card, flexShrink:0, padding:"12px 14px",
+            display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
+            <span style={{ fontSize:14, lineHeight:1.4 }}>
+              {pendingDeepseekReady && activeDeepseekPred?.signal==="ERROR" ? (
+                <span style={{ color:C.red, fontWeight:700 }}>⚠️ Analysis error this bar — detail in History tab</span>
+              ) : pendingDeepseekReady && activeDeepseekPred ? (
+                <span style={{ color:C.textSec, fontStyle:"italic" }}>⟳ Preparing trader briefing…</span>
+              ) : (
+                <span style={{ color:C.amber }}>⟳ Analyzing new bar — briefing in ~30–60s</span>
+              )}
+            </span>
+            {barCloseUTC && (
+              <span style={{ fontSize:14, fontWeight:800, color:"#15803D",
+                background:"#F0FDF4", border:"1px solid #86EFAC",
+                borderRadius:5, padding:"3px 10px" }}>
+                Closes {barCloseUTC}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }, [traderSummary, pendingDeepseekReady, activeDeepseekPred, backendSnap,
+      price, winStartPrice, tk, ob, oif, ls, strategies,
+      waitingOpen, barCloseUTC]);
+
   const strats = STRATEGY_META.filter(m=>strategies[m.key]).map(m=>({...m,...strategies[m.key]}));
 
   // Cross-exchange divergence (for microstructure display)
@@ -3060,485 +3454,7 @@ function App() {
                   render exception (bad Venice output, missing metric, etc.) doesn't
                   crash the whole live tab. Trader keeps seeing chart + DeepSeek card. */}
               <ErrorBoundary key="briefing">
-              {(() => {
-                const BULL_WORDS = new Set([
-                  "bullish","uptrend","upside","upward","breakout","bounce","rally","surge",
-                  "buyers","buying","accumulation","accumulating","support","higher","hh","hl",
-                  "strong","long","longs","rising","rose","up","aligned","holding",
-                ]);
-                const BEAR_WORDS = new Set([
-                  "bearish","downtrend","downside","downward","breakdown","rejection","selloff",
-                  "drop","drops","falling","fell","sellers","selling","distribution","resistance",
-                  "lower","ll","lh","weak","short","shorts","down","failing","losing",
-                ]);
-                const BullBearText = ({ text, size, baseColor }) => {
-                  // Keep sentence text a single calm color (driven by the bullet box tone).
-                  // Only numeric refs get bold emphasis so the trader's eye finds the levels
-                  // without a rainbow of green/red word coloring.
-                  const refSize = size + 2;
-                  const REF = /(\$\d[\d,]*(?:\.\d+)?[kKmM]?|\d+(?:\.\d+)?%|\d+(?:\.\d+)?\s*BTC\b)/gi;
-                  const segments = [];
-                  let last = 0, m;
-                  while ((m = REF.exec(text)) !== null) {
-                    if (m.index > last) segments.push({ k: "prose", t: text.slice(last, m.index) });
-                    segments.push({ k: "ref", t: m[0] });
-                    last = REF.lastIndex;
-                  }
-                  if (last < text.length) segments.push({ k: "prose", t: text.slice(last) });
-                  let key = 0;
-                  return (
-                    <span style={{ fontSize:size, color:baseColor, lineHeight:1.55 }}>
-                      {segments.map((seg) => seg.k === "ref"
-                        ? <strong key={key++} style={{ color:C.text, fontWeight:900, fontSize:refSize }}>{seg.t}</strong>
-                        : <span key={key++}>{seg.t}</span>
-                      )}
-                    </span>
-                  );
-                };
-                const toneEmoji = (t) => t==="bullish" ? "🟢" : t==="bearish" ? "🔴" : "⚠️";
-                const toneColor = (t) => t==="bullish" ? C.green : t==="bearish" ? C.red : C.amber;
-                const toneBg    = (t) => t==="bullish" ? C.greenBg : t==="bearish" ? C.redBg : C.amberBg;
-                const toneBorder= (t) => t==="bullish" ? C.greenBorder : t==="bearish" ? C.redBorder : C.amberBorder;
-
-                // Live-value lookup: map each Venice metric name to (current value, formatter,
-                // data-available flag). Anything missing returns null → pill shows "no data".
-                const fmt = {
-                  btc:  (v) => `${v.toFixed(1)} BTC`,
-                  usd:  (v) => `$${v.toLocaleString(undefined,{maximumFractionDigits:0})}`,
-                  pct:  (v) => `${v.toFixed(2)}%`,
-                  num:  (v) => v.toFixed(2),
-                };
-                // Backend microstructure snapshot — lives in the backendSnap payload.
-                // Safe fallback to {} if the snapshot isn't loaded yet, so the metric()
-                // switch falls through to null (pill renders as "no data") rather than
-                // crashing the whole app with ReferenceError.
-                const ds     = (backendSnap?.snapshot?.dashboard_signals) || {};
-                const spb    = ds.spot_perp_basis;
-                const cvdBlk = ds.cvd;
-                const obFull = ds.order_book;
-                const skew   = ds.deribit_skew_term;
-                const metric = (m) => {
-                  switch (m) {
-                    case "price":             return price != null ? { v: price, f: fmt.usd } : null;
-                    case "price_change_pct":  return (price != null && winStartPrice) ? { v: (price - winStartPrice) / winStartPrice * 100, f: fmt.pct } : null;
-                    case "taker_buy_volume":  return tk?.bv  != null ? { v: tk.bv,  f: fmt.btc } : null;
-                    case "taker_sell_volume": return tk?.sv  != null ? { v: tk.sv,  f: fmt.btc } : null;
-                    case "taker_volume":      return tk?.bv!=null && tk?.sv!=null ? { v: tk.bv + tk.sv, f: fmt.btc } : null;
-                    case "taker_ratio":       return tk?.bsr != null ? { v: tk.bsr, f: fmt.num } : null;
-                    case "bid_imbalance":     return (obFull?.imbalance_05pct_pct != null) ? { v: obFull.imbalance_05pct_pct, f: fmt.pct } : (ob?.imb != null ? { v: ob.imb, f: fmt.pct } : null);
-                    case "ask_imbalance":     return (obFull?.imbalance_05pct_pct != null) ? { v: -obFull.imbalance_05pct_pct, f: fmt.pct } : (ob?.imb != null ? { v: -ob.imb, f: fmt.pct } : null);
-                    case "funding_rate":      return oif?.fr != null ? { v: oif.fr*100, f: fmt.pct } : null;
-                    case "open_interest":     return oif?.oi != null ? { v: oif.oi, f: fmt.btc } : null;
-                    case "rsi":               return strategies?.rsi?.value != null ? { v: parseFloat(strategies.rsi.value), f: fmt.num } : null;
-                    case "long_short_ratio":  return ls?.lsr != null ? { v: ls.lsr, f: fmt.num } : null;
-                    // Phase 2.5 / 6.5 additions (bar-level)
-                    case "basis_pct":         return spb?.basis_pct != null ? { v: spb.basis_pct, f: fmt.pct } : null;
-                    case "perp_cvd_1h":       return cvdBlk?.perp_cvd_1h_btc != null ? { v: cvdBlk.perp_cvd_1h_btc, f: fmt.btc } : null;
-                    case "spot_cvd_1h":       return cvdBlk?.spot_cvd_1h_btc != null ? { v: cvdBlk.spot_cvd_1h_btc, f: fmt.btc } : null;
-                    case "aggregate_cvd_1h":  return cvdBlk?.aggregate_cvd_1h_btc != null ? { v: cvdBlk.aggregate_cvd_1h_btc, f: fmt.btc } : null;
-                    case "bid_depth_05pct":   return obFull?.bid_depth_05pct_btc != null ? { v: obFull.bid_depth_05pct_btc, f: fmt.btc } : null;
-                    case "ask_depth_05pct":   return obFull?.ask_depth_05pct_btc != null ? { v: obFull.ask_depth_05pct_btc, f: fmt.btc } : null;
-                    case "rr_25d_30d":        return skew?.rr_25d_30d_pct != null ? { v: skew.rr_25d_30d_pct, f: fmt.pct } : null;
-                    case "iv_30d_atm":        return skew?.iv_30d_atm_pct != null ? { v: skew.iv_30d_atm_pct, f: fmt.pct } : null;
-                    default: return null;
-                  }
-                };
-                const opCheck = { ">": (a,b)=>a>b, ">=": (a,b)=>a>=b, "<": (a,b)=>a<b, "<=": (a,b)=>a<=b, "==": (a,b)=>Math.abs(a-b)<1e-9 };
-                // Metric metadata: short label, layman one-liner, live-source link.
-                const METRIC_META = {
-                  price:             { label: "price",      layman: "Current BTC/USDT spot price.",
-                                       source: { label: "Binance spot", url: "https://www.binance.com/en/trade/BTC_USDT" } },
-                  price_change_pct:  { label: "Δ price",    layman: "% change from this bar's open — positive = up move so far, negative = down.",
-                                       source: { label: "Binance spot", url: "https://www.binance.com/en/trade/BTC_USDT" } },
-                  taker_buy_volume:  { label: "taker buy",  layman: "BTC bought by traders crossing the ask in the last 5 min (aggressive buyers).",
-                                       source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
-                  taker_sell_volume: { label: "taker sell", layman: "BTC sold by traders hitting the bid in the last 5 min (aggressive sellers).",
-                                       source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
-                  taker_volume:      { label: "taker vol",  layman: "Total aggressor volume (buys + sells) in the last 5 min — pure noise when near zero.",
-                                       source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
-                  taker_ratio:       { label: "BSR",        layman: "Buy-to-sell aggressor ratio. >1 = buyers dominating, <1 = sellers dominating.",
-                                       source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
-                  bid_imbalance:     { label: "bid imb",    layman: "Positive = more bids than asks in the top 20 book levels. Shows buyer support depth.",
-                                       source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
-                  ask_imbalance:     { label: "ask imb",    layman: "Positive = more asks than bids in the top 20 book levels. Shows seller supply overhead.",
-                                       source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
-                  funding_rate:      { label: "funding",    layman: "% longs pay shorts every 8h. Positive = bullish crowd (longs paying to stay long).",
-                                       source: { label: "Coinglass", url: "https://www.coinglass.com/FundingRate" } },
-                  open_interest:     { label: "OI",         layman: "Total open BTC perpetual futures contracts on Binance — proxy for speculative engagement.",
-                                       source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinOpenInterest" } },
-                  rsi:               { label: "RSI",        layman: "Momentum oscillator. >70 overbought (pullback risk), <30 oversold (bounce risk).",
-                                       source: null },
-                  long_short_ratio:  { label: "L/S",        layman: "Retail longs vs shorts on Binance futures. Often a contrarian indicator at extremes.",
-                                       source: { label: "Coinglass", url: "https://www.coinglass.com/LongShortRatio" } },
-                  // Niche metrics DeepSeek may cite — no live frontend feed yet, but the
-                  // source link still points to the upstream dashboard where the signal
-                  // originated so the trader can verify DeepSeek's claim.
-                  basis_pct:             { label: "basis",           layman: "Spot-perp premium. Positive = perp trades above spot (bullish speculation).",
-                                           source: { label: "Coinglass", url: "https://www.coinglass.com/Basis" } },
-                  perp_cvd_1h:           { label: "perp CVD 1h",     layman: "Cumulative volume delta on perp over last hour — net aggressor pressure.",
-                                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
-                  spot_cvd_1h:           { label: "spot CVD 1h",     layman: "Spot cumulative volume delta 1h — net buying vs selling at market.",
-                                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
-                  aggregate_cvd_1h:      { label: "aggregate CVD 1h",layman: "Cross-venue cumulative volume delta — net aggressor pressure across exchanges.",
-                                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
-                  bid_depth_05pct:       { label: "bid depth ±0.5%", layman: "BTC liquidity on the bid side within 0.5% of mid — buyer support wall.",
-                                           source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
-                  ask_depth_05pct:       { label: "ask depth ±0.5%", layman: "BTC liquidity on the ask side within 0.5% of mid — seller supply overhead.",
-                                           source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
-                  rr_25d_30d:            { label: "RR 25d/30d",      layman: "Risk reversal — difference in 25-delta call vs put IV. Positive = bullish skew.",
-                                           source: { label: "Deribit", url: "https://metrics.deribit.com" } },
-                  iv_30d_atm:            { label: "IV 30d ATM",      layman: "30-day at-the-money implied volatility — market's expected move range.",
-                                           source: { label: "Deribit", url: "https://metrics.deribit.com" } },
-                  spot_whale_buy_btc:    { label: "whale buy",       layman: "BTC bought in single trades ≥5 BTC on spot — institutional accumulation proxy.",
-                                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinWhaleIndex" } },
-                  spot_whale_sell_btc:   { label: "whale sell",      layman: "BTC sold in single trades ≥5 BTC on spot — institutional distribution proxy.",
-                                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinWhaleIndex" } },
-                  aggregate_funding_rate:{ label: "agg funding",     layman: "Cross-exchange aggregated funding rate — avoids single-venue bias.",
-                                           source: { label: "Coinglass", url: "https://www.coinglass.com/FundingRate" } },
-                  aggregate_liquidations_usd:{label:"agg liqs",      layman: "Cross-exchange liquidation cascade in USD — forced-close pressure.",
-                                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinLiquidations" } },
-                  oi_velocity_pct:       { label: "OI velocity",     layman: "% change in open interest over 30 min — new positioning entering or exiting.",
-                                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinOpenInterest" } },
-                };
-                const metricLabel = Object.fromEntries(Object.entries(METRIC_META).map(([k,v]) => [k, v.label]));
-
-                // Condition pill: shows current live value, threshold, and ✓/✗ whether met.
-                // Neutral grey if live data isn't available (don't lie with ✓).
-                const ConditionPill = ({ cond, stableMet }) => {
-                  const live = metric(cond.metric);
-                  const thresholdStr = live ? live.f(cond.value) : `${cond.value}${cond.unit||""}`;
-                  // Use the hysteresis-filtered stable state from the parent Bullet if
-                  // provided (prevents flickering). Fall back to raw live check only if
-                  // the parent didn't supply it (e.g. no live feed at all).
-                  const rawMet = live ? opCheck[cond.op](live.v, cond.value) : null;
-                  const isMet = (stableMet !== undefined && stableMet !== null) ? stableMet : rawMet;
-                  const ok = isMet === true;
-                  const bad = isMet === false;
-                  // No live feed for this metric → still show the threshold (preserves
-                  // DeepSeek's intelligence) but mark "source unavailable" so the
-                  // trader doesn't mistake it for a verified signal.
-                  const borderC = ok ? C.green : bad ? C.red : C.borderSoft;
-                  const bgC     = ok ? C.greenBg : bad ? C.redBg : "#F5F5F4";
-                  const fgC     = ok ? "#166534" : bad ? "#991B1B" : C.textSec;
-                  // Pill icon reflects the op direction, not a binary checkmark:
-                  //   > / >= → ▲ (threshold is "above X")
-                  //   < / <= → ▼ (threshold is "below X")
-                  //   ==     → ● (equality / at level)
-                  //   no live source → ⓘ (info only, can't verify)
-                  const icon = !live        ? "ⓘ"
-                             : cond.op === ">" || cond.op === ">=" ? "▲"
-                             : cond.op === "<" || cond.op === "<=" ? "▼"
-                             : "●";
-                  const meta    = METRIC_META[cond.metric] || {};
-                  const labelText = meta.label || cond.metric.replace(/_/g," ");
-                  return (
-                    <span style={{ display:"inline-flex", flexDirection:"column", gap:2 }}>
-                      {/* Pill — big bold numbers, source ↗ */}
-                      <span style={{ display:"inline-flex", alignItems:"center", gap:7,
-                        fontSize:13, fontWeight:700, padding:"4px 10px", borderRadius:5,
-                        background: bgC, color: fgC, border:`1px solid ${borderC}` }}>
-                        <span style={{ fontSize:15, fontWeight:900 }}>{icon}</span>
-                        <span>{labelText} {cond.op}{" "}
-                          <strong style={{ fontSize:17, color:C.text }}>{thresholdStr}</strong>
-                        </span>
-                        {live ? (
-                          <span style={{ color:C.muted, fontWeight:600 }}>· now{" "}
-                            <strong style={{ color:C.text, fontWeight:900, fontSize:17 }}>{live.f(live.v)}</strong>
-                          </span>
-                        ) : (
-                          <span style={{ color:C.muted, fontWeight:600, fontStyle:"italic" }}>· source unavailable</span>
-                        )}
-                        {meta.source && (
-                          <a href={meta.source.url} target="_blank" rel="noopener noreferrer"
-                             title={`Verify at ${meta.source.label}`}
-                             style={{ color:C.muted, textDecoration:"underline",
-                               textDecorationColor:C.borderSoft, textUnderlineOffset:2,
-                               fontSize:10, fontWeight:700, marginLeft:4, letterSpacing:0.3 }}
-                             onClick={(e)=>e.stopPropagation()}>↗ {meta.source.label}</a>
-                        )}
-                      </span>
-                      {/* Per-pill metric DEFINITION (what the number represents). Kept
-                            distinct from the bullet-level "→ what this means:" (trade
-                            consequence) to avoid confusing the two. Uses a small ℹ label
-                            so the trader reads it as "here's what this metric is". */}
-                      {meta.layman && (
-                        <span style={{ fontSize:12, color:"#475569",
-                          marginLeft:10, lineHeight:1.4, maxWidth:520 }}>
-                          <span style={{ color:C.muted, fontWeight:700, marginRight:5,
-                            fontSize:11, letterSpacing:0.3 }}>ℹ this measures</span>
-                          <span style={{ fontStyle:"italic" }}>{meta.layman}</span>
-                        </span>
-                      )}
-                    </span>
-                  );
-                };
-
-                // Evaluate conditions → firing state per bullet.
-                // Bucketing rules:
-                //   - hasConds + all met           → ACTIONABLE (fired, green/red)
-                //   - no conditions at all         → ACTIONABLE (immediate narrative, the trader
-                //     should act on NOW — e.g. "stand aside, no edge"; these have no trigger
-                //     to wait on so they're always "live advice")
-                //   - hasConds + not all met       → POTENTIAL (waiting for trigger)
-                // Hysteresis helper: returns a STABLE met-state for a single condition.
-                // Raw met/unmet from live lookup flips instantly, but stableMet only
-                // commits to a new state after it has held continuously for HYSTERESIS_MS.
-                // Prevents the bullet from toggling ACTIONABLE ↔ WAITING every second
-                // when a live value is bouncing right at its threshold.
-                const stableMet = (condKey, rawMet) => {
-                  const now = Date.now();
-                  const ref = hysteresisRef.current;
-                  let t = ref[condKey];
-                  if (!t) {
-                    t = { committed: rawMet, raw: rawMet, changeAt: now };
-                    ref[condKey] = t;
-                    return rawMet;
-                  }
-                  // raw value changed → reset the stability clock
-                  if (rawMet !== t.raw) {
-                    t.raw = rawMet;
-                    t.changeAt = now;
-                  }
-                  // if raw has held steady ≥ HYSTERESIS_MS and differs from committed, commit
-                  if (rawMet !== t.committed && (now - t.changeAt) >= HYSTERESIS_MS) {
-                    t.committed = rawMet;
-                  }
-                  return t.committed;
-                };
-                const evalBullet = (b) => {
-                  const results = (b.conditions || []).map((c) => {
-                    const live = metric(c.metric);
-                    const raw  = live ? opCheck[c.op](live.v, c.value) : null;
-                    // null (no live source) can't be stabilized — pass through.
-                    if (raw === null) return { raw: null, stable: null };
-                    const key  = `${b.text || ""}|${c.metric}|${c.op}|${c.value}`;
-                    return { raw, stable: stableMet(key, raw) };
-                  });
-                  const hasConds = results.length > 0;
-                  // allMet uses the STABLE (hysteresis-filtered) met-state so the bullet
-                  // only flips actionable/waiting after 10s of sustained change.
-                  const allMet = hasConds && results.every(r => r.stable === true);
-                  const actionable = !hasConds || allMet;
-                  return {
-                    ...b,
-                    __allMet: allMet, __hasConds: hasConds, __actionable: actionable,
-                    // Expose raw + stable so ConditionPill can show the stable status
-                    // (keeps pill pills coherent with the bullet-level decision).
-                    __condResults: results,
-                  };
-                };
-
-                const Bullet = ({ tone, text, conditions, if_met, __allMet, __hasConds, __actionable, __condResults }) => {
-                  // A bullet is "active right now" when it has no conditions (immediate
-                  // narrative like "stand aside") OR all its conditions have fired.
-                  const fired     = __allMet;
-                  const active    = __actionable;     // no-conditions immediate OR fired
-                  // Venice sometimes labels oversold/overbought state as bullish/bearish
-                  // tone even when the if_met reads as "continuation of indecision" — only
-                  // paint green/red when the bullet actually names a trade direction.
-                  const phrase         = `${if_met || ""} ${text || ""}`.toLowerCase();
-                  const DIRECTIONAL_RE = /\b(long|short|buy|sell|enter|exit|rally|drop|breakout|breakdown|upside|downside|bullish|bearish)\b/;
-                  // Neutral markers — includes variants like "not breaking", "fails to break",
-                  // "no break", "chop", "choppy", to catch neutral-lean bullets that would
-                  // otherwise be force-colored by a stray directional keyword in the narrative.
-                  const NEUTRAL_RE     = /\b(indecision|no breakout|no breakdown|no break|not breaking|fails to break|range-?bound|consolidation|consolidating|stand aside|sidelines?|chop(?:py)?|neutral)\b/;
-                  const directional    = DIRECTIONAL_RE.test(phrase) && !NEUTRAL_RE.test(phrase);
-                  const firedBull = active && tone === "bullish" && directional;
-                  const firedBear = active && tone === "bearish" && directional;
-                  // Color policy: ONLY directional (BUY/SELL) uses colored backgrounds.
-                  // PAUSE / INFO / waiting use neutral gray — nothing to act on directionally.
-                  // Special case: if a bullet has NO conditions and neutral tone, it's a pure
-                  // market observation ("note / context"), not a pause directive. Show ℹ INFO.
-                  const pureInfo = active && !__hasConds && tone === "neutral";
-                  let bg, border, leftBar, msgColor, actionLabel, actionIcon;
-                  if (firedBull)       { bg = "#ECFDF5"; border = C.green;        leftBar = C.green;  msgColor = "#15803D"; actionLabel = "BUY";   actionIcon = "▲"; }
-                  else if (firedBear)  { bg = "#FEF2F2"; border = C.red;          leftBar = C.red;    msgColor = "#B91C1C"; actionLabel = "SELL";  actionIcon = "▼"; }
-                  else if (pureInfo)   { bg = "#F5F5F4"; border = C.borderSoft;   leftBar = C.muted;  msgColor = "#57534E"; actionLabel = "INFO";  actionIcon = "ⓘ"; }
-                  else if (active)     { bg = "#F5F5F4"; border = C.borderSoft;   leftBar = C.muted;  msgColor = "#57534E"; actionLabel = "PAUSE"; actionIcon = "⏸"; }
-                  else                 { bg = "#FAFAF9"; border = C.borderSoft;   leftBar = C.muted;  msgColor = C.muted;   actionLabel = null;    actionIcon = "⏸"; }
-                  return (
-                    <div style={{ display:"flex", flexDirection:"column", gap:6,
-                      padding:"8px 12px", borderRadius:6,
-                      background: bg,
-                      borderLeft: `4px solid ${leftBar}`,
-                      border: `1px solid ${border}`,
-                      transition: "background-color 400ms ease, border-color 400ms ease, border-left-color 400ms ease" }}>
-                      <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
-                        {/* LEFT — action chip (BUY / SELL / PAUSE) when the bullet is
-                            live; a muted ⏸ when it's waiting. Primary trader signal. */}
-                        {actionLabel ? (
-                          <span style={{ display:"inline-flex", alignItems:"center", gap:4,
-                            fontSize:12, fontWeight:900, color:msgColor,
-                            background:"#FFFFFF", border:`2px solid ${border}`,
-                            borderRadius:4, padding:"2px 8px", letterSpacing:1.5,
-                            flexShrink:0, lineHeight:1.2, minWidth:64, justifyContent:"center" }}>
-                            <span style={{ fontSize:13 }}>{actionIcon}</span>
-                            {actionLabel}
-                          </span>
-                        ) : (
-                          <span style={{ fontSize:14, color:C.muted, opacity:0.6, flexShrink:0, paddingTop:2, minWidth:64, textAlign:"center" }}>
-                            ⏸
-                          </span>
-                        )}
-                        <span style={{ flex:1 }}>
-                          <BullBearText text={text} size={12} baseColor={C.text} />
-                        </span>
-                        {/* Per-bullet SOURCE button — ONLY when we have a real source
-                            for the exact signal cited. No filler fallbacks: if no
-                            condition has a known source entry, render a disabled
-                            "? UNKNOWN" tag so the gap is visible during audits. */}
-                        {(() => {
-                          const conds = conditions || [];
-                          const sourced = conds.map(c => METRIC_META[c.metric]).find(m => m && m.source);
-                          if (sourced) {
-                            return (
-                              <a href={sourced.source.url} target="_blank" rel="noopener noreferrer"
-                                 title={`Verify at ${sourced.source.label}`}
-                                 onClick={(e)=>e.stopPropagation()}
-                                 style={{ color:"#B91C1C", textDecoration:"none",
-                                   fontSize:9, fontWeight:800, letterSpacing:1,
-                                   padding:"2px 7px", border:"1px solid #DC2626",
-                                   borderRadius:3, background:"#FFFFFF",
-                                   flexShrink:0, lineHeight:1.3, whiteSpace:"nowrap" }}>
-                                ↗ SOURCE
-                              </a>
-                            );
-                          }
-                          // No verifiable source — flag for audit rather than link to filler
-                          return (
-                            <span title="No verifiable source mapped for this claim — flag for audit"
-                                  style={{ color:C.muted, fontSize:9, fontWeight:700, letterSpacing:1,
-                                    padding:"2px 7px", border:`1px dashed ${C.muted}`,
-                                    borderRadius:3, background:"transparent",
-                                    flexShrink:0, lineHeight:1.3, whiteSpace:"nowrap", fontStyle:"italic" }}>
-                              ? UNKNOWN
-                            </span>
-                          );
-                        })()}
-                      </div>
-                      {__hasConds && (
-                        <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginLeft:28 }}>
-                          {conditions.map((c, i) => (
-                            <ConditionPill key={i} cond={c}
-                              stableMet={(__condResults && __condResults[i]) ? __condResults[i].stable : undefined} />
-                          ))}
-                        </div>
-                      )}
-                      {/* "What this means" — always visible when Venice emits it. The
-                          prefix is BLACK + LARGER so the trader scans it instantly; the
-                          consequence itself is tone-colored. */}
-                      {if_met && (
-                        <div style={{ marginLeft:28, marginTop:3, lineHeight:1.4,
-                          display:"flex", flexWrap:"wrap", alignItems:"baseline", gap:6 }}>
-                          <span style={{ fontSize:15, fontWeight:900, color:C.text, letterSpacing:0.3 }}>
-                            {fired ? "→ what this means:" : "→ if conditions fire:"}
-                          </span>
-                          <span style={{
-                            fontSize: fired ? 14 : 12,
-                            fontWeight: fired ? 800 : 600,
-                            color: fired ? msgColor : C.textSec,
-                            fontStyle: fired ? "normal" : "italic" }}>
-                            {if_met}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  );
-                };
-                const briefingReady = traderSummary && pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR";
-                return (
-                  <div style={{ width:"100%", minWidth:360, display:"flex", flexDirection:"column", gap:8 }}>
-                    {briefingReady && (
-                      <div style={{ ...card, flexShrink:0, padding:"14px 16px",
-                        background:"#FAFAF9", border:`2px solid ${C.borderSoft}` }}>
-                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-                          <span style={{ fontSize:12, fontWeight:900, color:C.text,
-                            letterSpacing:1.2, textTransform:"uppercase" }}>⚡ Trader Briefing</span>
-                          <span style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>
-                            ~30s read · decision-ready
-                          </span>
-                        </div>
-                        {/* Edge — 1-2 sentence synthesis across multiple signals. No single
-                            "exact" source applies; per-bullet pills carry their own specific
-                            source links. Edge is displayed without a source chip to avoid
-                            implying a filler verification path. */}
-                        <div style={{ marginBottom: (traderSummary.watch?.length || traderSummary.actions?.length) ? 10 : 0,
-                          fontWeight:600 }}>
-                          <BullBearText text={traderSummary.edge} size={15} baseColor={C.text} />
-                        </div>
-                        {(() => {
-                          const all = [
-                            ...(traderSummary.watch   || []).map(b => ({ ...b, __src: "w" })),
-                            ...(traderSummary.actions || []).map(b => ({ ...b, __src: "a" })),
-                          ].map(evalBullet);
-                          const actionable = all.filter(b => b.__actionable);
-                          const waiting    = all.filter(b => !b.__actionable);
-                          return (<>
-                            {actionable.length > 0 && (
-                              <div style={{ marginTop:10 }}>
-                                <div style={{ fontSize:11, fontWeight:800, color:"#15803D", letterSpacing:1.2,
-                                  textTransform:"uppercase", marginBottom:6 }}>Actionable · {actionable.length} live now</div>
-                                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                                  {actionable.map((b, i) => <Bullet key={`act${b.__src}${i}`} {...b} />)}
-                                </div>
-                              </div>
-                            )}
-                            {waiting.length > 0 && (
-                              <div style={{ marginTop:12 }}>
-                                {/* Collapsible header — click to toggle. Default collapsed
-                                    so the page doesn't drown in pending scenarios. */}
-                                <button onClick={() => setWaitingOpen(v => !v)}
-                                  style={{ width:"100%", display:"flex", alignItems:"center",
-                                    justifyContent:"space-between", gap:8,
-                                    background:"none", border:"none", padding:"4px 0",
-                                    cursor:"pointer", fontFamily:"inherit" }}>
-                                  <span style={{ fontSize:11, fontWeight:700, color:C.muted,
-                                    letterSpacing:1.2, textTransform:"uppercase" }}>
-                                    {waitingOpen ? "▾" : "▸"} Waiting for conditions · {waiting.length}
-                                  </span>
-                                  <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>
-                                    {waitingOpen ? "hide" : "show"}
-                                  </span>
-                                </button>
-                                {waitingOpen && (
-                                  <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:6 }}>
-                                    {waiting.map((b, i) => <Bullet key={`w${b.__src}${i}`} {...b} />)}
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </>);
-                        })()}
-                        {/* (global sources footer removed — every pill carries its own
-                            ↗ source link inline, directly next to the number it claims) */}
-                      </div>
-                    )}
-                    {!briefingReady && (
-                      <div style={{ ...card, flexShrink:0, padding:"12px 14px",
-                        display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
-                        <span style={{ fontSize:14, lineHeight:1.4 }}>
-                          {pendingDeepseekReady && activeDeepseekPred?.signal==="ERROR" ? (
-                            <span style={{ color:C.red, fontWeight:700 }}>⚠️ Analysis error this bar — detail in History tab</span>
-                          ) : pendingDeepseekReady && activeDeepseekPred ? (
-                            <span style={{ color:C.textSec, fontStyle:"italic" }}>⟳ Preparing trader briefing…</span>
-                          ) : (
-                            <span style={{ color:C.amber }}>⟳ Analyzing new bar — briefing in ~30–60s</span>
-                          )}
-                        </span>
-                        {barCloseUTC && (
-                          <span style={{ fontSize:14, fontWeight:800,
-                            color:timeLeft<60?C.red:timeLeft<120?C.amber:"#15803D",
-                            background:timeLeft<60?"#FFF1F2":timeLeft<120?C.amberBg:"#F0FDF4",
-                            border:`1px solid ${timeLeft<60?C.redBorder:timeLeft<120?C.amberBorder:"#86EFAC"}`,
-                            borderRadius:5, padding:"3px 10px" }}>
-                            Closes {barCloseUTC}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
+              {briefingJSX}
               </ErrorBoundary>
 
               {/* Historical Pattern block removed — the raw pattern data is fed into Venice
