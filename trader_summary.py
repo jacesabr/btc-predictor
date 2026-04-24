@@ -39,12 +39,14 @@ OUTPUT STRICT JSON ONLY, exactly this shape:
   "watch": [{
     "tone": "bullish|bearish|neutral",
     "text": "a condition, level, or bar-level event that would confirm or invalidate the setup",
-    "conditions": [{"metric": "<name>", "op": ">"|">="|"<"|"<="|"==", "value": <number>, "unit": "<unit>"}]
+    "conditions": [{"metric": "<name>", "op": ">"|">="|"<"|"<="|"==", "value": <number>, "unit": "<unit>"}],
+    "if_met": "short plain-English phrase (<=15 words) describing what it MEANS for the trader when ALL conditions are met — e.g. 'breakout confirmed, bearish thesis invalidated' or 'momentum accelerating, reversal odds rising'. Omit or empty if the text already states the consequence."
   }],
   "actions": [{
     "tone": "bullish|bearish|neutral",
     "text": "concrete IF-THEN guidance — 'if price breaks X do Y', 'stand aside unless Z'. NEVER a bare 'buy' or 'sell'.",
-    "conditions": [same shape as watch]
+    "conditions": [same shape as watch],
+    "if_met": "short plain-English phrase (<=15 words) describing what the trader should DO when ALL conditions are met — e.g. 'enter long with stop at $78,200' or 'trigger fired — consider short'. Usually this IS the action in the text's 'then' clause."
   }]
 }
 
@@ -60,9 +62,11 @@ CONDITIONS — machine-checkable thresholds that back the bullet:
 - If the bullet's text references a threshold ("breaks $78,288", "taker volume above 5 BTC",
   "RSI below 30", "funding above 0.02%"), add a matching "conditions" entry so the UI
   can show live-vs-threshold and tick/X whether it is currently met.
-- Valid "metric" values ONLY (use these exact strings): price, taker_buy_volume,
-  taker_sell_volume, taker_volume, taker_ratio, bid_imbalance, ask_imbalance,
-  funding_rate, open_interest, rsi, long_short_ratio.
+- Valid "metric" values ONLY (use these exact strings): price, price_change_pct
+  (percent move from the current bar's open; use this for thresholds like
+  "moves more than 0.2%"), taker_buy_volume, taker_sell_volume, taker_volume,
+  taker_ratio, bid_imbalance, ask_imbalance, funding_rate, open_interest, rsi,
+  long_short_ratio.
 - "op" must be one of: ">", ">=", "<", "<=", "==".
 - "value" must be a plain number (no strings, no ranges). For "between X and Y", emit TWO
   conditions: one with op ">=" X and one with op "<=" Y.
@@ -79,7 +83,8 @@ NO JARGON WITHOUT EVIDENCE:
 # emits a different name, validate will drop the condition rather than let the
 # UI show a meaningless pill.
 _VALID_METRICS = {
-    "price", "taker_buy_volume", "taker_sell_volume", "taker_volume",
+    "price", "price_change_pct",
+    "taker_buy_volume", "taker_sell_volume", "taker_volume",
     "taker_ratio", "bid_imbalance", "ask_imbalance",
     "funding_rate", "open_interest", "rsi", "long_short_ratio",
 }
@@ -219,10 +224,13 @@ def _validate(obj: Any) -> Optional[dict]:
                 continue
             if tone not in ("bullish", "bearish", "neutral"):
                 tone = "neutral"
+            if_met_raw = b.get("if_met")
+            if_met = str(if_met_raw).strip()[:200] if if_met_raw else ""
             out.append({
                 "tone":       tone,
                 "text":       text.strip(),
                 "conditions": _norm_conditions(b.get("conditions")),
+                "if_met":     if_met or None,
             })
             if len(out) >= cap:
                 break

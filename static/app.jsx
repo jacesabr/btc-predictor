@@ -3040,6 +3040,7 @@ function App() {
                 const metric = (m) => {
                   switch (m) {
                     case "price":             return price != null ? { v: price, f: fmt.usd } : null;
+                    case "price_change_pct":  return (price != null && winStartPrice) ? { v: (price - winStartPrice) / winStartPrice * 100, f: fmt.pct } : null;
                     case "taker_buy_volume":  return tk?.bv  != null ? { v: tk.bv,  f: fmt.btc } : null;
                     case "taker_sell_volume": return tk?.sv  != null ? { v: tk.sv,  f: fmt.btc } : null;
                     case "taker_volume":      return tk?.bv!=null && tk?.sv!=null ? { v: tk.bv + tk.sv, f: fmt.btc } : null;
@@ -3057,6 +3058,8 @@ function App() {
                 // Metric metadata: short label, layman one-liner, live-source link.
                 const METRIC_META = {
                   price:             { label: "price",      layman: "Current BTC/USDT spot price.",
+                                       source: { label: "Binance spot", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+                  price_change_pct:  { label: "Δ price",    layman: "% change from this bar's open — positive = up move so far, negative = down.",
                                        source: { label: "Binance spot", url: "https://www.binance.com/en/trade/BTC_USDT" } },
                   taker_buy_volume:  { label: "taker buy",  layman: "BTC bought by traders crossing the ask in the last 5 min (aggressive buyers).",
                                        source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
@@ -3128,43 +3131,64 @@ function App() {
                   );
                 };
 
-                const Bullet = ({ tone, text, conditions }) => {
-                  // All conditions met → flip the background green so the trader sees
-                  // "this is live RIGHT NOW" at a glance, regardless of bullet tone.
-                  const evalCond = (c) => {
+                // Evaluate conditions → yield firing state per bullet.
+                // "fired" means all conditions met (box becomes green/red based on tone).
+                // "pending" means waiting for at least one condition (box stays yellow).
+                const evalBullet = (b) => {
+                  const results = (b.conditions || []).map((c) => {
                     const live = metric(c.metric);
                     return live ? opCheck[c.op](live.v, c.value) : null;
-                  };
-                  const results  = (conditions || []).map(evalCond);
+                  });
                   const hasConds = results.length > 0;
                   const allMet   = hasConds && results.every(r => r === true);
-                  const liveBg     = allMet ? "#ECFDF5" : toneBg(tone);
-                  const liveBorder = allMet ? C.green    : toneBorder(tone);
-                  const liveLeft   = allMet ? C.green    : toneColor(tone);
+                  return { ...b, __allMet: allMet, __hasConds: hasConds };
+                };
+
+                const Bullet = ({ tone, text, conditions, if_met, __allMet, __hasConds }) => {
+                  // Color rules per user direction:
+                  //   - Conditions met → green (bullish/neutral) or red (bearish). Box shouts "fired".
+                  //   - Conditions pending / no conditions → yellow (awaiting).
+                  const fired = __allMet;
+                  const firedBull = fired && tone === "bullish";
+                  const firedBear = fired && tone === "bearish";
+                  let bg, border, leftBar, emoji, msgColor;
+                  if (firedBull)      { bg = "#ECFDF5"; border = C.green;  leftBar = C.green;  emoji = "🟢"; msgColor = "#15803D"; }
+                  else if (firedBear) { bg = "#FEF2F2"; border = C.red;    leftBar = C.red;    emoji = "🔴"; msgColor = "#B91C1C"; }
+                  else if (fired)     { bg = "#ECFDF5"; border = C.green;  leftBar = C.green;  emoji = "✅"; msgColor = "#15803D"; }
+                  else                { bg = C.amberBg; border = C.amberBorder; leftBar = C.amber; emoji = "⚠️"; msgColor = C.amber; }
                   return (
                     <div style={{ display:"flex", flexDirection:"column", gap:6,
                       padding:"8px 12px", borderRadius:6,
-                      background: liveBg,
-                      borderLeft: `4px solid ${liveLeft}`,
-                      border: `1px solid ${liveBorder}` }}>
+                      background: bg,
+                      borderLeft: `4px solid ${leftBar}`,
+                      border: `1px solid ${border}` }}>
                       <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
                         <span style={{ fontSize:16, lineHeight:1.3, flexShrink:0, paddingTop:1 }}>
-                          {allMet ? "✅" : toneEmoji(tone)}
+                          {emoji}
                         </span>
                         <span style={{ flex:1 }}>
-                          <BullBearText text={text} size={13} baseColor={tone==="neutral" ? C.text : toneColor(tone)} />
+                          <BullBearText text={text} size={13} baseColor={C.text} />
                         </span>
-                        {allMet && (
-                          <span style={{ fontSize:9, fontWeight:900, color:"#15803D",
-                            background:"#D1FAE5", border:`1px solid ${C.green}`,
+                        {fired && (
+                          <span style={{ fontSize:9, fontWeight:900, color:msgColor,
+                            background:"#FFFFFF", border:`1px solid ${border}`,
                             borderRadius:3, padding:"1px 6px", letterSpacing:1, flexShrink:0 }}>
                             LIVE
                           </span>
                         )}
                       </div>
-                      {hasConds && (
+                      {__hasConds && (
                         <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginLeft:28 }}>
                           {conditions.map((c, i) => <ConditionPill key={i} cond={c} />)}
+                        </div>
+                      )}
+                      {/* "This means" — only when all conditions fire. Emphatic, tone-colored. */}
+                      {fired && if_met && (
+                        <div style={{ marginLeft:28, marginTop:3,
+                          fontSize:14, fontWeight:800, lineHeight:1.4,
+                          color: msgColor, letterSpacing:0.2 }}>
+                          <span style={{ opacity:0.7, fontWeight:600, marginRight:4 }}>→ this means:</span>
+                          {if_met}
                         </div>
                       )}
                     </div>
@@ -3188,24 +3212,35 @@ function App() {
                           fontWeight:600 }}>
                           <BullBearText text={traderSummary.edge} size={17} baseColor={C.text} />
                         </div>
-                        {traderSummary.watch?.length > 0 && (
-                          <div style={{ marginTop:10 }}>
-                            <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:1,
-                              textTransform:"uppercase", marginBottom:6 }}>Potential</div>
-                            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                              {traderSummary.watch.map((b, i) => <Bullet key={`w${i}`} {...b} />)}
-                            </div>
-                          </div>
-                        )}
-                        {traderSummary.actions?.length > 0 && (
-                          <div style={{ marginTop:12 }}>
-                            <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:1,
-                              textTransform:"uppercase", marginBottom:6 }}>Actionable</div>
-                            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                              {traderSummary.actions.map((b, i) => <Bullet key={`a${i}`} {...b} />)}
-                            </div>
-                          </div>
-                        )}
+                        {/* Sort fired bullets to top, pending below — user sees what's
+                            live right now before what's still waiting. */}
+                        {(() => {
+                          const sortFired = (arr) => (arr || [])
+                            .map(evalBullet)
+                            .sort((a, b) => (b.__allMet ? 1 : 0) - (a.__allMet ? 1 : 0));
+                          const watchSorted   = sortFired(traderSummary.watch);
+                          const actionsSorted = sortFired(traderSummary.actions);
+                          return (<>
+                            {watchSorted.length > 0 && (
+                              <div style={{ marginTop:10 }}>
+                                <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:1,
+                                  textTransform:"uppercase", marginBottom:6 }}>Potential</div>
+                                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                                  {watchSorted.map((b, i) => <Bullet key={`w${i}`} {...b} />)}
+                                </div>
+                              </div>
+                            )}
+                            {actionsSorted.length > 0 && (
+                              <div style={{ marginTop:12 }}>
+                                <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:1,
+                                  textTransform:"uppercase", marginBottom:6 }}>Actionable</div>
+                                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                                  {actionsSorted.map((b, i) => <Bullet key={`a${i}`} {...b} />)}
+                                </div>
+                              </div>
+                            )}
+                          </>);
+                        })()}
                       </div>
                     )}
                     {!briefingReady && (
