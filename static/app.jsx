@@ -3225,7 +3225,7 @@ function App() {
               </span>
             )}
             <span style={{ flex:1 }}>
-              <BullBearText text={text} size={12} baseColor={C.text} />
+              <BullBearText text={text} size={14} baseColor={C.text} />
             </span>
             {(() => {
               // 1) Prefer the source of any condition metric — most specific.
@@ -3295,25 +3295,23 @@ function App() {
             </div>
           )}
           {if_met && (() => {
-            // Hide the "→ what this means" line when bullet text already
-            // explains the implication. Proxy: text already has an arrow
-            // or em-dash (meaning the writer used the fact→implication
-            // pattern) AND text is long enough (≥ 60 chars) to have said
-            // it. Otherwise show a compact one-liner.
+            // Only render the if_met consequence line when the bullet's
+            // condition has actually FIRED — that's the moment the reader
+            // wants the plain-English "so what". For unfired bullets
+            // (WAITING / not-yet-actionable) the "if fires:" restatement
+            // just restates the main text, takes up vertical space, and
+            // adds no new information. Hide it entirely in those cases.
+            if (!fired) return null;
+            // And on fired bullets: suppress the duplicate line if the
+            // main text already carries an arrow/em-dash implication.
             const textHasArrow = /→|—/.test(text || "");
             const textLongEnough = (text || "").length >= 60;
-            if (fired && textHasArrow && textLongEnough) return null;
+            if (textHasArrow && textLongEnough) return null;
             return (
-              <div style={{ marginLeft:28, marginTop:2, lineHeight:1.35,
+              <div style={{ marginLeft:28, marginTop:3, lineHeight:1.35,
                 display:"flex", flexWrap:"wrap", alignItems:"baseline", gap:5 }}>
-                <span style={{ fontSize:12, fontWeight:800, color:C.muted, letterSpacing:0.2 }}>
-                  {fired ? "→" : narrative ? "context:" : "if fires:"}
-                </span>
-                <span style={{
-                  fontSize: fired ? 13 : 12,
-                  fontWeight: fired ? 700 : 500,
-                  color: fired ? msgColor : C.textSec,
-                  fontStyle: fired ? "normal" : "italic" }}>
+                <span style={{ fontSize:13, fontWeight:800, color:C.muted, letterSpacing:0.2 }}>→</span>
+                <span style={{ fontSize:14, fontWeight:700, color: msgColor }}>
                   {if_met}
                 </span>
               </div>
