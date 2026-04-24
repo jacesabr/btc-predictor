@@ -145,21 +145,41 @@ def _truncate(s: Any, n: int) -> str:
     return s if len(s) <= n else s[:n] + " …"
 
 
-def _build_user_prompt(pred: dict, historical: str, binance_expert: dict) -> str:
-    """Assemble the INPUT block from the main-page fields."""
+def _build_user_prompt(
+    pred: dict,
+    historical: str,
+    binance_expert: dict,
+    historical_context: str = "",
+    specialist_signals: Optional[dict] = None,
+    ensemble_result: Optional[dict] = None,
+) -> str:
+    """Assemble the INPUT block from the main-page fields. Now forwards more of
+    DeepSeek's intelligence than before — specialist_signals (5 strategies),
+    ensemble vote, current-bar historical_context, and raised truncation caps
+    so rich sections reach Venice intact."""
     parts = ["INPUT:"]
     signal = (pred.get("signal") or "?").upper()
     parts.append(f"signal: {signal}")
     parts.append(f"confidence: {pred.get('confidence', '?')}")
+
+    # Ensemble vote — tells Venice whether the ensemble agreed with DeepSeek or
+    # was split. Was dropped entirely from Venice input previously.
+    if ensemble_result and ensemble_result.get("signal"):
+        bull = ensemble_result.get("bullish_count", 0)
+        bear = ensemble_result.get("bearish_count", 0)
+        upp  = ensemble_result.get("up_probability", 0.5)
+        ens_conf = ensemble_result.get("confidence")
+        ens_conf_s = f" conf={ens_conf*100:.0f}%" if isinstance(ens_conf,(int,float)) else ""
+        parts.append(f"ensemble_vote: {ensemble_result['signal']} ({bull}↑/{bear}↓ up_prob={upp*100:.0f}%{ens_conf_s})")
 
     # Data availability flags — surface to Venice so it can warn the trader when
     # critical signals are missing rather than silently filling with assumptions.
     data_received = pred.get("data_received") or ""
     data_requests = pred.get("data_requests") or ""
     if data_received:
-        parts.append(f"data_received: {_truncate(data_received, 400)}")
+        parts.append(f"data_received: {_truncate(data_received, 600)}")
     if data_requests and data_requests.upper() != "NONE":
-        parts.append(f"data_requests (gaps flagged by DeepSeek): {_truncate(data_requests, 400)}")
+        parts.append(f"data_requests (gaps flagged by DeepSeek): {_truncate(data_requests, 600)}")
 
     # For NEUTRAL bars the abstention rationale is often long and nuanced —
     # truncating it kills the case for not-trading and forces Venice to invent
@@ -168,29 +188,51 @@ def _build_user_prompt(pred: dict, historical: str, binance_expert: dict) -> str
 
     reasoning = pred.get("reasoning") or ""
     if reasoning:
-        r = reasoning if is_neutral else _truncate(reasoning, 3000)
+        # Raised 3000 → 5000 so the 5-point reasoning (MICROSTRUCTURE / FUNDING /
+        # TECHNICAL / SYNTHESIS / SPECIALIST_AGREEMENT) doesn't clip mid-thought.
+        r = reasoning if is_neutral else _truncate(reasoning, 5000)
         parts.append(f"reasoning:\n{r}")
 
     narrative = pred.get("narrative") or ""
     if narrative:
-        n = narrative if is_neutral else _truncate(narrative, 800)
+        # 800 → 1500 so multi-bar narratives with specific times survive.
+        n = narrative if is_neutral else _truncate(narrative, 1500)
         parts.append(f"narrative: {n}")
 
     free_obs = pred.get("free_observation") or ""
     if free_obs:
-        f = free_obs if is_neutral else _truncate(free_obs, 600)
+        f = free_obs if is_neutral else _truncate(free_obs, 900)
         parts.append(f"free_observation: {f}")
 
+    # Specialist signals — 5 independent strategies (Dow, Fib, Alligator, A/D,
+    # Harmonic) with their own signal + confidence + reasoning. Entirely absent
+    # from Venice before — trader lost all signal-diversity insight.
+    if specialist_signals:
+        spec_parts = ["specialist_signals (5 independent strategies):"]
+        for name in ("dow_theory", "fib_pullback", "alligator", "acc_dist", "harmonic"):
+            v = specialist_signals.get(name) or {}
+            if v and v.get("signal"):
+                conf_raw = v.get("confidence")
+                conf_pct = int(float(conf_raw) * 100) if isinstance(conf_raw,(int,float)) else "?"
+                reasoning_snip = _truncate(str(v.get("reasoning","")), 200)
+                spec_parts.append(f"  {name}: {v['signal']} ({conf_pct}%) — {reasoning_snip}")
+        if len(spec_parts) > 1:
+            parts.append("\n".join(spec_parts))
+
+    # Current-bar prose summary used for historical similarity search. Lets
+    # Venice sanity-check that historical matches actually fit current state.
+    if historical_context:
+        hc = historical_context if is_neutral else _truncate(historical_context, 2500)
+        parts.append(f"current_bar_context:\n{hc}")
+
     if historical:
-        # Raise cap to 4000 — historical analyst carries AGAINST/FOR/EDGE/SUGGESTION
-        # sections that were getting clipped at 2000, losing the full steelman.
+        # 2000 → 4000 (already raised previously; keeping the expanded cap).
         h = historical if is_neutral else _truncate(historical, 4000)
         parts.append(f"historical_pattern:\n{h}")
 
-    # Binance expert output is STRUCTURED — forward every section so Venice can
-    # reference the specific micro-signal it wants (taker_flow / whale_flow /
-    # oi_funding / order_book / confluence / edge / watch). Previously only one
-    # narrative field was passed; Venice lost the rich breakdown.
+    # Binance expert output — forward every structured section at a higher cap
+    # so the rich breakdown (taker_flow, whale_flow, oi_funding, order_book,
+    # positioning, confluence, edge, watch) reaches Venice uncliped.
     if binance_expert:
         sig = binance_expert.get("signal")
         be_parts = [f"binance_expert signal: {sig or '?'}"]
@@ -200,8 +242,9 @@ def _build_user_prompt(pred: dict, historical: str, binance_expert: dict) -> str
             v = binance_expert.get(field)
             if v:
                 v = str(v)
-                cap = 600 if is_neutral else 400
-                be_parts.append(f"  {field}: {_truncate(v, cap)}")
+                # 400 → 1200 for NEUTRAL, 400 → 800 otherwise — preserves per-field nuance
+                cap = 1200 if is_neutral else 800
+                be_parts.append(f"  {field}:\n    {_truncate(v, cap)}")
         parts.append("\n".join(be_parts))
 
     return "\n\n".join(parts)
@@ -327,6 +370,9 @@ async def get_or_build(
     binance_expert: dict,
     api_key: str,
     model: str,
+    historical_context: str = "",
+    specialist_signals: Optional[dict] = None,
+    ensemble_result: Optional[dict] = None,
 ) -> Optional[dict]:
     """
     Return the cached summary for this bar, or build it once. Returns None on
@@ -347,7 +393,12 @@ async def get_or_build(
 
         started = time.time()
         try:
-            user_prompt = _build_user_prompt(pred, historical, binance_expert)
+            user_prompt = _build_user_prompt(
+                pred, historical, binance_expert,
+                historical_context=historical_context,
+                specialist_signals=specialist_signals or {},
+                ensemble_result=ensemble_result or {},
+            )
             raw = await _call_venice(api_key, model, SYSTEM_PROMPT, user_prompt)
         except Exception as exc:
             logger.warning("trader_summary Venice call FAILED for bar %s: %s", window_start_time, exc)

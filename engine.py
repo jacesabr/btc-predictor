@@ -355,6 +355,13 @@ async def _build_trader_summary_bg(window_start_time: float) -> None:
             pred=pred,
             historical=current_state.get("bar_historical_analysis", "") or "",
             binance_expert=current_state.get("bar_binance_expert", {}) or {},
+            # Additional context forwarded to Venice (previously dropped):
+            #  - bar_historical_context: prose of CURRENT bar used for similarity search
+            #  - specialist_signals: Dow/Fib/Alligator/A/D/Harmonic strategy calls
+            #  - ensemble_result: vote breakdown + probability
+            historical_context=current_state.get("bar_historical_context", "") or "",
+            specialist_signals=current_state.get("bar_specialist_signals", {}) or {},
+            ensemble_result=current_state.get("ensemble_prediction") or {},
             api_key=VENICE_API_KEY,
             model=VENICE_MODEL,
         )
