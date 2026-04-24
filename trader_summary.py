@@ -169,10 +169,10 @@ cost real money. Translate, never invent.
 
 OUTPUT STRICT JSON ONLY, exactly this shape:
 {
-  "edge": "The chart story in two parts. FIRST sentence (max 14 words) = the bottom-line takeaway the trader should walk away with — one short, confident claim. Example: 'Sellers pushing but bid support is holding — no clear edge yet.' SECOND sentence (optional, max 22 words) = the why — one or two concrete details from the INPUT that support the headline. Example: 'Taker flow is 2.9 BTC sells vs 1.4 BTC buys and historical matches both bounced from here.' WRITE LIKE A HUMAN NARRATING THE CHART, not a list of clauses joined by em-dashes. No fact-dumps. No 'buyers and sellers are locked in a stalemate — bid wall at 320.1 BTC defends $77,746, but taker flow shows …' — that's three facts crammed into one sentence. Split them.",
+  "edge": "THE CHART STORY — told as a narrative, not a fact-dump. Imagine you're an experienced trader narrating the chart to a friend in simple non-technical words. Two to three short sentences, each plain English, each moving the story forward. Structure: (1) what's happening right now, (2) what the opposing forces are, (3) what the historical/structural read says. Examples: 'Price has been testing $77,746 for the last three bars. Buyers put a stack of orders there but they haven't been active yet — they're waiting. Sellers are mildly pushing with low volume, and the two most similar historical setups both bounced from a level like this.' NOT a single sentence with three em-dash clauses. NOT 'buyers and sellers are locked in a stalemate — bid wall 320 BTC — taker flow 2.9 sells vs 1.4 buys'. Sentences, narrative voice, plain words.",
   "watch": [{
     "tone": "bullish|bearish|neutral",
-    "text": "Trader-pidgin, NOT analyst prose. Max 14 words. Lead with the metric + value, then the consequence. Fragments allowed when punchier. Good: 'BSR 11.3 — buyers exhausting, expect fade.' Good: 'Book balanced (397 bids / 394 asks), no wall either way.' Bad: 'The balanced order book offers no structural support or resistance to sustain the move' (too many filler words). Cut all of: 'may', 'suggests', 'showing no', 'offers no', 'with no risk despite', 'seems to', 'appears'. Cut trailing clauses that restate the INPUT in more words. Use only numbers from INPUT.",
+    "text": "A NARRATIVE VALIDATOR — an if-then-means statement that will either confirm or invalidate the chart story in `edge` as it plays out live. Form: 'If <specific observable event, at whatever price / level / threshold it actually happens>, that means <plain-English consequence for the narrative or for the trader's next move>.' The space of observable events is OPEN and dynamic — pick whatever DeepSeek's INPUT actually observed or reasoned about for THIS bar, not a template list. Good candidates include (but are not limited to): price breaking or holding a cited level, a specific signal crossing a specific threshold, a pattern completing or failing, a volume event, an order-book event, a correlation breaking, a historical precedent playing out or not. Examples: 'If price holds $77,746 through the next two bars, that means the buyer defense is real and the bounce thesis confirms.' 'If taker sell volume spikes above 5 BTC while bids at $77,746 don't fill, that means buyers are getting overrun and the narrative breaks.' 'If the 10 historical matches DeepSeek cited at similar BSR keep reversing up, that means the statistical edge tilts long despite short-term pressure.' Plain English only — no jargon like fade/squeeze/wall/distribution/thesis/order-block. Numbers cited must appear verbatim in INPUT.",
     "conditions": [{"metric": "<name>", "op": ">"|">="|"<"|"<="|"==", "value": <number>, "unit": "<unit>"}],
     "if_met": "short phrase (<=12 words) stating the DIRECT consequence the INPUT text supports. Omit if text already says it.",
     "sources": ["<section 1>", "<section 2>"],
@@ -294,11 +294,22 @@ HARD RULES:
   carries the trader-usable info either way.
 - Each bullet = ONE sentence. Total briefing ≤180 words across edge + all
   bullets. Scannable in 30s, but DENSE with signal coverage.
-- watch: 3–5 bullets (one per major INPUT signal when present). actions: 2–4
-  bullets (entry + invalidation + partial-fill ideas). DO NOT under-emit — a
-  briefing with rich INPUT and only 2 watch bullets is a failure, not a
-  virtue. Only drop a bullet when there is literally nothing specific to
-  say about that signal in the INPUT.
+- watch: 3–7 bullets (one IF-AT-MEANS statement per signal DeepSeek
+  analyzed in the INPUT). actions: 2–4 bullets (entry + invalidation +
+  partial-fill ideas). The watch array is the CHART STORY — each bullet
+  maps to one signal type with its live-monitorable condition:
+      - taker flow  → "If BSR <> <N>, that means ..."
+      - order book  → "If price tests $<level> where <N> BTC orders sit, that means ..."
+      - funding     → "If funding <> <N>% while price <> <level>, that means ..."
+      - open int.   → "If OI <> <N> BTC as price <> <level>, that means ..."
+      - RSI         → "If RSI <> <N> on the next bar, that means ..."
+      - liquidations→ "If $<N> liquidations hit below $<level>, that means ..."
+      - whale flow  → "If whale <buys/sells> exceed <N> BTC, that means ..."
+  If DeepSeek's reasoning includes multiple of these, emit a bullet for
+  EACH. The watch array read top-to-bottom should read like an expert
+  narrating the chart: "at this level X is happening which means Y, and
+  if Z happens next it means W." Don't lump signals into one bullet; one
+  signal per bullet so each has its own live condition pill in the UI.
 - BALANCE observation-bullets with trigger-bullets. An observation-bullet
   describes what IS happening now and has a condition whose threshold is
   already met (e.g. "Sellers are dominating — BSR <N> with <X> BTC sells vs
