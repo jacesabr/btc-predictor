@@ -2628,7 +2628,18 @@ function App() {
     }
     poll();
     const id = setInterval(poll, 30000);
-    return () => clearInterval(id);
+    // If the browser throttles the tab while hidden (Chrome clamps
+    // setInterval to ~1 min when backgrounded), stats freeze at the last
+    // poll. Force a fresh poll the instant the user refocuses the tab so
+    // they see up-to-date W/L counts immediately on return.
+    const onVis = () => { if (!document.hidden) poll(); };
+    document.addEventListener("visibilitychange", onVis);
+    window.addEventListener("focus", onVis);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("focus", onVis);
+    };
   }, [isAdmin]);
 
   // ── Backend snapshot — fetch on tab switch + new DS window ───
