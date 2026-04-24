@@ -3256,12 +3256,15 @@ function App() {
                              onClick={(e)=>e.stopPropagation()}>↗ {meta.source.label}</a>
                         )}
                       </span>
-                      {/* Layman one-liner prefixed with "what this means:" to tell the
-                            trader WHY this metric matters. Bumped font so it reads cleanly. */}
+                      {/* Per-pill metric DEFINITION (what the number represents). Kept
+                            distinct from the bullet-level "→ what this means:" (trade
+                            consequence) to avoid confusing the two. Uses a small ℹ label
+                            so the trader reads it as "here's what this metric is". */}
                       {meta.layman && (
-                        <span style={{ fontSize:13, color:"#334155",
-                          marginLeft:10, lineHeight:1.45, maxWidth:520 }}>
-                          <span style={{ fontWeight:800, color:C.text, marginRight:4 }}>what this means:</span>
+                        <span style={{ fontSize:12, color:"#475569",
+                          marginLeft:10, lineHeight:1.4, maxWidth:520 }}>
+                          <span style={{ color:C.muted, fontWeight:700, marginRight:5,
+                            fontSize:11, letterSpacing:0.3 }}>ℹ this measures</span>
                           <span style={{ fontStyle:"italic" }}>{meta.layman}</span>
                         </span>
                       )}
