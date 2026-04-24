@@ -1,4 +1,4 @@
-# BTC 5-Minute Predictor — Architecture
+# Simple Analysis — Architecture
 
 ## Overview
 

@@ -1,4 +1,4 @@
-# Polymarket Bitcoin 5-Minute Prediction
+# Simple Analysis
 
 A production system that predicts the direction of BTC/USDT at the close of each 5-minute bar, designed to be bet on Polymarket's "BTC up/down" binary markets.
 

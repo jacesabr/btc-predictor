@@ -1,4 +1,4 @@
-"""Configuration for BTC Oracle Predictor."""
+"""Configuration for Simple Analysis."""
 import os
 from dataclasses import dataclass, field
 from typing import List
