@@ -74,7 +74,7 @@ cost real money. Translate, never invent.
 
 OUTPUT STRICT JSON ONLY, exactly this shape:
 {
-  "edge": "One punchy sentence — what is the dominant setup RIGHT NOW? Max 25 words. Lead with the strongest directional read. Do NOT cram every signal. If data is missing, say so here. If signal is NEUTRAL with no edge, say that plainly.",
+  "edge": "Lead sentence — dominant setup RIGHT NOW. Max 30 words. If the signal is NEUTRAL because of a concrete structural divergence (e.g. 'taker flow bullish but whale flow distributing + no historical precedent'), you MAY use a SECOND sentence (max 25 more words) to name the opposing forces. Cite the concrete numbers that define the divergence. Don't pad with generic hedging.",
   "watch": [{
     "tone": "bullish|bearish|neutral",
     "text": "ONE complete sentence (not a phrase fragment). State what to watch and WHY it matters. Reference the specific signal by name. Example: 'If taker buy volume surges above 50 BTC, the zero-flow regime breaks and bulls regain control.' NOT 'taker flow'. Max 22 words.",
@@ -164,9 +164,13 @@ HARD RULES:
   something to say about a signal, write a full sentence. If you don't, OMIT
   the bullet entirely. Empty conditions does NOT mean empty text — the text
   carries the trader-usable info either way.
-- Each bullet = ONE sentence. Total briefing ≤120 words across edge + all
-  bullets. Scannable in 30s.
-- watch: max 3 bullets. actions: max 3 bullets. Less is more.
+- Each bullet = ONE sentence. Total briefing ≤180 words across edge + all
+  bullets. Scannable in 30s, but DENSE with signal coverage.
+- watch: 3–5 bullets (one per major INPUT signal when present). actions: 2–4
+  bullets (entry + invalidation + partial-fill ideas). DO NOT under-emit — a
+  briefing with rich INPUT and only 2 watch bullets is a failure, not a
+  virtue. Only drop a bullet when there is literally nothing specific to
+  say about that signal in the INPUT.
 - No hedging, no meta-commentary, no "the model says".
 
 COMPLETENESS (LAZINESS IS AUDITED):
@@ -493,7 +497,7 @@ async def _call_venice(
     payload = {
         "model":           model,
         "messages":        messages,
-        "max_tokens":      1100,   # raised to accommodate sources + quotes
+        "max_tokens":      1600,   # raised for 5 watch + 4 actions + 2-sentence edge + quotes
         "temperature":     0.2,
         "response_format": {"type": "json_object"},
     }
@@ -745,8 +749,8 @@ def _validate(obj: Any, input_text: str, strict: bool = False) -> Tuple[Optional
                 break
         return out
 
-    watch   = _norm_bullets("watch",   4)
-    actions = _norm_bullets("actions", 3)
+    watch   = _norm_bullets("watch",   5)
+    actions = _norm_bullets("actions", 4)
     return {
         "edge":    edge.strip(),
         "watch":   watch,
@@ -967,8 +971,21 @@ async def get_or_build(
                 retry_reasons.append(f"{n} bullet(s) with no source_quotes and no auto-derivable anchor")
         if audit["family_mismatch_conditions_cleared"]:
             retry_reasons.append(f"{len(audit['family_mismatch_conditions_cleared'])} bullet(s) had text naming one signal but conditions on another")
-        if completeness["ratio"] < 0.6 and len(completeness["expected"]) >= 3:
+        # Under-coverage trigger. 0.75 threshold means: if >= 25% of major INPUT
+        # signals are silently dropped, we retry. Calibrated against user
+        # feedback that a 0.667-coverage bar felt "sad and sparse" — 2 of 6
+        # signals missed shouldn't slide through.
+        if completeness["ratio"] < 0.75 and len(completeness["expected"]) >= 3:
             retry_reasons.append(f"missed major INPUT topics: {completeness['missed']}")
+        # Density trigger: if INPUT has 4+ signals but briefing has < 3 total
+        # bullets, we retry even if coverage is technically ok (the edge line
+        # alone covering a topic isn't enough — the trader needs an actionable
+        # bullet per major signal).
+        total_bullets = len(cleaned["watch"]) + len(cleaned["actions"])
+        if len(completeness["expected"]) >= 4 and total_bullets < 3:
+            retry_reasons.append(
+                f"only {total_bullets} bullets for {len(completeness['expected'])} major INPUT signals — insufficient density"
+            )
 
         final_cleaned, final_audit = cleaned, audit
         if retry_reasons:
@@ -1003,14 +1020,18 @@ async def get_or_build(
                     fab2 = len(audit2["fabricated_text_numbers"]) + len(audit2["dropped_values"])
                     bullets1 = len(cleaned["watch"]) + len(cleaned["actions"])
                     bullets2 = len(cleaned2["watch"]) + len(cleaned2["actions"])
-                    # Accept retry if it's strictly better: fewer fabrications
-                    # AND no fewer bullets (never lose content on retry).
-                    if fab2 < fab1 and bullets2 >= max(1, bullets1 - 1):
-                        final_cleaned, final_audit = cleaned2, audit2
-                        completeness = completeness2
-                    elif fab2 == fab1 and completeness2["ratio"] > completeness["ratio"]:
-                        final_cleaned, final_audit = cleaned2, audit2
-                        completeness = completeness2
+                    # Accept retry if it's strictly better along any axis
+                    # without regressing on the others:
+                    #   (a) fewer fabrications, same-or-more bullets
+                    #   (b) same fabrications, better coverage
+                    #   (c) same fabrications + coverage, more bullets (denser)
+                    # Never accept a retry that ships FEWER bullets than pass 1.
+                    if fab2 <= fab1 and bullets2 >= bullets1:
+                        if (fab2 < fab1
+                            or completeness2["ratio"] > completeness["ratio"]
+                            or bullets2 > bullets1):
+                            final_cleaned, final_audit = cleaned2, audit2
+                            completeness = completeness2
             except Exception as exc:
                 logger.warning("trader_summary retry failed for bar %s: %s", window_start_time, exc)
 
