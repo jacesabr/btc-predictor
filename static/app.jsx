@@ -2934,16 +2934,57 @@ function App() {
                 const c2conf = c2src?.confidence ?? 0;
                 const c2meta = c2src ? { label:`#${c2src.window_count} · ${c2src.latency_ms}ms`, aiReq: c2src.data_requests&&c2src.data_requests.toUpperCase()!=="NONE"&&c2src.data_requests.trim()!=="" } : null;
 
+                // Pre-compute accuracy display numbers
+                const accPct = (deepseekAcc?.accuracy ?? 0) * 100;
+                const wins = deepseekAcc?.correct ?? 0;
+                const total = (deepseekAcc?.directional ?? 0) + (deepseekAcc?.neutrals ?? 0);
+                const losses = (deepseekAcc?.directional ?? deepseekAcc?.total ?? 0) - wins;
+                const neutral = Math.max(0, total - wins - losses);
+                const barTotal = wins + losses + neutral;
+                const wBarPct = barTotal > 0 ? wins / barTotal * 100 : 0;
+                const lBarPct = barTotal > 0 ? losses / barTotal * 100 : 0;
+                const nBarPct = barTotal > 0 ? neutral / barTotal * 100 : 0;
+                const noAccData = !deepseekAcc?.total;
                 return (
-                  <div style={{ ...card, flexShrink:0, padding:"8px 12px" }}>
-                    {/* HEADER ROW — title left; countdown + LIVE/ADMIN tabs right.
-                        Timer + tabs bumped up since they're the primary always-on UI
-                        nav; user wants them prominent. */}
+                  <div style={{ ...card, flexShrink:0, padding:"10px 14px" }}>
+                    {/* TITLE + signal + meta (lightweight) */}
                     <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, marginBottom:4 }}>
                       <div style={colTitle}>DeepSeek AI Analysis</div>
-                      <div style={{ display:"flex", alignItems:"center", gap:16 }}>
+                      {c2meta && (
+                        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                          <span style={{ fontSize:9, color:C.muted }}>{c2meta.label}</span>
+                          {c2meta.aiReq && <span style={{ fontSize:9, fontWeight:700, padding:"1px 5px", borderRadius:3, color:C.amber, background:C.amberBg, border:`1px solid ${C.amberBorder}` }}>⚡ AI req</span>}
+                        </div>
+                      )}
+                    </div>
+                    {dsErr ? <div style={{ fontSize:11, color:C.red }}>{activeDeepseekPred.reasoning||"API error"}</div>
+                      : c2sig ? <SignalRow sig={c2sig} conf={c2conf} />
+                      : <div style={{ fontSize:11, color:C.muted }}>Analyzing…</div>}
+
+                    {/* BIG ROW — accuracy % + wins/losses INLINE WITH countdown + tabs
+                        All at matching size so the trader's eye takes everything in at once. */}
+                    <div style={{ borderTop:`1px solid ${C.borderSoft}`, marginTop:8, paddingTop:6 }} />
+                    <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", gap:14, flexWrap:"wrap" }}>
+                      {/* LEFT — DeepSeek accuracy % + counts */}
+                      <div style={{ display:"flex", alignItems:"baseline", gap:10 }}>
+                        {!noAccData ? (
+                          <>
+                            <span style={{ fontSize:11, fontWeight:700, color:C.muted, letterSpacing:1.2, textTransform:"uppercase" }}>Accuracy</span>
+                            <span style={{ fontSize:28, fontWeight:900, color:accPct>=50?C.green:C.red, letterSpacing:1, lineHeight:1 }}>{accPct.toFixed(1)}%</span>
+                            <span style={{ fontSize:12, fontWeight:800, color:C.green }}>{wins}W</span>
+                            <span style={{ fontSize:12, color:C.muted }}>/</span>
+                            <span style={{ fontSize:12, fontWeight:800, color:C.red }}>{losses}L</span>
+                            <span style={{ fontSize:12, color:C.muted }}>/</span>
+                            <span style={{ fontSize:12, fontWeight:800, color:C.muted }}>{neutral}N</span>
+                          </>
+                        ) : (
+                          <span style={{ fontSize:12, color:C.muted }}>No historical data yet</span>
+                        )}
+                      </div>
+                      {/* RIGHT — countdown + LIVE/ADMIN tabs at matching large size */}
+                      <div style={{ display:"flex", alignItems:"baseline", gap:16 }}>
                         <div style={{ display:"flex", alignItems:"baseline", gap:7 }}>
-                          <span style={{ fontSize:24, fontWeight:900, fontVariantNumeric:"tabular-nums", lineHeight:1,
+                          <span style={{ fontSize:28, fontWeight:900, fontVariantNumeric:"tabular-nums", lineHeight:1,
                             color:timeLeft<60?C.red:timeLeft<120?C.amber:C.green, letterSpacing:1.5 }}>{mins}:{secs}</span>
                           <span style={{ fontSize:10, color:C.muted, letterSpacing:1.2, textTransform:"uppercase", fontWeight:700 }}>bar closes</span>
                         </div>
@@ -2958,25 +2999,21 @@ function App() {
                                 background:"none", border:"none",
                                 borderBottom:active?`3px solid ${C.amber}`:"3px solid transparent",
                                 color:active?C.amber:C.muted, fontWeight:active?800:500,
-                                padding:"5px 14px", cursor:"pointer",
-                                fontSize:14, fontFamily:"inherit", letterSpacing:2 }}>{label}</button>
+                                padding:"4px 12px", cursor:"pointer",
+                                fontSize:16, fontFamily:"inherit", letterSpacing:2 }}>{label}</button>
                             );
                           })}
                         </div>
                       </div>
                     </div>
-                    {dsErr ? <div style={{ fontSize:11, color:C.red }}>{activeDeepseekPred.reasoning||"API error"}</div>
-                      : c2sig ? <SignalRow sig={c2sig} conf={c2conf} />
-                      : <div style={{ fontSize:11, color:C.muted }}>Analyzing…</div>}
-                    <div style={metaRow}>
-                      {c2meta && (<>
-                        <span style={{ fontSize:9, color:C.muted }}>{c2meta.label}</span>
-                        {c2meta.aiReq && <span style={{ fontSize:9, fontWeight:700, padding:"1px 5px", borderRadius:3, color:C.amber, background:C.amberBg, border:`1px solid ${C.amberBorder}` }}>⚡ AI req</span>}
-                      </>)}
-                    </div>
-                    <AccuracyRow lbl="DeepSeek accuracy" pct={deepseekAcc?.accuracy*100??0} wins={deepseekAcc?.correct??0}
-                      losses={(deepseekAcc?.directional??deepseekAcc?.total??0)-(deepseekAcc?.correct??0)}
-                      total={(deepseekAcc?.directional??0)+(deepseekAcc?.neutrals??0)} noData={!deepseekAcc?.total} />
+                    {/* Accuracy progress bar */}
+                    {!noAccData && (
+                      <div style={{ display:"flex", height:5, borderRadius:3, overflow:"hidden", marginTop:4, background:C.borderSoft }}>
+                        {wBarPct > 0 && <div style={{ width:`${wBarPct}%`, background:C.green }} />}
+                        {lBarPct > 0 && <div style={{ width:`${lBarPct}%`, background:C.red }} />}
+                        {nBarPct > 0 && <div style={{ width:`${nBarPct}%`, background:C.muted }} />}
+                      </div>
+                    )}
                   </div>
                 );
               })()}
@@ -3118,14 +3155,15 @@ function App() {
                         {meta.source && (
                           <a href={meta.source.url} target="_blank" rel="noopener noreferrer"
                              title={`Live source: ${meta.source.label}`}
-                             style={{ color:"#2563EB", textDecoration:"none", fontSize:12, fontWeight:700,
-                               padding:"0 3px", marginLeft:2 }}
-                             onClick={(e)=>e.stopPropagation()}>↗</a>
+                             style={{ color:"#2563EB", textDecoration:"none", fontSize:10, fontWeight:800,
+                               padding:"2px 6px", marginLeft:4, borderRadius:3,
+                               background:"#EFF6FF", border:"1px solid #BFDBFE", letterSpacing:0.5 }}
+                             onClick={(e)=>e.stopPropagation()}>↗ {meta.source.label.toUpperCase()}</a>
                         )}
                       </span>
                       {/* Layman one-liner */}
                       {meta.layman && (
-                        <span style={{ fontSize:10, color:C.muted, fontStyle:"italic",
+                        <span style={{ fontSize:11, color:"#475569", fontStyle:"italic",
                           marginLeft:10, lineHeight:1.4, maxWidth:480 }}>
                           {meta.layman}
                         </span>
@@ -3134,9 +3172,13 @@ function App() {
                   );
                 };
 
-                // Evaluate conditions → yield firing state per bullet.
-                // "fired" means all conditions met (box becomes green/red based on tone).
-                // "pending" means waiting for at least one condition (box stays yellow).
+                // Evaluate conditions → firing state per bullet.
+                // Bucketing rules:
+                //   - hasConds + all met           → ACTIONABLE (fired, green/red)
+                //   - no conditions at all         → ACTIONABLE (immediate narrative, the trader
+                //     should act on NOW — e.g. "stand aside, no edge"; these have no trigger
+                //     to wait on so they're always "live advice")
+                //   - hasConds + not all met       → POTENTIAL (waiting for trigger)
                 const evalBullet = (b) => {
                   const results = (b.conditions || []).map((c) => {
                     const live = metric(c.metric);
@@ -3144,7 +3186,8 @@ function App() {
                   });
                   const hasConds = results.length > 0;
                   const allMet   = hasConds && results.every(r => r === true);
-                  return { ...b, __allMet: allMet, __hasConds: hasConds };
+                  const actionable = !hasConds || allMet;  // immediate advice OR fired trigger
+                  return { ...b, __allMet: allMet, __hasConds: hasConds, __actionable: actionable };
                 };
 
                 const Bullet = ({ tone, text, conditions, if_met, __allMet, __hasConds }) => {
@@ -3185,12 +3228,18 @@ function App() {
                           {conditions.map((c, i) => <ConditionPill key={i} cond={c} />)}
                         </div>
                       )}
-                      {/* "This means" — only when all conditions fire. Emphatic, tone-colored. */}
-                      {fired && if_met && (
+                      {/* "This means" — always visible when Venice emits it. Tone-colored
+                          + emphatic when fired, muted when pending so the trader sees the
+                          edge preview regardless of current state. */}
+                      {if_met && (
                         <div style={{ marginLeft:28, marginTop:3,
-                          fontSize:14, fontWeight:800, lineHeight:1.4,
-                          color: msgColor, letterSpacing:0.2 }}>
-                          <span style={{ opacity:0.7, fontWeight:600, marginRight:4 }}>→ this means:</span>
+                          fontSize:fired?14:11, fontWeight:fired?800:600, lineHeight:1.4,
+                          color: fired ? msgColor : C.textSec,
+                          fontStyle: fired ? "normal" : "italic",
+                          letterSpacing:fired?0.2:0 }}>
+                          <span style={{ opacity:fired?0.7:0.55, fontWeight:600, marginRight:4 }}>
+                            {fired ? "→ this means:" : "→ if conditions fire:"}
+                          </span>
                           {if_met}
                         </div>
                       )}
@@ -3215,38 +3264,58 @@ function App() {
                           fontWeight:600 }}>
                           <BullBearText text={traderSummary.edge} size={15} baseColor={C.text} />
                         </div>
-                        {/* Re-categorize bullets by CONDITION STATE, not Venice's original
-                            watch/actions split. Trader mental model:
-                              ACTIONABLE = conditions met right now, act / this is happening
-                              POTENTIAL  = conditions waiting, scenario hasn't fired yet */}
                         {(() => {
                           const all = [
                             ...(traderSummary.watch   || []).map(b => ({ ...b, __src: "w" })),
                             ...(traderSummary.actions || []).map(b => ({ ...b, __src: "a" })),
                           ].map(evalBullet);
-                          const fired   = all.filter(b => b.__allMet);
-                          const pending = all.filter(b => !b.__allMet);
+                          const actionable = all.filter(b => b.__actionable);
+                          const waiting    = all.filter(b => !b.__actionable);
                           return (<>
-                            {fired.length > 0 && (
+                            {actionable.length > 0 && (
                               <div style={{ marginTop:10 }}>
-                                <div style={{ fontSize:10, fontWeight:700, color:"#15803D", letterSpacing:1,
-                                  textTransform:"uppercase", marginBottom:6 }}>Actionable · conditions met right now</div>
+                                <div style={{ fontSize:11, fontWeight:800, color:"#15803D", letterSpacing:1.2,
+                                  textTransform:"uppercase", marginBottom:6 }}>Actionable · {actionable.filter(b=>b.__allMet).length} firing, {actionable.filter(b=>!b.__hasConds).length} immediate</div>
                                 <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                                  {fired.map((b, i) => <Bullet key={`f${b.__src}${i}`} {...b} />)}
+                                  {actionable.map((b, i) => <Bullet key={`act${b.__src}${i}`} {...b} />)}
                                 </div>
                               </div>
                             )}
-                            {pending.length > 0 && (
+                            {waiting.length > 0 && (
                               <div style={{ marginTop:12 }}>
-                                <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:1,
-                                  textTransform:"uppercase", marginBottom:6 }}>Potential · waiting for conditions</div>
+                                <div style={{ fontSize:11, fontWeight:800, color:C.amber, letterSpacing:1.2,
+                                  textTransform:"uppercase", marginBottom:6 }}>Waiting for conditions</div>
                                 <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                                  {pending.map((b, i) => <Bullet key={`p${b.__src}${i}`} {...b} />)}
+                                  {waiting.map((b, i) => <Bullet key={`w${b.__src}${i}`} {...b} />)}
                                 </div>
                               </div>
                             )}
                           </>);
                         })()}
+                        {/* SOURCES FOOTER — universal click-through for every number in
+                            the briefing (edge, bullets, pills). If Venice cites a value,
+                            the trader can verify it from the listed upstream dashboards. */}
+                        <div style={{ marginTop:14, paddingTop:10, borderTop:`1px solid ${C.borderSoft}`,
+                          display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                          <span style={{ fontSize:10, fontWeight:800, color:C.muted, letterSpacing:1.2,
+                            textTransform:"uppercase", marginRight:4 }}>Verify sources</span>
+                          {[
+                            { label:"Binance spot",    url:"https://www.binance.com/en/trade/BTC_USDT" },
+                            { label:"Binance futures", url:"https://www.binance.com/en/futures/BTCUSDT" },
+                            { label:"Taker flow",      url:"https://www.coinglass.com/BitcoinTakerBuySellVolume" },
+                            { label:"Funding",         url:"https://www.coinglass.com/FundingRate" },
+                            { label:"OI",              url:"https://www.coinglass.com/BitcoinOpenInterest" },
+                            { label:"L/S ratio",       url:"https://www.coinglass.com/LongShortRatio" },
+                            { label:"Liquidations",    url:"https://www.coinglass.com/BitcoinLiquidations" },
+                          ].map((s) => (
+                            <a key={s.label} href={s.url} target="_blank" rel="noopener noreferrer"
+                               style={{ color:"#2563EB", textDecoration:"none", fontSize:10, fontWeight:800,
+                                 padding:"3px 8px", borderRadius:3, letterSpacing:0.5,
+                                 background:"#EFF6FF", border:"1px solid #BFDBFE" }}>
+                              ↗ {s.label.toUpperCase()}
+                            </a>
+                          ))}
+                        </div>
                       </div>
                     )}
                     {!briefingReady && (
