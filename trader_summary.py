@@ -221,8 +221,9 @@ def _build_user_prompt(
 
     # Current-bar prose summary used for historical similarity search. Lets
     # Venice sanity-check that historical matches actually fit current state.
+    # NEUTRAL bars: full text (nuance preserved); directional bars: truncate.
     if historical_context:
-        hc = historical_context if is_neutral else _truncate(historical_context, 2500)
+        hc = historical_context if is_neutral else _truncate(historical_context, 3000)
         parts.append(f"current_bar_context:\n{hc}")
 
     if historical:

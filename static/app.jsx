@@ -3056,9 +3056,10 @@ function App() {
                 );
               })()}
 
-              {/* TRADER BRIEFING + STATUS STRIP — wrapped in a narrow 40%-width column
-                  so the content stays tight and scannable. Larger fonts now that there's
-                  less on screen. Inline bull/bear language coloring + emoji tone tags. */}
+              {/* TRADER BRIEFING + STATUS STRIP — wrapped in ErrorBoundary so a
+                  render exception (bad Venice output, missing metric, etc.) doesn't
+                  crash the whole live tab. Trader keeps seeing chart + DeepSeek card. */}
+              <ErrorBoundary key="briefing">
               {(() => {
                 const BULL_WORDS = new Set([
                   "bullish","uptrend","upside","upward","breakout","bounce","rally","surge",
@@ -3337,7 +3338,10 @@ function App() {
                   // paint green/red when the bullet actually names a trade direction.
                   const phrase         = `${if_met || ""} ${text || ""}`.toLowerCase();
                   const DIRECTIONAL_RE = /\b(long|short|buy|sell|enter|exit|rally|drop|breakout|breakdown|upside|downside|bullish|bearish)\b/;
-                  const NEUTRAL_RE     = /\b(indecision|no breakout|no breakdown|range-?bound|consolidation|stand aside|sidelines?|neutral)\b/;
+                  // Neutral markers — includes variants like "not breaking", "fails to break",
+                  // "no break", "chop", "choppy", to catch neutral-lean bullets that would
+                  // otherwise be force-colored by a stray directional keyword in the narrative.
+                  const NEUTRAL_RE     = /\b(indecision|no breakout|no breakdown|no break|not breaking|fails to break|range-?bound|consolidation|consolidating|stand aside|sidelines?|chop(?:py)?|neutral)\b/;
                   const directional    = DIRECTIONAL_RE.test(phrase) && !NEUTRAL_RE.test(phrase);
                   const firedBull = active && tone === "bullish" && directional;
                   const firedBear = active && tone === "bearish" && directional;
@@ -3535,6 +3539,7 @@ function App() {
                   </div>
                 );
               })()}
+              </ErrorBoundary>
 
               {/* Historical Pattern block removed — the raw pattern data is fed into Venice
                   and surfaces in the trader briefing above as Watch/Actions bullets when relevant.
