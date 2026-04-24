@@ -883,15 +883,29 @@ function EnsembleTab({ weights, ob, ls, tk, oif, lq, fg, mp, cz, cg, dots, price
     microAcc[shortKey] = r;
   });
 
+  // Aggressive-precision BTC formatter — matches the briefing pill's fmt.btc.
+  // Never round a non-zero value to "0"; add decimal precision as the value
+  // gets smaller so the trader can see there's a real reading even when it's
+  // a fraction of a BTC.
+  const btcFmt = (v) => {
+    if (v == null || !isFinite(v)) return "—";
+    if (v === 0) return "0";
+    const a = Math.abs(v);
+    if (a >= 1000)  return v.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    if (a >= 10)    return v.toFixed(1);
+    if (a >= 1)     return v.toFixed(2);
+    if (a >= 0.01)  return v.toFixed(3);
+    return v.toFixed(4);
+  };
   const microRows = [
     { key:"order_book",  uiKey:"ob",  name:"Order Book",   dot:dots.ob,  signal:ob?.sig,
-      kv: ob ? [["Bid",`${ob.bv?.toFixed(0)} BTC`],["Imb",`${ob.imb>=0?"+":""}${ob.imb?.toFixed(1)}%`],["Ask",`${ob.av?.toFixed(0)} BTC`]] : [] },
+      kv: ob ? [["Bid",`${btcFmt(ob.bv)} BTC`],["Imb",`${ob.imb>=0?"+":""}${ob.imb?.toFixed(1)}%`],["Ask",`${btcFmt(ob.av)} BTC`]] : [] },
     { key:"long_short",  uiKey:"ls",  name:"Long/Short",   dot:dots.ls,  signal:ls?.rSig,
       kv: ls ? [["L/S",ls.lsr?.toFixed(3)],["Retail",`${ls.retailLong?.toFixed(0)}%L`],["Smart",`${ls.smartLong?.toFixed(0)}%L`],["Div",`${ls.div>=0?"+":""}${ls.div?.toFixed(1)}%`]] : [] },
     { key:"taker_flow",  uiKey:"tk",  name:"Taker Flow",   dot:dots.tk,  signal:tk?.sig,
-      kv: tk ? [["BSR",tk.bsr?.toFixed(4)],["Buy",`${tk.bv?.toFixed(0)} BTC`],["Sell",`${tk.sv?.toFixed(0)} BTC`],["Trend",tk.trend]] : [] },
+      kv: tk ? [["BSR",tk.bsr?.toFixed(4)],["Buy",`${btcFmt(tk.bv)} BTC`],["Sell",`${btcFmt(tk.sv)} BTC`],["Trend",tk.trend]] : [] },
     { key:"oi_funding",  uiKey:"oif", name:"OI + Funding", dot:dots.oif, signal:oif?.frSig,
-      kv: oif ? [["OI",`${oif.oi?.toFixed(0)} BTC`],["FR",`${(oif.fr*100)?.toFixed(4)}%`],["Prem",`${oif.premium?.toFixed(4)}%`],["Next",oif.nextFund]] : [] },
+      kv: oif ? [["OI",`${btcFmt(oif.oi)} BTC`],["FR",`${(oif.fr*100)?.toFixed(4)}%`],["Prem",`${oif.premium?.toFixed(4)}%`],["Next",oif.nextFund]] : [] },
     { key:"liquidations",uiKey:"lq",  name:"Liquidations", dot:dots.lq,  signal:lq?.sig,
       kv: lq ? [["Total",lq.total],["Long",`${lq.longCount} ($${(lq.lvol||0).toLocaleString(undefined,{maximumFractionDigits:0})})`],["Short",`${lq.shortCount} ($${(lq.svol||0).toLocaleString(undefined,{maximumFractionDigits:0})})`]] : [] },
     { key:"fear_greed",  uiKey:"fg",  name:"Fear & Greed", dot:dots.fg,  signal:fg?.sig,
@@ -2674,15 +2688,22 @@ function App() {
       .then(d => { if (d?.error) { console.error("[accuracy/all server error]", d.error); setAllAccuracyErr(true); } else if (d) { setAllAccuracy(d); setAllAccuracyErr(false); } else { setAllAccuracyErr(true); } })
       .catch(e => { console.error("[accuracy/all]", e); setAllAccuracyErr(true); });
   }, []);
+  // Fetch accuracy data when EITHER the public SOURCES tab is open OR an
+  // admin-panel section that needs it is expanded. Previously only the
+  // admin path triggered the fetch, so the public SOURCES tab hung forever
+  // on "Loading accuracy data…".
+  const accuracyNeeded = (tab === "sources")
+                      || (expandedAdminSection === "ensemble")
+                      || (expandedAdminSection === "history");
   useEffect(() => {
-    if (expandedAdminSection !== "ensemble" && expandedAdminSection !== "history") return;
+    if (!accuracyNeeded) return;
     fetchAllAccuracy();
-  }, [expandedAdminSection, fetchAllAccuracy]);
+  }, [accuracyNeeded, fetchAllAccuracy]);
   useEffect(() => {
-    if (expandedAdminSection !== "ensemble" && expandedAdminSection !== "history") return;
+    if (!accuracyNeeded) return;
     const id = setInterval(fetchAllAccuracy, 20000);
     return () => clearInterval(id);
-  }, [expandedAdminSection, fetchAllAccuracy]);
+  }, [accuracyNeeded, fetchAllAccuracy]);
 
   // ── Embedding audit — fetch when EMBED AUDIT section expanded ──
   useEffect(() => {
@@ -2939,20 +2960,45 @@ function App() {
       );
     };
     const fmt = {
-      // Adaptive precision: small values (< 10 BTC) need 2 decimals so
-      // 0.63 doesn't collapse to "0.6"; mid values (10-999 BTC) get 1
-      // decimal; large values (≥ 1000 BTC, e.g. OI) get comma-grouped
-      // integers. Keeps pill values aligned with what the bullet text
-      // cites verbatim.
+      // Aggressive precision — never let a non-zero reading round to "0".
+      // A "0 BTC" or "0.00%" pill made the trader think the source was
+      // dead; show whatever decimal count is needed to prove there's an
+      // actual value there.
+      //   value == 0           → "0 BTC"
+      //   |v| < 0.01           → 4 decimals (e.g. "0.0045 BTC")
+      //   |v| < 1              → 3 decimals (e.g. "0.152 BTC")
+      //   |v| < 10             → 2 decimals (e.g. "5.42 BTC")
+      //   |v| < 1000           → 1 decimal  (e.g. "320.5 BTC")
+      //   |v| ≥ 1000           → integer + commas (e.g. "34,839 BTC")
       btc:  (v) => {
+        if (v === 0 || v == null) return "0 BTC";
         const a = Math.abs(v);
         if (a >= 1000)  return `${v.toLocaleString(undefined,{maximumFractionDigits:0})} BTC`;
         if (a >= 10)    return `${v.toFixed(1)} BTC`;
-        return `${v.toFixed(2)} BTC`;
+        if (a >= 1)     return `${v.toFixed(2)} BTC`;
+        if (a >= 0.01)  return `${v.toFixed(3)} BTC`;
+        return `${v.toFixed(4)} BTC`;
       },
-      usd:  (v) => `$${v.toLocaleString(undefined,{maximumFractionDigits:0})}`,
-      pct:  (v) => `${v.toFixed(2)}%`,
-      num:  (v) => v.toFixed(2),
+      usd:  (v) => {
+        if (v === 0 || v == null) return "$0";
+        const a = Math.abs(v);
+        if (a >= 1)     return `$${v.toLocaleString(undefined,{maximumFractionDigits:0})}`;
+        return `$${v.toFixed(4)}`;
+      },
+      pct:  (v) => {
+        if (v === 0 || v == null) return "0%";
+        const a = Math.abs(v);
+        if (a >= 1)     return `${v.toFixed(2)}%`;
+        if (a >= 0.01)  return `${v.toFixed(3)}%`;
+        return `${v.toFixed(5)}%`;
+      },
+      num:  (v) => {
+        if (v === 0 || v == null) return "0";
+        const a = Math.abs(v);
+        if (a >= 1)     return v.toFixed(2);
+        if (a >= 0.01)  return v.toFixed(3);
+        return v.toFixed(4);
+      },
     };
     const ds     = (backendSnap?.snapshot?.dashboard_signals) || {};
     const spb    = ds.spot_perp_basis;

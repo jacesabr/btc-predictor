@@ -495,8 +495,11 @@ async def inspect_last_deepseek():
     return {"server_time": time.time(), "files": files}
 
 
-@app.get("/accuracy/all", dependencies=[Depends(require_admin)])
+@app.get("/accuracy/all")
 async def get_all_accuracy(n: int = 100):
+    # Public — powers the SOURCES tab's "Prediction Accuracy — All Sources"
+    # panel which anyone can view alongside the live microstructure signals.
+    # The data is aggregate signal-performance stats, no user PII.
     try:
       from strategies import accuracy_to_label
       limit     = n if n > 0 else None
