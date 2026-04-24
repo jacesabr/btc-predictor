@@ -3232,11 +3232,13 @@ function App() {
                   const active    = __actionable;     // no-conditions immediate OR fired
                   const firedBull = active && tone === "bullish";
                   const firedBear = active && tone === "bearish";
+                  // Color policy: ONLY directional (BUY/SELL) uses colored backgrounds.
+                  // PAUSE and waiting use neutral gray — nothing to act on, no need to shout.
                   let bg, border, leftBar, msgColor, actionLabel, actionIcon;
                   if (firedBull)       { bg = "#ECFDF5"; border = C.green;        leftBar = C.green;  msgColor = "#15803D"; actionLabel = "BUY";   actionIcon = "▲"; }
                   else if (firedBear)  { bg = "#FEF2F2"; border = C.red;          leftBar = C.red;    msgColor = "#B91C1C"; actionLabel = "SELL";  actionIcon = "▼"; }
-                  else if (active)     { bg = C.amberBg; border = C.amberBorder;  leftBar = C.amber;  msgColor = "#B45309"; actionLabel = "PAUSE"; actionIcon = "⏸"; }
-                  else                 { bg = "#FAFAF9"; border = C.borderSoft;   leftBar = C.muted;  msgColor = C.muted;    actionLabel = null;    actionIcon = "⏸"; }
+                  else if (active)     { bg = "#F5F5F4"; border = C.borderSoft;   leftBar = C.muted;  msgColor = "#57534E"; actionLabel = "PAUSE"; actionIcon = "⏸"; }
+                  else                 { bg = "#FAFAF9"; border = C.borderSoft;   leftBar = C.muted;  msgColor = C.muted;   actionLabel = null;    actionIcon = "⏸"; }
                   return (
                     <div style={{ display:"flex", flexDirection:"column", gap:6,
                       padding:"8px 12px", borderRadius:6,
