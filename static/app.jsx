@@ -3225,18 +3225,18 @@ function App() {
                   return { ...b, __allMet: allMet, __hasConds: hasConds, __actionable: actionable };
                 };
 
-                const Bullet = ({ tone, text, conditions, if_met, __allMet, __hasConds }) => {
-                  // Color rules per user direction:
-                  //   - Conditions met → green (bullish/neutral) or red (bearish). Box shouts "fired".
-                  //   - Conditions pending / no conditions → yellow (awaiting).
-                  const fired = __allMet;
-                  const firedBull = fired && tone === "bullish";
-                  const firedBear = fired && tone === "bearish";
-                  let bg, border, leftBar, emoji, msgColor;
-                  if (firedBull)      { bg = "#ECFDF5"; border = C.green;  leftBar = C.green;  emoji = "🟢"; msgColor = "#15803D"; }
-                  else if (firedBear) { bg = "#FEF2F2"; border = C.red;    leftBar = C.red;    emoji = "🔴"; msgColor = "#B91C1C"; }
-                  else if (fired)     { bg = "#ECFDF5"; border = C.green;  leftBar = C.green;  emoji = "✅"; msgColor = "#15803D"; }
-                  else                { bg = C.amberBg; border = C.amberBorder; leftBar = C.amber; emoji = "⚠️"; msgColor = C.amber; }
+                const Bullet = ({ tone, text, conditions, if_met, __allMet, __hasConds, __actionable }) => {
+                  // A bullet is "active right now" when it has no conditions (immediate
+                  // narrative like "stand aside") OR all its conditions have fired.
+                  const fired     = __allMet;
+                  const active    = __actionable;     // no-conditions immediate OR fired
+                  const firedBull = active && tone === "bullish";
+                  const firedBear = active && tone === "bearish";
+                  let bg, border, leftBar, msgColor, actionLabel, actionIcon;
+                  if (firedBull)       { bg = "#ECFDF5"; border = C.green;        leftBar = C.green;  msgColor = "#15803D"; actionLabel = "BUY";   actionIcon = "▲"; }
+                  else if (firedBear)  { bg = "#FEF2F2"; border = C.red;          leftBar = C.red;    msgColor = "#B91C1C"; actionLabel = "SELL";  actionIcon = "▼"; }
+                  else if (active)     { bg = C.amberBg; border = C.amberBorder;  leftBar = C.amber;  msgColor = "#B45309"; actionLabel = "PAUSE"; actionIcon = "⏸"; }
+                  else                 { bg = "#FAFAF9"; border = C.borderSoft;   leftBar = C.muted;  msgColor = C.muted;    actionLabel = null;    actionIcon = "⏸"; }
                   return (
                     <div style={{ display:"flex", flexDirection:"column", gap:6,
                       padding:"8px 12px", borderRadius:6,
@@ -3245,19 +3245,25 @@ function App() {
                       border: `1px solid ${border}`,
                       transition: "background-color 400ms ease, border-color 400ms ease, border-left-color 400ms ease" }}>
                       <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
-                        <span style={{ fontSize:16, lineHeight:1.3, flexShrink:0, paddingTop:1 }}>
-                          {emoji}
-                        </span>
+                        {/* LEFT — action chip (BUY / SELL / PAUSE) when the bullet is
+                            live; a muted ⏸ when it's waiting. Primary trader signal. */}
+                        {actionLabel ? (
+                          <span style={{ display:"inline-flex", alignItems:"center", gap:4,
+                            fontSize:12, fontWeight:900, color:msgColor,
+                            background:"#FFFFFF", border:`2px solid ${border}`,
+                            borderRadius:4, padding:"2px 8px", letterSpacing:1.5,
+                            flexShrink:0, lineHeight:1.2, minWidth:64, justifyContent:"center" }}>
+                            <span style={{ fontSize:13 }}>{actionIcon}</span>
+                            {actionLabel}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize:14, color:C.muted, opacity:0.6, flexShrink:0, paddingTop:2, minWidth:64, textAlign:"center" }}>
+                            ⏸
+                          </span>
+                        )}
                         <span style={{ flex:1 }}>
                           <BullBearText text={text} size={12} baseColor={C.text} />
                         </span>
-                        {fired && (
-                          <span style={{ fontSize:9, fontWeight:900, color:msgColor,
-                            background:"#FFFFFF", border:`1px solid ${border}`,
-                            borderRadius:3, padding:"1px 6px", letterSpacing:1, flexShrink:0 }}>
-                            LIVE
-                          </span>
-                        )}
                       </div>
                       {__hasConds && (
                         <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginLeft:28 }}>
