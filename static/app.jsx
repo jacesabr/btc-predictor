@@ -3040,12 +3040,10 @@ function App() {
                   "lower","ll","lh","weak","short","shorts","down","failing","losing",
                 ]);
                 const BullBearText = ({ text, size, baseColor }) => {
-                  // Numeric refs ($X,XXX, X%, X BTC) get bumped one step bigger than the
-                  // surrounding prose so the trader's eye latches onto them first.
+                  // Keep sentence text a single calm color (driven by the bullet box tone).
+                  // Only numeric refs get bold emphasis so the trader's eye finds the levels
+                  // without a rainbow of green/red word coloring.
                   const refSize = size + 2;
-                  // Extract numeric refs whole so commas inside e.g. "$78,375" don't
-                  // split the number in half. Prior approach split on "," at top level
-                  // and rendered "$78" bold + ",375" plain.
                   const REF = /(\$\d[\d,]*(?:\.\d+)?[kKmM]?|\d+(?:\.\d+)?%|\d+(?:\.\d+)?\s*BTC\b)/gi;
                   const segments = [];
                   let last = 0, m;
@@ -3056,17 +3054,11 @@ function App() {
                   }
                   if (last < text.length) segments.push({ k: "prose", t: text.slice(last) });
                   let key = 0;
-                  const renderProse = (s) => s.split(/(\s+|[,;:.!?()\[\]])/).map((p) => {
-                    const clean = p.toLowerCase().replace(/[^a-z]/g, "");
-                    if (clean && BULL_WORDS.has(clean)) return <strong key={key++} style={{ color:"#16A34A", fontWeight:800 }}>{p}</strong>;
-                    if (clean && BEAR_WORDS.has(clean)) return <strong key={key++} style={{ color:"#DC2626", fontWeight:800 }}>{p}</strong>;
-                    return <span key={key++}>{p}</span>;
-                  });
                   return (
                     <span style={{ fontSize:size, color:baseColor, lineHeight:1.55 }}>
                       {segments.map((seg) => seg.k === "ref"
                         ? <strong key={key++} style={{ color:C.text, fontWeight:900, fontSize:refSize }}>{seg.t}</strong>
-                        : renderProse(seg.t)
+                        : <span key={key++}>{seg.t}</span>
                       )}
                     </span>
                   );
@@ -3162,10 +3154,9 @@ function App() {
                         {meta.source && (
                           <a href={meta.source.url} target="_blank" rel="noopener noreferrer"
                              title={`Live source: ${meta.source.label}`}
-                             style={{ color:"#2563EB", textDecoration:"none", fontSize:10, fontWeight:800,
-                               padding:"2px 6px", marginLeft:4, borderRadius:3,
-                               background:"#EFF6FF", border:"1px solid #BFDBFE", letterSpacing:0.5 }}
-                             onClick={(e)=>e.stopPropagation()}>↗ {meta.source.label.toUpperCase()}</a>
+                             style={{ color:C.muted, textDecoration:"none", fontSize:10, fontWeight:700,
+                               marginLeft:4, letterSpacing:0.5 }}
+                             onClick={(e)=>e.stopPropagation()}>↗ source</a>
                         )}
                       </span>
                       {/* Layman one-liner */}
@@ -3305,10 +3296,10 @@ function App() {
                         {/* SOURCES FOOTER — universal click-through for every number in
                             the briefing (edge, bullets, pills). If Venice cites a value,
                             the trader can verify it from the listed upstream dashboards. */}
-                        <div style={{ marginTop:14, paddingTop:10, borderTop:`1px solid ${C.borderSoft}`,
-                          display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-                          <span style={{ fontSize:10, fontWeight:800, color:C.muted, letterSpacing:1.2,
-                            textTransform:"uppercase", marginRight:4 }}>Verify sources</span>
+                        <div style={{ marginTop:12, paddingTop:8, borderTop:`1px solid ${C.borderSoft}`,
+                          display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+                          <span style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1,
+                            textTransform:"uppercase" }}>Verify sources ↗</span>
                           {[
                             { label:"Binance spot",    url:"https://www.binance.com/en/trade/BTC_USDT" },
                             { label:"Binance futures", url:"https://www.binance.com/en/futures/BTCUSDT" },
@@ -3319,10 +3310,9 @@ function App() {
                             { label:"Liquidations",    url:"https://www.coinglass.com/BitcoinLiquidations" },
                           ].map((s) => (
                             <a key={s.label} href={s.url} target="_blank" rel="noopener noreferrer"
-                               style={{ color:"#2563EB", textDecoration:"none", fontSize:10, fontWeight:800,
-                                 padding:"3px 8px", borderRadius:3, letterSpacing:0.5,
-                                 background:"#EFF6FF", border:"1px solid #BFDBFE" }}>
-                              ↗ {s.label.toUpperCase()}
+                               style={{ color:C.textSec, textDecoration:"underline", textDecorationColor:C.borderSoft,
+                                 fontSize:10, fontWeight:600 }}>
+                              {s.label}
                             </a>
                           ))}
                         </div>
