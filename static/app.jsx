@@ -3055,57 +3055,57 @@ function App() {
     };
     const opCheck = { ">": (a,b)=>a>b, ">=": (a,b)=>a>=b, "<": (a,b)=>a<b, "<=": (a,b)=>a<=b, "==": (a,b)=>Math.abs(a-b)<1e-9 };
     const METRIC_META = {
-      price:             { label: "price",      layman: "Current BTC/USDT spot price.",
+      price:             { label: "price",      layman: "The current BTC price on Binance spot.",
                            source: { label: "Binance spot", url: "/#sources" } },
-      price_change_pct:  { label: "Δ price",    layman: "% change from this bar's open — positive = up move so far, negative = down.",
+      price_change_pct:  { label: "Δ price",    layman: "How far price has moved since this 5-minute bar opened. Positive means up, negative means down.",
                            source: { label: "Binance spot", url: "/#sources" } },
-      taker_buy_volume:  { label: "taker buy",  layman: "BTC bought by traders crossing the ask in the last 5 min (aggressive buyers).",
+      taker_buy_volume:  { label: "taker buy",  layman: "BTC bought by people market-buying (clicking BUY instead of placing a limit order) in the last 5 minutes. Bigger = stronger buyer pressure.",
                            source: { label: "Coinglass", url: "/#sources" } },
-      taker_sell_volume: { label: "taker sell", layman: "BTC sold by traders hitting the bid in the last 5 min (aggressive sellers).",
+      taker_sell_volume: { label: "taker sell", layman: "BTC sold by people market-selling (clicking SELL instead of placing a limit order) in the last 5 minutes. Bigger = stronger seller pressure.",
                            source: { label: "Coinglass", url: "/#sources" } },
-      taker_volume:      { label: "taker vol",  layman: "Total aggressor volume (buys + sells) in the last 5 min — pure noise when near zero.",
+      taker_volume:      { label: "taker vol",  layman: "Total BTC that crossed the market (buys + sells) in the last 5 minutes. Near zero = no one is acting.",
                            source: { label: "Coinglass", url: "/#sources" } },
-      taker_ratio:       { label: "BSR",        layman: "Buy-to-sell aggressor ratio. >1 = buyers dominating, <1 = sellers dominating.",
+      taker_ratio:       { label: "BSR",        layman: "BSR = Buy/Sell Ratio. How many BTC are being market-bought compared to market-sold right now. Above 1 means buyers are pushing, below 1 means sellers are. At 1 = balanced.",
                            source: { label: "Coinglass", url: "/#sources" } },
-      bsr:               { label: "BSR",        layman: "Buy-to-sell aggressor ratio. >1 = buyers dominating, <1 = sellers dominating.",
+      bsr:               { label: "BSR",        layman: "BSR = Buy/Sell Ratio. How many BTC are being market-bought compared to market-sold right now. Above 1 means buyers are pushing, below 1 means sellers are. At 1 = balanced.",
                            source: { label: "Coinglass", url: "/#sources" } },
-      bid_imbalance:     { label: "bid imb",    layman: "Positive = more bids than asks in the top 20 book levels. Shows buyer support depth.",
+      bid_imbalance:     { label: "bid imb",    layman: "How lopsided the order book is near the current price. Positive = more buy orders sitting than sell orders, so there's a cushion below.",
                            source: { label: "Binance depth", url: "/#sources" } },
-      ask_imbalance:     { label: "ask imb",    layman: "Positive = more asks than bids in the top 20 book levels. Shows seller supply overhead.",
+      ask_imbalance:     { label: "ask imb",    layman: "How lopsided the order book is near the current price. Positive = more sell orders sitting than buy orders, so there's resistance above.",
                            source: { label: "Binance depth", url: "/#sources" } },
-      funding_rate:      { label: "funding",    layman: "% longs pay shorts every 8h. Positive = bullish crowd (longs paying to stay long).",
+      funding_rate:      { label: "funding",    layman: "The % that long positions pay short positions every 8 hours on Binance perps. Positive = too many longs crowded in (pay-to-stay). Negative = too many shorts crowded in.",
                            source: { label: "Coinglass", url: "/#sources" } },
-      open_interest:     { label: "OI",         layman: "Total open BTC perpetual futures contracts on Binance — proxy for speculative engagement.",
+      open_interest:     { label: "OI",         layman: "Open Interest = total BTC sitting in open perpetual-futures positions on Binance. Rising = new money entering; falling = traders closing positions.",
                            source: { label: "Coinglass", url: "/#sources" } },
-      rsi:               { label: "RSI",        layman: "Momentum oscillator (5m window). >70 overbought (pullback risk), <30 oversold (bounce risk).",
+      rsi:               { label: "RSI",        layman: "RSI = Relative Strength Index, a momentum gauge on the 5-minute chart. Over 70 = price ran up fast, may pull back. Under 30 = price dropped fast, may bounce. Near 50 = no momentum.",
                            source: { label: "TradingView", url: "/#sources" } },
-      long_short_ratio:  { label: "L/S",        layman: "Retail longs vs shorts on Binance futures. Often a contrarian indicator at extremes.",
+      long_short_ratio:  { label: "L/S",        layman: "How many retail traders are long vs short on Binance futures. When it gets extreme, it often goes the other way (crowd tends to be wrong at peaks).",
                            source: { label: "Coinglass", url: "/#sources" } },
-      basis_pct:             { label: "basis",           layman: "Spot-perp premium. Positive = perp trades above spot (bullish speculation).",
+      basis_pct:             { label: "basis",           layman: "How much the perpetual futures price is above or below spot. Positive = futures traders paying a premium (bullish speculation).",
                                source: { label: "Coinglass", url: "/#sources" } },
-      perp_cvd_1h:           { label: "perp CVD 1h",     layman: "Cumulative volume delta on perp over last hour — net aggressor pressure.",
+      perp_cvd_1h:           { label: "perp CVD 1h",     layman: "Net buying-vs-selling pressure on Binance perps over the last hour. Positive = more buy pressure than sell.",
                                source: { label: "Coinglass", url: "/#sources" } },
-      spot_cvd_1h:           { label: "spot CVD 1h",     layman: "Spot cumulative volume delta 1h — net buying vs selling at market.",
+      spot_cvd_1h:           { label: "spot CVD 1h",     layman: "Net buying-vs-selling pressure on Binance spot over the last hour. Positive = more buy pressure than sell.",
                                source: { label: "Coinglass", url: "/#sources" } },
-      aggregate_cvd_1h:      { label: "aggregate CVD 1h",layman: "Cross-venue cumulative volume delta — net aggressor pressure across exchanges.",
+      aggregate_cvd_1h:      { label: "aggregate CVD 1h",layman: "Combined buying-vs-selling pressure across all major exchanges in the last hour.",
                                source: { label: "Coinglass", url: "/#sources" } },
-      bid_depth_05pct:       { label: "bid depth ±0.5%", layman: "BTC liquidity on the bid side within 0.5% of mid — buyer support wall.",
+      bid_depth_05pct:       { label: "bid depth ±0.5%", layman: "Total BTC in buy orders sitting within 0.5% below the current price — how much demand is parked right under price.",
                                source: { label: "Binance depth", url: "/#sources" } },
-      ask_depth_05pct:       { label: "ask depth ±0.5%", layman: "BTC liquidity on the ask side within 0.5% of mid — seller supply overhead.",
+      ask_depth_05pct:       { label: "ask depth ±0.5%", layman: "Total BTC in sell orders sitting within 0.5% above the current price — how much supply is parked right above price.",
                                source: { label: "Binance depth", url: "/#sources" } },
-      rr_25d_30d:            { label: "RR 25d/30d",      layman: "Risk reversal — difference in 25-delta call vs put IV. Positive = bullish skew.",
+      rr_25d_30d:            { label: "RR 25d/30d",      layman: "Options skew — measures if traders are paying more to hedge upside or downside over the next 30 days. Positive = upside bias in options.",
                                source: { label: "Deribit", url: "/#sources" } },
-      iv_30d_atm:            { label: "IV 30d ATM",      layman: "30-day at-the-money implied volatility — market's expected move range.",
+      iv_30d_atm:            { label: "IV 30d ATM",      layman: "How big of a price swing options traders are pricing in over the next 30 days. Higher = market expects more volatility.",
                                source: { label: "Deribit", url: "/#sources" } },
-      spot_whale_buy_btc:    { label: "whale buy",       layman: "BTC bought in single trades ≥5 BTC on spot — institutional accumulation proxy.",
+      spot_whale_buy_btc:    { label: "whale buy",       layman: "Big single purchases (≥5 BTC) done on spot exchanges in the last 5 minutes — when big holders start buying it often marks the start of a move up.",
                                source: { label: "Coinglass", url: "/#sources" } },
-      spot_whale_sell_btc:   { label: "whale sell",      layman: "BTC sold in single trades ≥5 BTC on spot — institutional distribution proxy.",
+      spot_whale_sell_btc:   { label: "whale sell",      layman: "Big single sells (≥5 BTC) done on spot exchanges in the last 5 minutes — when big holders start selling it often marks the start of a move down.",
                                source: { label: "Coinglass", url: "/#sources" } },
-      aggregate_funding_rate:{ label: "agg funding",     layman: "Cross-exchange aggregated funding rate — avoids single-venue bias.",
+      aggregate_funding_rate:{ label: "agg funding",     layman: "Funding rate averaged across all major exchanges — avoids getting a lopsided read from one venue.",
                                source: { label: "Coinglass", url: "/#sources" } },
-      aggregate_liquidations_usd:{label:"agg liqs",      layman: "Cross-exchange liquidation cascade in USD — forced-close pressure.",
+      aggregate_liquidations_usd:{label:"agg liqs",      layman: "Total dollar value of traders forcibly closed out (stopped out) across all exchanges in the last 5 minutes — spikes mark stop-cascades.",
                                source: { label: "Coinglass", url: "/#sources" } },
-      oi_velocity_pct:       { label: "OI velocity",     layman: "% change in open interest over 30 min — new positioning entering or exiting.",
+      oi_velocity_pct:       { label: "OI velocity",     layman: "How fast Open Interest is changing — rising = fresh money is entering positions, falling = traders are closing out.",
                                source: { label: "Coinglass", url: "/#sources" } },
     };
     // Text → signal-family map (mirrors server-side _TEXT_SIGNAL_FAMILIES in
@@ -3396,12 +3396,12 @@ function App() {
           {(conditions && conditions.length > 0) && (
             <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginLeft:28 }}>
               {__inferred && (
-                <span title="Bullet prose names these signals; pill synthesized from text so you still see live value + source."
+                <span title="The bullet text mentions this signal without attaching a formal threshold. The NUMBER you see below is the live reading pulled straight from the backend feed — NOT made up. We just added the pill so you can see the current value at a glance without digging."
                       style={{ fontSize:9, fontWeight:800, color:C.muted, letterSpacing:1,
                         padding:"2px 7px", border:`1px dashed ${C.borderSoft}`,
                         borderRadius:3, background:"#FFFFFF", alignSelf:"center",
                         textTransform:"uppercase" }}>
-                  inferred from text
+                  live reading (no threshold)
                 </span>
               )}
               {conditions.map((c, i) => (
@@ -3450,39 +3450,53 @@ function App() {
               </span>
             </div>
             {(() => {
-              // Split the edge into a bottom-line HEADLINE + supporting DETAIL
-              // so the trader gets the takeaway in one second and can read the
-              // rationale underneath only if they want. Venice emits edges like
-              // "<headline>. <detail>" or "<headline> — <detail>"; we split on
-              // the first period/em-dash to separate. If there's no obvious
-              // break, the whole edge renders as the headline.
+              // Split the edge into takeaway + supporting detail. Rendered at
+              // ONE consistent font size (15px) with a small vertical gap
+              // between them — user feedback was that mixing 17px + 13px looked
+              // like jarring headline/caption, not a coherent story. Keep the
+              // hierarchy cue via font-weight instead (takeaway bolder, detail
+              // regular) so the eye can still jump to the first line in a
+              // scan, without the size whiplash.
+              //
+              // Split rule: the EARLIEST of (first em-dash, first en-dash,
+              // first sentence-end) — pick whichever break happens first so
+              // the takeaway is a single punchy idea, not two sentences run
+              // together.
               const raw = (traderSummary.edge || "").trim();
-              const mEm = raw.indexOf(" — ");
-              const mDash = raw.indexOf(" – ");
-              const mSentence = raw.search(/[.!?]\s+\S/);
-              let splitAt = -1;
-              if (mEm   > 0)  splitAt = mEm;
-              else if (mDash > 0) splitAt = mDash;
-              else if (mSentence > 0 && mSentence < raw.length - 3) splitAt = mSentence + 1; // after the period
-              let headline, detail;
-              if (splitAt > 0) {
-                headline = raw.slice(0, splitAt).trim().replace(/[.!?]$/, "");
-                detail   = raw.slice(splitAt).replace(/^[\s—–.!?]+/, "").trim();
+              const cands = [];
+              const em   = raw.indexOf(" — ");
+              const dash = raw.indexOf(" – ");
+              if (em   >= 20) cands.push({ at: em,   skip: 3 });
+              if (dash >= 20) cands.push({ at: dash, skip: 3 });
+              const sent = raw.match(/[.!?]\s+[A-Z0-9$]/);
+              if (sent && sent.index >= 20) cands.push({ at: sent.index + 1, skip: 1 });
+              cands.sort((a,b) => a.at - b.at);
+              const first = cands[0];
+              let takeaway, detail;
+              if (first && first.at < raw.length - 4) {
+                takeaway = raw.slice(0, first.at).trim().replace(/[.!?]$/, "");
+                detail   = raw.slice(first.at + first.skip).trim();
               } else {
-                headline = raw;
-                detail   = "";
+                takeaway = raw; detail = "";
               }
               const hasMore = (traderSummary.watch?.length || traderSummary.actions?.length);
+              // width:100% + overflow-wrap:anywhere makes the edge text hug
+                // the card's inner width and wrap at any point — prevents the
+                // "rice bounced off $77,484..." / "$77" clipping seen when the
+                // narrator ran a long sentence into a narrow container.
+              const edgeStyle = {
+                width: "100%", maxWidth: "100%",
+                overflowWrap: "anywhere", wordBreak: "break-word",
+                fontSize: 15, color: C.text, lineHeight: 1.45,
+              };
               return (
                 <div style={{ marginBottom: hasMore ? 10 : 0 }}>
-                  <div style={{ fontSize:17, fontWeight:800, color:C.text,
-                    lineHeight:1.3, letterSpacing:0.1 }}>
-                    <BullBearText text={headline} size={17} baseColor={C.text} />
+                  <div style={{ ...edgeStyle, fontWeight: 700 }}>
+                    <BullBearText text={takeaway} size={15} baseColor={C.text} />
                   </div>
                   {detail && (
-                    <div style={{ marginTop:5, fontSize:13, fontWeight:400,
-                      color:C.textSec, lineHeight:1.4 }}>
-                      <BullBearText text={detail} size={13} baseColor={C.textSec} />
+                    <div style={{ ...edgeStyle, marginTop: 6, fontWeight: 400 }}>
+                      <BullBearText text={detail} size={15} baseColor={C.text} />
                     </div>
                   )}
                 </div>
