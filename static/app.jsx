@@ -3374,26 +3374,36 @@ function App() {
                         <span style={{ flex:1 }}>
                           <BullBearText text={text} size={12} baseColor={C.text} />
                         </span>
-                        {/* Per-statement SOURCE button in the bullet's top-right.
-                            Points to the first condition's source when we have one,
-                            else falls back to Binance spot as a general market view.
-                            Red-bordered button per user's request — makes "verify
-                            the claim" a one-click option on every statement. */}
+                        {/* Per-bullet SOURCE button — ONLY when we have a real source
+                            for the exact signal cited. No filler fallbacks: if no
+                            condition has a known source entry, render a disabled
+                            "? UNKNOWN" tag so the gap is visible during audits. */}
                         {(() => {
-                          const primaryCond = (conditions || [])[0];
-                          const pMeta = primaryCond ? (METRIC_META[primaryCond.metric] || {}) : {};
-                          const src = pMeta.source || { label: "Binance", url: "https://www.binance.com/en/trade/BTC_USDT" };
+                          const conds = conditions || [];
+                          const sourced = conds.map(c => METRIC_META[c.metric]).find(m => m && m.source);
+                          if (sourced) {
+                            return (
+                              <a href={sourced.source.url} target="_blank" rel="noopener noreferrer"
+                                 title={`Verify at ${sourced.source.label}`}
+                                 onClick={(e)=>e.stopPropagation()}
+                                 style={{ color:"#B91C1C", textDecoration:"none",
+                                   fontSize:9, fontWeight:800, letterSpacing:1,
+                                   padding:"2px 7px", border:"1px solid #DC2626",
+                                   borderRadius:3, background:"#FFFFFF",
+                                   flexShrink:0, lineHeight:1.3, whiteSpace:"nowrap" }}>
+                                ↗ SOURCE
+                              </a>
+                            );
+                          }
+                          // No verifiable source — flag for audit rather than link to filler
                           return (
-                            <a href={src.url} target="_blank" rel="noopener noreferrer"
-                               title={`Verify at ${src.label}`}
-                               onClick={(e)=>e.stopPropagation()}
-                               style={{ color:"#B91C1C", textDecoration:"none",
-                                 fontSize:9, fontWeight:800, letterSpacing:1,
-                                 padding:"2px 7px", border:"1px solid #DC2626",
-                                 borderRadius:3, background:"#FFFFFF",
-                                 flexShrink:0, lineHeight:1.3, whiteSpace:"nowrap" }}>
-                              ↗ SOURCE
-                            </a>
+                            <span title="No verifiable source mapped for this claim — flag for audit"
+                                  style={{ color:C.muted, fontSize:9, fontWeight:700, letterSpacing:1,
+                                    padding:"2px 7px", border:`1px dashed ${C.muted}`,
+                                    borderRadius:3, background:"transparent",
+                                    flexShrink:0, lineHeight:1.3, whiteSpace:"nowrap", fontStyle:"italic" }}>
+                              ? UNKNOWN
+                            </span>
                           );
                         })()}
                       </div>
@@ -3439,24 +3449,13 @@ function App() {
                             ~30s read · decision-ready
                           </span>
                         </div>
-                        {/* Edge — 1-2 sentence headline with inline bull/bear coloring,
-                            plus a red SOURCE button so the trader can verify the claim
-                            from the primary market dashboard. */}
+                        {/* Edge — 1-2 sentence synthesis across multiple signals. No single
+                            "exact" source applies; per-bullet pills carry their own specific
+                            source links. Edge is displayed without a source chip to avoid
+                            implying a filler verification path. */}
                         <div style={{ marginBottom: (traderSummary.watch?.length || traderSummary.actions?.length) ? 10 : 0,
-                          fontWeight:600, display:"flex", alignItems:"baseline", gap:8, flexWrap:"wrap" }}>
-                          <span style={{ flex:"1 1 auto" }}>
-                            <BullBearText text={traderSummary.edge} size={15} baseColor={C.text} />
-                          </span>
-                          <a href="https://www.binance.com/en/trade/BTC_USDT"
-                             target="_blank" rel="noopener noreferrer"
-                             title="Verify market state at Binance"
-                             style={{ color:"#B91C1C", textDecoration:"none",
-                               fontSize:9, fontWeight:800, letterSpacing:1,
-                               padding:"2px 7px", border:"1px solid #DC2626",
-                               borderRadius:3, background:"#FFFFFF",
-                               flexShrink:0, whiteSpace:"nowrap" }}>
-                            ↗ SOURCE
-                          </a>
+                          fontWeight:600 }}>
+                          <BullBearText text={traderSummary.edge} size={15} baseColor={C.text} />
                         </div>
                         {(() => {
                           const all = [
