@@ -34,6 +34,53 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Simple Analysis", version="2.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# ── Admin session middleware ─────────────────────────────────
+# Signed, HttpOnly cookie. The real password is set via ADMIN_PASSWORD on
+# Render; there is no code-level fallback — if the env var is missing, login
+# is impossible. Cookie is HttpOnly (XSS can't read), SameSite=lax (CSRF
+# limited), signed with SESSION_SECRET so the client can't forge it.
+from starlette.middleware.sessions import SessionMiddleware
+_SESSION_SECRET = os.environ.get("SESSION_SECRET") or "dev-only-change-me-please-via-render-env"
+app.add_middleware(SessionMiddleware, secret_key=_SESSION_SECRET,
+                   session_cookie="btc_oracle_session", same_site="lax",
+                   https_only=True, max_age=60*60*24)  # 24h sessions
+
+_ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or ""
+_MAX_FAILED_ATTEMPTS = 3
+
+# Bump this string (any new unique value) and redeploy to clear the lockout
+# after 3 failed attempts. There is NO time-based auto-recovery — a code change
+# is the only way back in. Keep the history so we can see past unlocks.
+_LOGIN_UNLOCK_TOKEN = "initial-2026-04-24"
+
+from fastapi import HTTPException, Request, Depends
+def require_admin(request: Request):
+    """Dependency: 401 unless the session cookie carries an admin flag."""
+    if not request.session.get("admin"):
+        raise HTTPException(status_code=401, detail="admin authentication required")
+    return True
+
+
+def _count_failed_logins_since_unlock() -> int:
+    """Counts LOGIN_FAIL events since the most recent LOGIN_UNLOCK matching the
+    current code-level token. If no matching unlock exists, writes one (this is
+    a fresh unlock after a token bump) and returns 0."""
+    events = storage.load_recent_events(limit=1000)
+    unlock_at = None
+    for ev in events:
+        if ev.get("kind") == "LOGIN_UNLOCK" and ev.get("message") == _LOGIN_UNLOCK_TOKEN:
+            unlock_at = float(ev.get("logged_at") or 0.0)
+            break
+    if unlock_at is None:
+        storage.store_event(source="admin", kind="LOGIN_UNLOCK",
+                            message=_LOGIN_UNLOCK_TOKEN,
+                            raw_excerpt="admin login counter reset via code-change token bump")
+        return 0
+    return sum(1 for ev in events
+               if ev.get("kind") == "LOGIN_FAIL"
+               and float(ev.get("logged_at") or 0.0) > unlock_at)
+
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.mount("/charts", StaticFiles(directory=str(CHARTS_DIR)), name="charts")
 
@@ -64,6 +111,52 @@ class BacktestResponse(BaseModel):
     all_time_accuracy: float
     all_time_neutral: int
     strategy_accuracies: Dict[str, float]
+
+# ── Admin auth endpoints ─────────────────────────────────────
+
+class LoginBody(BaseModel):
+    password: str
+
+@app.get("/admin/status")
+async def admin_status(request: Request):
+    """Cheap check — UI uses this to decide whether to show the admin panel
+    or the login form. Safe to call unauthenticated."""
+    return {"authenticated": bool(request.session.get("admin"))}
+
+@app.post("/admin/login")
+async def admin_login(body: LoginBody, request: Request):
+    """Accepts password; on match sets a signed HttpOnly session cookie.
+    Hard 3-strike lockout: after 3 failed attempts (across all IPs, persisted
+    to the events table) further logins return 403 until the operator bumps
+    _LOGIN_UNLOCK_TOKEN in code and redeploys. No time-based recovery."""
+    ip = (request.client.host if request.client else "unknown") or "unknown"
+    fails = _count_failed_logins_since_unlock()
+    if fails >= _MAX_FAILED_ATTEMPTS:
+        raise HTTPException(status_code=403,
+            detail="admin locked — 3 failed attempts reached. Unlock requires a code change.")
+
+    # Reject empty expected-password (env var not set) so an unconfigured
+    # instance can never be logged into — even with an empty body.
+    if not _ADMIN_PASSWORD or body.password != _ADMIN_PASSWORD:
+        await asyncio.sleep(0.5)   # slow brute-force, obscure timing side-channel
+        storage.store_event(source="admin", kind="LOGIN_FAIL",
+                            message=f"attempt {fails + 1}/{_MAX_FAILED_ATTEMPTS}",
+                            raw_excerpt=f"ip={ip}")
+        remaining = _MAX_FAILED_ATTEMPTS - (fails + 1)
+        if remaining <= 0:
+            raise HTTPException(status_code=403,
+                detail="admin locked — 3 failed attempts reached. Unlock requires a code change.")
+        raise HTTPException(status_code=401,
+            detail=f"incorrect password ({remaining} attempt(s) remaining before permanent lock)")
+
+    request.session["admin"] = True
+    return {"ok": True}
+
+@app.post("/admin/logout")
+async def admin_logout(request: Request):
+    request.session.clear()
+    return {"ok": True}
+
 
 # ── REST endpoints ────────────────────────────────────────────
 
@@ -99,7 +192,7 @@ async def deepseek_status():
         "service_unavailable_reason":  current_state.get("service_unavailable_reason", ""),
     }
 
-@app.get("/backtest", response_model=BacktestResponse)
+@app.get("/backtest", response_model=BacktestResponse, dependencies=[Depends(require_admin)])
 async def get_backtest():
     total, correct, accuracy = _safe_storage(storage.get_rolling_accuracy, config.rolling_window_size, default=(0, 0, 0.0))
     at_total, at_correct, at_accuracy, at_neutral = _safe_storage(storage.get_total_accuracy, default=(0, 0, 0.0, 0))
@@ -112,7 +205,7 @@ async def get_backtest():
     )
 
 
-@app.get("/predictions/recent")
+@app.get("/predictions/recent", dependencies=[Depends(require_admin)])
 async def get_recent_predictions(n: int = 50):
     return _safe_storage(storage.get_recent_predictions, n, default=[])
 
@@ -182,7 +275,7 @@ async def get_agree_accuracy():
     return _safe_storage(storage.get_agree_accuracy, default={})
 
 
-@app.get("/backend")
+@app.get("/backend", dependencies=[Depends(require_admin)])
 async def get_backend_snapshot():
     return {
         "snapshot": current_state.get("backend_snapshot") or {},
@@ -190,14 +283,14 @@ async def get_backend_snapshot():
     }
 
 
-@app.get("/deepseek/predictions")
+@app.get("/deepseek/predictions", dependencies=[Depends(require_admin)])
 async def get_deepseek_predictions(n: int = 50):
     return _safe_storage(storage.get_recent_deepseek_predictions, n, default=[])
 
 
 _HEAVY_FIELDS = {"full_prompt", "raw_response"}
 
-@app.get("/deepseek/predictions/{window_start}")
+@app.get("/deepseek/predictions/{window_start}", dependencies=[Depends(require_admin)])
 async def get_deepseek_prediction_detail(window_start: float):
     """Single record with all fields including full_prompt and raw_response."""
     docs = _safe_storage(storage.get_recent_deepseek_predictions, 9999, default=[])
@@ -207,7 +300,7 @@ async def get_deepseek_prediction_detail(window_start: float):
     return {}
 
 
-@app.get("/historical-analysis/{window_start}")
+@app.get("/historical-analysis/{window_start}", dependencies=[Depends(require_admin)])
 async def get_historical_analysis(window_start: float):
     """
     Comprehensive audit of prediction pipeline for a single window.
@@ -274,7 +367,7 @@ async def get_historical_analysis(window_start: float):
     }
 
 
-@app.get("/deepseek/source-history")
+@app.get("/deepseek/source-history", dependencies=[Depends(require_admin)])
 async def get_deepseek_source_history(n: int = 20):
     docs    = _safe_storage(storage.get_recent_deepseek_predictions, n, default=[])
     results = []
@@ -310,7 +403,7 @@ async def get_deepseek_source_history(n: int = 20):
     return results
 
 
-@app.get("/api/timings")
+@app.get("/api/timings", dependencies=[Depends(require_admin)])
 async def get_timings():
     """Return per-stage pipeline timings for the current bar + recent history.
 
@@ -327,7 +420,7 @@ async def get_timings():
     }
 
 
-@app.get("/api/embedding-audit")
+@app.get("/api/embedding-audit", dependencies=[Depends(require_admin)])
 async def get_embedding_audit():
     """Return embedding audit log (last N audits) + current stats."""
     log = _safe_storage(load_embedding_audit_log, n=20, default=[])
@@ -338,7 +431,7 @@ async def get_embedding_audit():
     }
 
 
-@app.get("/api/inspect/last-deepseek")
+@app.get("/api/inspect/last-deepseek", dependencies=[Depends(require_admin)])
 async def inspect_last_deepseek():
     """Return raw text of the most recent files sent to / received from DeepSeek.
 
@@ -378,7 +471,7 @@ async def inspect_last_deepseek():
     return {"server_time": time.time(), "files": files}
 
 
-@app.get("/accuracy/all")
+@app.get("/accuracy/all", dependencies=[Depends(require_admin)])
 async def get_all_accuracy(n: int = 100):
     try:
       from strategies import accuracy_to_label
@@ -429,7 +522,7 @@ async def get_all_accuracy(n: int = 100):
     return {"ai": ai, "strategies": strategies, "specialists": specialists, "microstructure": microstructure}
 
 
-@app.get("/best-indicator")
+@app.get("/best-indicator", dependencies=[Depends(require_admin)])
 async def get_best_indicator(n: int = 0):
     limit = n if n > 0 else None
     try:
@@ -448,7 +541,7 @@ async def get_best_indicator(n: int = 0):
     return {"best_indicator": best, "ranked": ranked, "total_indicators": len(ranked), "pattern_record_count": pattern_record_count}
 
 
-@app.get("/errors")
+@app.get("/errors", dependencies=[Depends(require_admin)])
 async def get_errors():
     from datetime import datetime, timezone
     errors = []
@@ -458,7 +551,7 @@ async def get_errors():
     return {"errors": errors, "count": len(errors)}
 
 
-@app.get("/api/suggestions")
+@app.get("/api/suggestions", dependencies=[Depends(require_admin)])
 async def get_suggestions(limit: int = 30):
     """System-improvement suggestions harvested from postmortems + specialist files.
 
@@ -557,7 +650,7 @@ async def get_suggestions(limit: int = 30):
     }
 
 
-@app.post("/force-predict")
+@app.post("/force-predict", dependencies=[Depends(require_admin)])
 async def force_predict():
     prices = collector.get_prices(400)
     if len(prices) < 30:
@@ -581,7 +674,7 @@ async def force_predict():
         return {"status": "error", "detail": str(exc)}
 
 
-@app.post("/admin/reset")
+@app.post("/admin/reset", dependencies=[Depends(require_admin)])
 async def reset_database():
     try:
         counts = storage.reset_all_tables()
@@ -590,7 +683,7 @@ async def reset_database():
         return {"status": "error", "detail": str(exc)}
 
 
-@app.post("/admin/embed-missing")
+@app.post("/admin/embed-missing", dependencies=[Depends(require_admin)])
 async def embed_missing(limit: int = 20):
     """Manually Cohere-embed unembedded RESOLVED bars, up to `limit` at a time.
 

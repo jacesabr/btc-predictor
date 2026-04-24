@@ -47,6 +47,11 @@ HARD RULES:
 - Tag each bullet by which SIDE of the trade it implies (bullish, bearish, or neutral).
 - Each bullet <= 2 sentences. No hedging, no meta-commentary, no "the model says".
 - watch: max 4 bullets. actions: max 3 bullets.
+
+NO JARGON WITHOUT EVIDENCE:
+- Do NOT use technical-analysis terminology (Wyckoff, Elliott wave, harmonic patterns, distribution phase, accumulation phase, liquidity grab, stop hunt, market structure break, order block, fair value gap, etc.) unless the INPUT gives a concrete price level, bar index, or measured condition that backs it. A percentage alone is NOT evidence. A name alone is NOT evidence.
+- If the INPUT contains such a term but only hand-waves it, DROP the term and describe the underlying observation in plain words (e.g., "price compressed for 3 bars" instead of "accumulation phase").
+- Prefer plain English: "buyers stepped in at $95,150" over "demand zone held".
 """
 
 

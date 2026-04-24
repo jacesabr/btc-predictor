@@ -876,7 +876,7 @@ function AccuracySection({ title, rows, showWeight, emptyMsg }) {
   );
 }
 
-function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, cz, cg, dots, price, allAccuracy, allAccuracyErr, onRefreshAccuracy }) {
+function EnsembleTab({ weights, ob, ls, tk, oif, lq, fg, mp, cz, cg, dots, price, allAccuracy, allAccuracyErr, onRefreshAccuracy }) {
   // Build micro accuracy lookup for inline display: dash key → {accuracy, correct, total}
   const microAcc = {};
   (allAccuracy?.microstructure || []).forEach(r => {
@@ -917,26 +917,8 @@ function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, cz, cg,
       {/* LEFT: comprehensive accuracy table */}
       <div style={{ flex:"0 0 54%", overflowY:"auto", paddingRight:2 }}>
         <div style={{ ...card, borderLeft:`3px solid ${C.amber}` }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+          <div style={{ marginBottom:10 }}>
             <div style={{ ...label, fontSize:10 }}>Prediction Accuracy — All Sources</div>
-            <button
-              onClick={() => {
-                if (!confirm("Reset all win/loss scores? Historical bars are kept but scores restart from now.")) return;
-                fetch("/reset-scores",{method:"POST"})
-                  .then(()=>fetch("/weights/update",{method:"POST"}))
-                  .then(()=>Promise.all([
-                    fetch("/weights").then(r=>r.json()).then(setWeights).catch(()=>{}),
-                    fetch("/accuracy/all?n=200").then(r=>r.json()).then(d=>{ if(d&&!d.error) setAllAccuracy(d); }).catch(()=>{}),
-                    fetch("/deepseek/accuracy").then(r=>r.json()).then(setDeepseekAcc).catch(()=>{}),
-                    fetch("/accuracy/agree").then(r=>r.json()).then(setAgreeAcc).catch(()=>{}),
-                    fetch("/predictions/recent?n=500").then(r=>r.json()).then(setPreds).catch(()=>{}),
-                  ]));
-              }}
-              style={{ fontSize:9, padding:"2px 8px", borderRadius:3,
-                border:`1px solid ${C.border}`, background:C.surface,
-                color:C.textSec, cursor:"pointer", fontFamily:"inherit", letterSpacing:1 }}>
-              RECALIBRATE
-            </button>
           </div>
 
           {!hasAccuracy ? (
@@ -2094,23 +2076,6 @@ function EmbeddingAuditTab({ embeddingAuditLog, setEmbeddingAuditLog, deepseekIn
             </div>
           )}
         </div>
-        <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
-          {auditPill && (
-            <span style={{ background:auditPill.bg, color:auditPill.fg, border:`1px solid ${auditPill.br}`,
-              padding:"4px 8px", borderRadius:4, fontSize:9, fontWeight:600 }}>{auditPill.label}</span>
-          )}
-          <button onClick={refreshInspect}
-            style={{ background:C.bg, color:C.textSec, border:`1px solid ${C.border}`,
-              padding:"6px 10px", borderRadius:4, cursor:"pointer", fontSize:10, fontFamily:"inherit", fontWeight:600 }}>
-            Refresh files
-          </button>
-          <button onClick={startAudit} disabled={auditStatus==="running"}
-            style={{ background:C.amberBg, color:C.amber, border:`1px solid ${C.amberBorder}`,
-              padding:"6px 12px", borderRadius:4, cursor:auditStatus==="running"?"default":"pointer",
-              opacity:auditStatus==="running"?0.6:1, fontSize:10, fontFamily:"inherit", fontWeight:600 }}>
-            Run audit now
-          </button>
-        </div>
       </div>
 
       {/* Scroll body */}
@@ -2252,7 +2217,7 @@ function EmbeddingAuditTab({ embeddingAuditLog, setEmbeddingAuditLog, deepseekIn
 
         {(!embeddingAuditLog || embeddingAuditLog.length === 0) && (
           <div style={{ padding:"16px", color:C.muted, fontSize:11, textAlign:"center" }}>
-            No embedding audits in the log yet. First auto-audit fires ~4 hours after startup, or click "Run audit now".
+            No embedding audits in the log yet. Auto-audit fires every 4 hours via deepseek-reasoner.
           </div>
         )}
       </div>
@@ -2488,6 +2453,12 @@ function App() {
   const [serviceUnavailReason,  setServiceUnavailReason]  = useState("");
   const [binanceExpert,         setBinanceExpert]         = useState(null);
   const [tab,                   setTab]                   = useState("live");
+  const [isAdmin,               setIsAdmin]               = useState(false);
+  const [adminChecked,          setAdminChecked]          = useState(false);
+  const [adminLoginError,       setAdminLoginError]       = useState("");
+  const [adminPasswordInput,    setAdminPasswordInput]    = useState("");
+  const [adminLoginBusy,        setAdminLoginBusy]        = useState(false);
+  const [expandedAdminSection,  setExpandedAdminSection]  = useState("");   // "" | history | ensemble | timing | embed_audit | errors
   const [errorLog,              setErrorLog]              = useState([]);
   const [backendSnap,    setBackendSnap]    = useState(null);
   const [sourceHistory,  setSourceHistory]  = useState([]);
@@ -2586,22 +2557,37 @@ function App() {
     return () => clearInterval(id);
   }, []);
 
+  // ── Admin auth status (checked on load, refreshed periodically) ───
+  useEffect(() => {
+    const check = () => fetch("/admin/status")
+      .then(r => r.ok ? r.json() : { authenticated: false })
+      .then(d => { setIsAdmin(!!d.authenticated); setAdminChecked(true); })
+      .catch(() => { setIsAdmin(false); setAdminChecked(true); });
+    check();
+    const id = setInterval(check, 60000);
+    return () => clearInterval(id);
+  }, []);
+
   // ── REST polling (30s) ────────────────────────────────────────
+  // Public endpoints always poll. Admin-gated endpoints only poll when
+  // logged in — without that, they 401 and pollute the console.
   useEffect(() => {
     const safe = (url, setter) =>
       fetch(url).then(r => r.ok ? r.json() : null).then(d => { if (d != null) setter(d); }).catch(()=>{});
     function poll() {
-      safe("/backtest",                setBacktest);
-      safe("/predictions/recent?n=500", setPreds);
       safe("/weights",                 setWeights);
       safe("/deepseek/accuracy",       setDeepseekAcc);
-      safe("/deepseek/predictions?n=500", setDeepseekLog);
       safe("/accuracy/agree",          setAgreeAcc);
+      if (isAdmin) {
+        safe("/backtest",                 setBacktest);
+        safe("/predictions/recent?n=500", setPreds);
+        safe("/deepseek/predictions?n=500", setDeepseekLog);
+      }
     }
     poll();
     const id = setInterval(poll, 30000);
     return () => clearInterval(id);
-  }, []);
+  }, [isAdmin]);
 
   // ── Backend snapshot — fetch on tab switch + new DS window ───
   useEffect(() => {
@@ -2609,11 +2595,11 @@ function App() {
     fetch("/backend").then(r=>r.json()).then(setBackendSnap).catch(()=>{});
   }, [tab]);
 
-  // ── Error log — fetch on tab switch ──────────────────────────
+  // ── Error log — fetch when ERRORS section expanded ───────────
   useEffect(() => {
-    if (tab !== "errors") return;
-    fetch("/errors").then(r=>r.json()).then(d=>setErrorLog(d.errors||[])).catch(()=>{});
-  }, [tab]);
+    if (expandedAdminSection !== "errors") return;
+    fetch("/errors").then(r=>r.ok?r.json():null).then(d=>{ if(d) setErrorLog(d.errors||[]); }).catch(()=>{});
+  }, [expandedAdminSection]);
 
   // ── Source history — fetch on tab switch + refresh every 60s ──
   useEffect(() => {
@@ -2636,30 +2622,30 @@ function App() {
       .catch(e => { console.error("[accuracy/all]", e); setAllAccuracyErr(true); });
   }, []);
   useEffect(() => {
-    if (tab !== "ensemble" && tab !== "history") return;
+    if (expandedAdminSection !== "ensemble" && expandedAdminSection !== "history") return;
     fetchAllAccuracy();
-  }, [tab, fetchAllAccuracy]);
+  }, [expandedAdminSection, fetchAllAccuracy]);
   useEffect(() => {
-    if (tab !== "ensemble" && tab !== "history") return;
+    if (expandedAdminSection !== "ensemble" && expandedAdminSection !== "history") return;
     const id = setInterval(fetchAllAccuracy, 20000);
     return () => clearInterval(id);
-  }, [tab, fetchAllAccuracy]);
+  }, [expandedAdminSection, fetchAllAccuracy]);
 
-  // ── Embedding audit — fetch on tab switch ──────────────────────
+  // ── Embedding audit — fetch when EMBED AUDIT section expanded ──
   useEffect(() => {
-    if (tab !== "embed_audit") return;
-    fetch("/api/embedding-audit").then(r=>r.json()).then(d=>setEmbeddingAuditLog(d.audit_log||[])).catch(()=>{});
-    fetch("/api/inspect/last-deepseek").then(r=>r.json()).then(setDeepseekInspect).catch(()=>{});
-  }, [tab]);
+    if (expandedAdminSection !== "embed_audit") return;
+    fetch("/api/embedding-audit").then(r=>r.ok?r.json():null).then(d=>{ if(d) setEmbeddingAuditLog(d.audit_log||[]); }).catch(()=>{});
+    fetch("/api/inspect/last-deepseek").then(r=>r.ok?r.json():null).then(d=>{ if(d) setDeepseekInspect(d); }).catch(()=>{});
+  }, [expandedAdminSection]);
 
-  // ── Timing — fetch on tab switch + poll every 3s while visible ─
+  // ── Timing — fetch when TIMING section expanded; poll every 3s ─
   useEffect(() => {
-    if (tab !== "timing") return;
-    const load = () => fetch("/api/timings").then(r=>r.json()).then(setTimings).catch(()=>{});
+    if (expandedAdminSection !== "timing") return;
+    const load = () => fetch("/api/timings").then(r=>r.ok?r.json():null).then(d=>{ if(d) setTimings(d); }).catch(()=>{});
     load();
     const id = setInterval(load, 3000);
     return () => clearInterval(id);
-  }, [tab]);
+  }, [expandedAdminSection]);
 
   useEffect(() => {
     const wc = deepseekPred?.window_count;
@@ -2879,61 +2865,29 @@ function App() {
     <div style={{ fontFamily:"'JetBrains Mono','Fira Code',monospace", background:C.bg, color:C.text,
       height:"100vh", overflow:"hidden", fontSize:15, display:"flex", flexDirection:"column" }}>
 
-      {/* ── TABS ── */}
-      <div style={{ display:"flex", borderBottom:`1px solid ${C.border}`, padding:"0 14px",
-        flexShrink:0, background:C.surface }}>
-        {/* Countdown integrated into tab bar */}
-        <div style={{ display:"flex", alignItems:"center", gap:8, marginRight:16, paddingRight:14,
-          borderRight:`1px solid ${C.border}` }}>
-          <div style={{ textAlign:"center" }}>
-            <div style={{ fontSize:28, fontWeight:900, color:timeLeft<60?C.red:timeLeft<120?C.amber:C.green,
-              letterSpacing:2, fontVariantNumeric:"tabular-nums", lineHeight:1 }}>{mins}:{secs}</div>
-            <div style={{ fontSize:10, color:C.muted, letterSpacing:1, marginTop:2 }}>bar closes</div>
-          </div>
-          {price && (
-            <div style={{ textAlign:"center" }}>
-              <div style={{ fontSize:8, color:C.muted, letterSpacing:1, textTransform:"uppercase" }}>BTC/USD</div>
-              <div style={{ fontSize:16, fontWeight:900, color:C.text }}>${price.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</div>
-              {winStartPrice && (
-                <div style={{ fontSize:9, fontWeight:700, color:priceDelta>=0?C.green:C.red }}>
-                  {priceDelta>=0?"+":""}{pricePct.toFixed(3)}%
-                </div>
-              )}
-            </div>
-          )}
+      {/* ── TABS: countdown left, LIVE / ADMIN pinned right ── */}
+      <div style={{ display:"flex", alignItems:"center", borderBottom:`1px solid ${C.border}`,
+        padding:"0 14px", flexShrink:0, background:C.surface }}>
+        <div style={{ textAlign:"left" }}>
+          <div style={{ fontSize:28, fontWeight:900, color:timeLeft<60?C.red:timeLeft<120?C.amber:C.green,
+            letterSpacing:2, fontVariantNumeric:"tabular-nums", lineHeight:1 }}>{mins}:{secs}</div>
+          <div style={{ fontSize:10, color:C.muted, letterSpacing:1, marginTop:2 }}>bar closes</div>
         </div>
-        {[["live","LIVE"],["history","HISTORY"],["ensemble","ENSEMBLE"],["timing","TIMING"],["embed_audit","EMBED AUDIT"],["errors","ERRORS"]].map(([t,label])=>(
-          <button key={t} onClick={()=>setTab(t)} style={{
-            background:"none", border:"none",
-            borderBottom:tab===t?`2px solid ${C.amber}`:"2px solid transparent",
-            color:tab===t?C.amber:C.muted, fontWeight:tab===t?700:400,
-            padding:"5px 18px", cursor:"pointer",
-            fontSize:11, fontFamily:"inherit", letterSpacing:2 }}>{label}</button>
-        ))}
-        <div style={{ marginLeft:"auto", display:"flex", alignItems:"center", gap:8, paddingRight:4 }}>
-          <button onClick={function(){
-            if (window._forcingPredict) return;
-            window._forcingPredict = true;
-            var btn = document.getElementById("force-predict-btn");
-            if (btn) { btn.textContent = "Calculating…"; btn.style.opacity = "0.6"; btn.style.cursor = "default"; }
-            fetch("/force-predict",{method:"POST"}).then(function(r){ return r.json(); }).then(function(d){
-              window._forcingPredict = false;
-              if (btn) { btn.textContent = "Force Predict"; btn.style.opacity = "1"; btn.style.cursor = "pointer"; }
-              if (d.status!=="ok") { alert("Force predict: "+(d.detail||"unknown error")); }
-            }).catch(function(e){
-              window._forcingPredict = false;
-              if (btn) { btn.textContent = "Force Predict"; btn.style.opacity = "1"; btn.style.cursor = "pointer"; }
-              alert("Force predict failed: "+e);
-            });
-          }} id="force-predict-btn" style={{
-            background:C.amberBg, color:C.amber, border:"1px solid "+C.amberBorder,
-            padding:"3px 10px", borderRadius:4, cursor:"pointer",
-            fontSize:9, fontFamily:"inherit", fontWeight:700, letterSpacing:0.5 }}>
-            Force Predict
-          </button>
-          <div style={{ width:7, height:7, borderRadius:"50%", background:connected?C.green:C.amber,
-            boxShadow:connected?`0 0 5px ${C.green}66`:"none" }} />
-          <span style={{ fontSize:9, color:C.muted }}>{connected?"live":"reconnecting"}</span>
+        <div style={{ marginLeft:"auto", display:"flex" }}>
+          {[["live","LIVE"],["admin","ADMIN"]].map(([t,label])=>{
+            const active = t==="admin" ? (tab==="admin" || !!expandedAdminSection) : tab===t;
+            return (
+              <button key={t} onClick={()=>{
+                if (t === "admin") { setTab("admin"); setExpandedAdminSection(""); }
+                else { setTab("live"); setExpandedAdminSection(""); }
+              }} style={{
+                background:"none", border:"none",
+                borderBottom:active?`2px solid ${C.amber}`:"2px solid transparent",
+                color:active?C.amber:C.muted, fontWeight:active?700:400,
+                padding:"5px 18px", cursor:"pointer",
+                fontSize:11, fontFamily:"inherit", letterSpacing:2 }}>{label}</button>
+            );
+          })}
         </div>
       </div>
 
@@ -3037,97 +2991,116 @@ function App() {
                 );
               })()}
 
-              {/* TRADER BRIEFING — Venice-summarized Edge/Watch/Actions, rendered above
-                  the DeepSeek Analysis card. Only shows when the Venice summary arrived
-                  for the current bar; falls back silently to raw blocks below. */}
-              {traderSummary && pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR" && (() => {
-                const toneColor = (t) => t==="bullish" ? C.green : t==="bearish" ? C.red : C.muted;
-                const toneBg    = (t) => t==="bullish" ? C.greenBg : t==="bearish" ? C.redBg : C.surface;
-                const toneBorder= (t) => t==="bullish" ? C.greenBorder : t==="bearish" ? C.redBorder : C.borderSoft;
-                const toneLabel = (t) => t==="bullish" ? "BULL" : t==="bearish" ? "BEAR" : "—";
+              {/* TRADER BRIEFING + STATUS STRIP — wrapped in a narrow 40%-width column
+                  so the content stays tight and scannable. Larger fonts now that there's
+                  less on screen. Inline bull/bear language coloring + emoji tone tags. */}
+              {(() => {
+                const BULL_WORDS = new Set([
+                  "bullish","uptrend","upside","upward","breakout","bounce","rally","surge",
+                  "buyers","buying","accumulation","accumulating","support","higher","hh","hl",
+                  "strong","long","longs","rising","rose","up","aligned","holding",
+                ]);
+                const BEAR_WORDS = new Set([
+                  "bearish","downtrend","downside","downward","breakdown","rejection","selloff",
+                  "drop","drops","falling","fell","sellers","selling","distribution","resistance",
+                  "lower","ll","lh","weak","short","shorts","down","failing","losing",
+                ]);
+                const BullBearText = ({ text, size, baseColor }) => {
+                  const parts = text.split(/(\s+|[,;:.!?()\[\]])/);
+                  return (
+                    <span style={{ fontSize:size, color:baseColor, lineHeight:1.55 }}>
+                      {parts.map((p, i) => {
+                        const clean = p.toLowerCase().replace(/[^a-z]/g, "");
+                        if (clean && BULL_WORDS.has(clean)) return <strong key={i} style={{ color:"#16A34A", fontWeight:800 }}>{p}</strong>;
+                        if (clean && BEAR_WORDS.has(clean)) return <strong key={i} style={{ color:"#DC2626", fontWeight:800 }}>{p}</strong>;
+                        if (/^\$[\d,]+(\.\d+)?(k|K)?$/.test(p) || /^\d+(\.\d+)?%$/.test(p)) {
+                          return <strong key={i} style={{ color:C.text, fontWeight:800 }}>{p}</strong>;
+                        }
+                        return <span key={i}>{p}</span>;
+                      })}
+                    </span>
+                  );
+                };
+                const toneEmoji = (t) => t==="bullish" ? "🟢" : t==="bearish" ? "🔴" : "⚠️";
+                const toneColor = (t) => t==="bullish" ? C.green : t==="bearish" ? C.red : C.amber;
+                const toneBg    = (t) => t==="bullish" ? C.greenBg : t==="bearish" ? C.redBg : C.amberBg;
+                const toneBorder= (t) => t==="bullish" ? C.greenBorder : t==="bearish" ? C.redBorder : C.amberBorder;
                 const Bullet = ({ tone, text }) => (
-                  <div style={{ display:"flex", gap:8, alignItems:"flex-start",
-                    padding:"7px 10px", borderRadius:5,
+                  <div style={{ display:"flex", gap:10, alignItems:"flex-start",
+                    padding:"9px 12px", borderRadius:6,
                     background: toneBg(tone),
-                    borderLeft: `3px solid ${toneColor(tone)}`,
+                    borderLeft: `4px solid ${toneColor(tone)}`,
                     border: `1px solid ${toneBorder(tone)}` }}>
-                    <span style={{ fontSize:8, fontWeight:800, color: toneColor(tone),
-                      letterSpacing:0.8, minWidth:30, flexShrink:0, paddingTop:2 }}>
-                      {toneLabel(tone)}
+                    <span style={{ fontSize:18, lineHeight:1.2, flexShrink:0, paddingTop:1 }}>
+                      {toneEmoji(tone)}
                     </span>
-                    <span style={{ fontSize:13, fontWeight: tone==="neutral"?500:700,
-                      color: tone==="neutral" ? C.textSec : toneColor(tone), lineHeight:1.55 }}>
-                      {text}
-                    </span>
+                    <BullBearText text={text} size={15} baseColor={tone==="neutral" ? C.text : toneColor(tone)} />
                   </div>
                 );
+                const briefingReady = traderSummary && pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR";
                 return (
-                  <div style={{ ...card, flexShrink:0, padding:"12px 14px",
-                    background:"#FAFAF9", border:`2px solid ${C.borderSoft}` }}>
-                    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-                      <span style={{ fontSize:10, fontWeight:900, color:C.text,
-                        letterSpacing:1.2, textTransform:"uppercase" }}>⚡ Trader Briefing</span>
-                      <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>
-                        ~30s read · decision-ready
-                      </span>
-                    </div>
-                    {/* Edge — 1-2 sentence headline */}
-                    <div style={{ fontSize:14, fontWeight:600, color:C.text, lineHeight:1.55,
-                      marginBottom: (traderSummary.watch?.length || traderSummary.actions?.length) ? 10 : 0 }}>
-                      {traderSummary.edge}
-                    </div>
-                    {/* Watch — conditions / levels */}
-                    {traderSummary.watch?.length > 0 && (
-                      <div style={{ marginTop:8 }}>
-                        <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1,
-                          textTransform:"uppercase", marginBottom:5 }}>Watch</div>
-                        <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                          {traderSummary.watch.map((b, i) => <Bullet key={`w${i}`} {...b} />)}
+                  <div style={{ width:"100%", maxWidth:"40%", minWidth:360, display:"flex", flexDirection:"column", gap:8 }}>
+                    {briefingReady && (
+                      <div style={{ ...card, flexShrink:0, padding:"14px 16px",
+                        background:"#FAFAF9", border:`2px solid ${C.borderSoft}` }}>
+                        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+                          <span style={{ fontSize:12, fontWeight:900, color:C.text,
+                            letterSpacing:1.2, textTransform:"uppercase" }}>⚡ Trader Briefing</span>
+                          <span style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>
+                            ~30s read · decision-ready
+                          </span>
                         </div>
+                        {/* Edge — 1-2 sentence headline with inline bull/bear coloring */}
+                        <div style={{ marginBottom: (traderSummary.watch?.length || traderSummary.actions?.length) ? 12 : 0,
+                          fontWeight:600 }}>
+                          <BullBearText text={traderSummary.edge} size={17} baseColor={C.text} />
+                        </div>
+                        {traderSummary.watch?.length > 0 && (
+                          <div style={{ marginTop:10 }}>
+                            <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:1,
+                              textTransform:"uppercase", marginBottom:6 }}>Watch</div>
+                            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                              {traderSummary.watch.map((b, i) => <Bullet key={`w${i}`} {...b} />)}
+                            </div>
+                          </div>
+                        )}
+                        {traderSummary.actions?.length > 0 && (
+                          <div style={{ marginTop:12 }}>
+                            <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:1,
+                              textTransform:"uppercase", marginBottom:6 }}>Actions</div>
+                            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                              {traderSummary.actions.map((b, i) => <Bullet key={`a${i}`} {...b} />)}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
-                    {/* Actions — concrete IF/THEN */}
-                    {traderSummary.actions?.length > 0 && (
-                      <div style={{ marginTop:10 }}>
-                        <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1,
-                          textTransform:"uppercase", marginBottom:5 }}>Actions</div>
-                        <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                          {traderSummary.actions.map((b, i) => <Bullet key={`a${i}`} {...b} />)}
-                        </div>
+                    {!briefingReady && (
+                      <div style={{ ...card, flexShrink:0, padding:"12px 14px",
+                        display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
+                        <span style={{ fontSize:14, lineHeight:1.4 }}>
+                          {pendingDeepseekReady && activeDeepseekPred?.signal==="ERROR" ? (
+                            <span style={{ color:C.red, fontWeight:700 }}>⚠️ Analysis error this bar — detail in History tab</span>
+                          ) : pendingDeepseekReady && activeDeepseekPred ? (
+                            <span style={{ color:C.textSec, fontStyle:"italic" }}>⟳ Preparing trader briefing…</span>
+                          ) : (
+                            <span style={{ color:C.amber }}>⟳ Analyzing new bar — briefing in ~30–60s</span>
+                          )}
+                        </span>
+                        {barCloseUTC && (
+                          <span style={{ fontSize:14, fontWeight:800,
+                            color:timeLeft<60?C.red:timeLeft<120?C.amber:"#15803D",
+                            background:timeLeft<60?"#FFF1F2":timeLeft<120?C.amberBg:"#F0FDF4",
+                            border:`1px solid ${timeLeft<60?C.redBorder:timeLeft<120?C.amberBorder:"#86EFAC"}`,
+                            borderRadius:5, padding:"3px 10px" }}>
+                            Closes {barCloseUTC}
+                          </span>
+                        )}
                       </div>
                     )}
                   </div>
                 );
               })()}
-
-              {/* BAR STATUS STRIP — minimal. Renders a briefing-state message + the
-                  bar-close countdown only when the full trader briefing above isn't
-                  showing. The raw DeepSeek reasoning is kept on the backend (fed into
-                  Venice + stored to Postgres) but no longer rendered on the live page —
-                  operators can see the full detail in the History tab. */}
-              {!(traderSummary && pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR") && (
-                <div style={{ ...card, flexShrink:0, padding:"10px 12px",
-                  display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
-                  <span style={{ fontSize:12, lineHeight:1.4 }}>
-                    {pendingDeepseekReady && activeDeepseekPred?.signal==="ERROR" ? (
-                      <span style={{ color:C.red, fontWeight:700 }}>⚠ Analysis error this bar — detail in History tab</span>
-                    ) : pendingDeepseekReady && activeDeepseekPred ? (
-                      <span style={{ color:C.textSec, fontStyle:"italic" }}>⟳ Preparing trader briefing…</span>
-                    ) : (
-                      <span style={{ color:C.amber }}>⟳ Analyzing new bar — briefing in ~30–60s</span>
-                    )}
-                  </span>
-                  {barCloseUTC && (
-                    <span style={{ fontSize:13, fontWeight:800,
-                      color:timeLeft<60?C.red:timeLeft<120?C.amber:"#15803D",
-                      background:timeLeft<60?"#FFF1F2":timeLeft<120?C.amberBg:"#F0FDF4",
-                      border:`1px solid ${timeLeft<60?C.redBorder:timeLeft<120?C.amberBorder:"#86EFAC"}`,
-                      borderRadius:5, padding:"2px 10px" }}>
-                      Closes {barCloseUTC}
-                    </span>
-                  )}
-                </div>
-              )}
 
               {/* Historical Pattern block removed — the raw pattern data is fed into Venice
                   and surfaces in the trader briefing above as Watch/Actions bullets when relevant.
@@ -3139,120 +3112,186 @@ function App() {
           </div>
         )}
 
-        {/* ══ HISTORY TAB ══ */}
-        {tab==="history" && (
-          <ErrorBoundary key="history-tab">
-          <div style={{ height:"100%", overflowY:"auto", display:"flex", flexDirection:"column", gap:8, paddingBottom:8 }}>
-
-            {/* Per-signal accuracy pills — kept for diagnostics; 5-metric banner removed (DeepSeek win rate lives on LIVE tab) */}
-            <div style={{ ...card, flexShrink:0, padding:"6px 12px" }}>
-              {allAccuracy && (() => {
-                const cats = [
-                  { key:"strategies", label:"Strategies" },
-                  { key:"specialists", label:"Specialists" },
-                  { key:"microstructure", label:"Micro" },
-                  { key:"ai", label:"AI" },
-                ];
-                const allRows = [];
-                cats.forEach(({ key, label: catLabel }) => {
-                  (allAccuracy[key] || []).forEach(r => {
-                    if (r.total >= 3) allRows.push({ ...r, cat: catLabel });
-                  });
-                });
-                if (!allRows.length) return null;
-                allRows.sort((a,b) => b.accuracy - a.accuracy);
-                return (
-                  <div>
-                    <div style={{ fontSize:8, color:C.muted, fontWeight:700, letterSpacing:1.2, textTransform:"uppercase", marginBottom:4 }}>
-                      Per-signal accuracy ({allRows.length} tracked) — sorted best→worst
-                    </div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
-                      {allRows.map(r => {
-                        const col = r.accuracy >= 60 ? C.green : r.accuracy >= 50 ? C.textSec : C.red;
-                        const bg  = r.accuracy >= 60 ? C.greenBg : r.accuracy >= 50 ? C.bg : C.redBg;
-                        const bdr = r.accuracy >= 60 ? C.greenBorder : r.accuracy >= 50 ? C.borderSoft : C.redBorder;
-                        return (
-                          <div key={r.key} style={{ fontSize:9, padding:"2px 7px", borderRadius:4,
-                            color:col, background:bg, border:`1px solid ${bdr}`,
-                            display:"flex", alignItems:"baseline", gap:4 }}>
-                            <span style={{ fontWeight:700 }}>{r.name}</span>
-                            <span style={{ fontWeight:900 }}>{r.accuracy.toFixed(1)}%</span>
-                            <span style={{ opacity:0.6 }}>{r.correct}/{r.total}</span>
-                            <span style={{ fontSize:7, opacity:0.5 }}>{r.cat}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
+        {/* ══ ADMIN TAB ══ */}
+        {tab==="admin" && (
+          <ErrorBoundary key="admin-tab">
+            {!adminChecked ? (
+              <div style={{ padding:"20px", textAlign:"center", color:C.muted, fontSize:11 }}>
+                Checking admin session…
+              </div>
+            ) : !isAdmin ? (
+              <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"center", paddingTop:40 }}>
+                <div style={{ ...card, width:360, padding:"20px 24px" }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.amber, letterSpacing:2,
+                    textTransform:"uppercase", marginBottom:12 }}>Admin Login</div>
+                  <div style={{ fontSize:9, color:C.muted, letterSpacing:0.8, marginBottom:10, lineHeight:1.5 }}>
+                    Public view (LIVE tab) remains open. Admin panel needs a password.
+                    After 3 failed attempts the lockout is permanent until a code change.
                   </div>
-                );
-              })()}
-            </div>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (adminLoginBusy) return;
+                    setAdminLoginBusy(true); setAdminLoginError("");
+                    fetch("/admin/login", {
+                      method:"POST", headers:{"Content-Type":"application/json"},
+                      body: JSON.stringify({ password: adminPasswordInput })
+                    }).then(async r => {
+                      const body = await r.json().catch(() => ({}));
+                      if (r.ok) { setIsAdmin(true); setAdminPasswordInput(""); setAdminLoginError(""); }
+                      else { setAdminLoginError(body.detail || `HTTP ${r.status}`); }
+                    }).catch(e => setAdminLoginError(String(e)))
+                      .finally(() => setAdminLoginBusy(false));
+                  }}>
+                    <input type="password" value={adminPasswordInput} autoFocus
+                      onChange={e => setAdminPasswordInput(e.target.value)}
+                      placeholder="password"
+                      style={{ width:"100%", padding:"8px 10px", fontSize:12, fontFamily:"inherit",
+                        background:C.bg, color:C.text, border:`1px solid ${C.border}`,
+                        borderRadius:4, marginBottom:10 }} />
+                    <button type="submit" disabled={adminLoginBusy || !adminPasswordInput}
+                      style={{ width:"100%", padding:"7px", fontSize:11, fontFamily:"inherit",
+                        fontWeight:700, letterSpacing:1.5, textTransform:"uppercase",
+                        color:C.amber, background:C.amberBg, border:`1px solid ${C.amberBorder}`,
+                        borderRadius:4, cursor: adminLoginBusy ? "default" : "pointer",
+                        opacity: adminLoginBusy ? 0.6 : 1 }}>
+                      {adminLoginBusy ? "Authenticating…" : "Unlock"}
+                    </button>
+                    {adminLoginError && (
+                      <div style={{ marginTop:10, fontSize:10, color:C.red,
+                        padding:"6px 8px", background:C.redBg, border:`1px solid ${C.redBorder}`,
+                        borderRadius:4, lineHeight:1.4 }}>
+                        {adminLoginError}
+                      </div>
+                    )}
+                  </form>
+                </div>
+              </div>
+            ) : (
+              <div style={{ height:"100%", overflowY:"auto", display:"flex",
+                flexDirection:"column", gap:6, paddingBottom:8 }}>
+                {/* Header bar with logout */}
+                <div style={{ ...card, padding:"6px 12px", flexShrink:0,
+                  display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                  <span style={{ fontSize:10, fontWeight:700, color:C.amber,
+                    letterSpacing:2, textTransform:"uppercase" }}>Admin panel</span>
+                  <button onClick={() => {
+                    fetch("/admin/logout", { method:"POST" })
+                      .finally(() => { setIsAdmin(false); setExpandedAdminSection(""); });
+                  }} style={{ fontSize:9, padding:"3px 10px", fontFamily:"inherit",
+                    fontWeight:700, letterSpacing:1, textTransform:"uppercase",
+                    color:C.muted, background:"none", border:`1px solid ${C.border}`,
+                    borderRadius:3, cursor:"pointer" }}>Logout</button>
+                </div>
 
-            {/* Full-width bar history list */}
-            <div style={{ flex:1, minHeight:0 }}>
-              <DeepSeekAuditTab
-                deepseekLog={deepseekLog} deepseekAcc={deepseekAcc}
-                deepseekPred={deepseekPred} ensembleAccuracy={allTimeAccuracy}
-                totalPreds={allTimeTotal} correctPreds={allTimeCorrect} agreeAcc={agreeAcc}
-              />
-            </div>
-
-          </div>
+                {[
+                  ["history",     "HISTORY",      "Bar-by-bar prediction outcomes + per-signal accuracy"],
+                  ["ensemble",    "ENSEMBLE",     "Strategy weights + live microstructure"],
+                  ["timing",      "TIMING",       "Per-bar pipeline stage latencies"],
+                  ["embed_audit", "EMBED AUDIT",  "Embedding coverage + last DeepSeek prompts"],
+                  ["errors",      "ERRORS",       "Persisted error/flag/suggestion log"],
+                ].map(([key, label, blurb]) => {
+                  const open = expandedAdminSection === key;
+                  return (
+                    <div key={key} style={{ ...card, padding:0, flexShrink: open ? 1 : 0,
+                      display:"flex", flexDirection:"column",
+                      minHeight: open ? 300 : "auto" }}>
+                      <div onClick={() => setExpandedAdminSection(open ? "" : key)}
+                        style={{ padding:"8px 12px", cursor:"pointer",
+                          display:"flex", alignItems:"center", gap:8,
+                          borderBottom: open ? `1px solid ${C.borderSoft}` : "none" }}>
+                        <span style={{ fontSize:11, fontWeight:700, color:open?C.amber:C.muted,
+                          letterSpacing:1.5, minWidth:14 }}>{open ? "▼" : "▶"}</span>
+                        <span style={{ fontSize:11, fontWeight:800, color:open?C.amber:C.text,
+                          letterSpacing:2 }}>{label}</span>
+                        <span style={{ fontSize:9, color:C.muted, marginLeft:8 }}>{blurb}</span>
+                      </div>
+                      {open && (
+                        <div style={{ flex:1, minHeight:0, padding:"6px 8px", overflow:"hidden",
+                          display:"flex", flexDirection:"column" }}>
+                          {key==="history" && (
+                            <div style={{ flex:1, minHeight:0, display:"flex", flexDirection:"column", gap:6 }}>
+                              <div style={{ ...card, flexShrink:0, padding:"6px 10px" }}>
+                                {allAccuracy && (() => {
+                                  const cats = [
+                                    { key:"strategies", label:"Strategies" },
+                                    { key:"specialists", label:"Specialists" },
+                                    { key:"microstructure", label:"Micro" },
+                                    { key:"ai", label:"AI" },
+                                  ];
+                                  const allRows = [];
+                                  cats.forEach(({ key: k, label: catLabel }) => {
+                                    (allAccuracy[k] || []).forEach(r => {
+                                      if (r.total >= 3) allRows.push({ ...r, cat: catLabel });
+                                    });
+                                  });
+                                  if (!allRows.length) return null;
+                                  allRows.sort((a,b) => b.accuracy - a.accuracy);
+                                  return (
+                                    <div>
+                                      <div style={{ fontSize:8, color:C.muted, fontWeight:700,
+                                        letterSpacing:1.2, textTransform:"uppercase", marginBottom:4 }}>
+                                        Per-signal accuracy ({allRows.length} tracked) — sorted best→worst
+                                      </div>
+                                      <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
+                                        {allRows.map(r => {
+                                          const col = r.accuracy >= 60 ? C.green : r.accuracy >= 50 ? C.textSec : C.red;
+                                          const bg  = r.accuracy >= 60 ? C.greenBg : r.accuracy >= 50 ? C.bg : C.redBg;
+                                          const bdr = r.accuracy >= 60 ? C.greenBorder : r.accuracy >= 50 ? C.borderSoft : C.redBorder;
+                                          return (
+                                            <div key={r.key} style={{ fontSize:9, padding:"2px 7px", borderRadius:4,
+                                              color:col, background:bg, border:`1px solid ${bdr}`,
+                                              display:"flex", alignItems:"baseline", gap:4 }}>
+                                              <span style={{ fontWeight:700 }}>{r.name}</span>
+                                              <span style={{ fontWeight:900 }}>{r.accuracy.toFixed(1)}%</span>
+                                              <span style={{ opacity:0.6 }}>{r.correct}/{r.total}</span>
+                                              <span style={{ fontSize:7, opacity:0.5 }}>{r.cat}</span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                              <div style={{ flex:1, minHeight:0 }}>
+                                <DeepSeekAuditTab
+                                  deepseekLog={deepseekLog} deepseekAcc={deepseekAcc}
+                                  deepseekPred={deepseekPred} ensembleAccuracy={allTimeAccuracy}
+                                  totalPreds={allTimeTotal} correctPreds={allTimeCorrect} agreeAcc={agreeAcc}
+                                />
+                              </div>
+                            </div>
+                          )}
+                          {key==="ensemble" && (
+                            <EnsembleTab
+                              weights={weights}
+                              ob={ob} ls={ls} tk={tk} oif={oif} lq={lq}
+                              fg={fg} mp={mp} cz={cz} cg={cg}
+                              dots={dots} price={price}
+                              allAccuracy={allAccuracy}
+                              allAccuracyErr={allAccuracyErr}
+                              onRefreshAccuracy={fetchAllAccuracy}
+                            />
+                          )}
+                          {key==="timing" && (<TimingTab timings={timings} />)}
+                          {key==="embed_audit" && (
+                            <EmbeddingAuditTab
+                              embeddingAuditLog={embeddingAuditLog}
+                              setEmbeddingAuditLog={setEmbeddingAuditLog}
+                              deepseekInspect={deepseekInspect}
+                              setDeepseekInspect={setDeepseekInspect}
+                            />
+                          )}
+                          {key==="errors" && (<ErrorsTab errors={errorLog} />)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </ErrorBoundary>
         )}
-
-        {/* ══ AUDIT TAB ══ */}
-
-        {/* ══ SOURCES TAB ══ */}
-
-        {tab==="embed_audit" && (
-          <EmbeddingAuditTab
-            embeddingAuditLog={embeddingAuditLog}
-            setEmbeddingAuditLog={setEmbeddingAuditLog}
-            deepseekInspect={deepseekInspect}
-            setDeepseekInspect={setDeepseekInspect}
-          />
-        )}
-
-
-        {/* ══ DEEPSEEK TAB ══ */}
-
-        {/* ══ ENSEMBLE TAB ══ */}
-        {tab==="ensemble" && (
-          <EnsembleTab
-            weights={weights} setWeights={setWeights}
-            ob={ob} ls={ls} tk={tk} oif={oif} lq={lq}
-            fg={fg} mp={mp} cz={cz} cg={cg}
-            dots={dots} price={price}
-            allAccuracy={allAccuracy}
-            allAccuracyErr={allAccuracyErr}
-            onRefreshAccuracy={fetchAllAccuracy}
-          />
-        )}
-
-        {/* ══ BACKEND TAB ══ */}
-
-        {/* ══ STRATEGIES TAB ══ */}
-
-        {/* ══ BACKTEST TAB ══ */}
-
-        {/* ══ TIMING TAB ══ */}
-        {tab==="timing" && (
-          <ErrorBoundary key="timing-tab">
-            <TimingTab timings={timings} />
-          </ErrorBoundary>
-        )}
-
-        {/* ══ BINANCE TEST TAB ══ */}
-
-        {/* ══ ERRORS TAB ══ */}
-        {tab==="errors" && (
-          <ErrorBoundary key="errors-tab">
-            <ErrorsTab errors={errorLog} />
-          </ErrorBoundary>
-        )}
-
-        {/* ══ SETTINGS TAB ══ */}
 
       </div>
 
