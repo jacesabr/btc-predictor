@@ -3212,30 +3212,33 @@ function App() {
                           fontWeight:600 }}>
                           <BullBearText text={traderSummary.edge} size={17} baseColor={C.text} />
                         </div>
-                        {/* Sort fired bullets to top, pending below — user sees what's
-                            live right now before what's still waiting. */}
+                        {/* Re-categorize bullets by CONDITION STATE, not Venice's original
+                            watch/actions split. Trader mental model:
+                              ACTIONABLE = conditions met right now, act / this is happening
+                              POTENTIAL  = conditions waiting, scenario hasn't fired yet */}
                         {(() => {
-                          const sortFired = (arr) => (arr || [])
-                            .map(evalBullet)
-                            .sort((a, b) => (b.__allMet ? 1 : 0) - (a.__allMet ? 1 : 0));
-                          const watchSorted   = sortFired(traderSummary.watch);
-                          const actionsSorted = sortFired(traderSummary.actions);
+                          const all = [
+                            ...(traderSummary.watch   || []).map(b => ({ ...b, __src: "w" })),
+                            ...(traderSummary.actions || []).map(b => ({ ...b, __src: "a" })),
+                          ].map(evalBullet);
+                          const fired   = all.filter(b => b.__allMet);
+                          const pending = all.filter(b => !b.__allMet);
                           return (<>
-                            {watchSorted.length > 0 && (
+                            {fired.length > 0 && (
                               <div style={{ marginTop:10 }}>
-                                <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:1,
-                                  textTransform:"uppercase", marginBottom:6 }}>Potential</div>
+                                <div style={{ fontSize:10, fontWeight:700, color:"#15803D", letterSpacing:1,
+                                  textTransform:"uppercase", marginBottom:6 }}>Actionable · conditions met right now</div>
                                 <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                                  {watchSorted.map((b, i) => <Bullet key={`w${i}`} {...b} />)}
+                                  {fired.map((b, i) => <Bullet key={`f${b.__src}${i}`} {...b} />)}
                                 </div>
                               </div>
                             )}
-                            {actionsSorted.length > 0 && (
+                            {pending.length > 0 && (
                               <div style={{ marginTop:12 }}>
                                 <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:1,
-                                  textTransform:"uppercase", marginBottom:6 }}>Actionable</div>
+                                  textTransform:"uppercase", marginBottom:6 }}>Potential · waiting for conditions</div>
                                 <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                                  {actionsSorted.map((b, i) => <Bullet key={`a${i}`} {...b} />)}
+                                  {pending.map((b, i) => <Bullet key={`p${b.__src}${i}`} {...b} />)}
                                 </div>
                               </div>
                             )}
