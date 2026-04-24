@@ -99,6 +99,14 @@ HARD RULES:
   round, or infer thresholds. If DeepSeek cites BSR=0.7914, use 0.7914, not
   0.79. If DeepSeek says "16.7 BTC buys", do not invent "below 2 BTC" as a
   reversal threshold.
+- NO DEGENERATE THRESHOLDS. Do not emit "taker_buy_volume > 0", "whale_buy > 0",
+  "open_interest > 0", or any ">0" threshold on a quantity that is always
+  non-negative. If INPUT says a regime is absent or zero (e.g. "zero taker
+  flow regime", "no whales ≥0.5 BTC"), describe the absence as the bullet's
+  narrative — the trigger is "a non-trivial figure appears", and you must
+  pick a specific non-zero threshold from the INPUT (e.g. cite the 3-bar
+  average, the prior spike, or a break level). If no meaningful threshold
+  exists, OMIT the condition and keep the bullet as pure narrative.
 - If a bullet needs a threshold that isn't in the INPUT, either:
     (a) quote the INPUT's number as the threshold (e.g., "below the cited
         434.9 BTC bid wall"), OR
@@ -180,6 +188,13 @@ COMPLETENESS (LAZINESS IS AUDITED):
   levels, historical-precedent win rate — that signal should be represented
   somewhere in your output (edge OR a watch/action bullet). Silently dropping
   half of DeepSeek's signals to save space is not allowed.
+- LIQUIDATIONS ARE HIGH-SIGNAL, NEVER DROP: if INPUT mentions any
+  "long liquidations", "short liquidations", "cascade", "$X liquidated",
+  "wicked stops", or specific liquidation levels — you MUST surface this in
+  at least one bullet, either as a reason the current direction has legs
+  (longs liquidated = downside accelerated) or as an invalidation level
+  (absorbed cascade = reversal setup). Liquidations have been the
+  most-frequently-missed topic in audit (79% drop rate) — prioritize them.
 - On NEUTRAL bars: the rationale for abstaining (why the argument fails
   under steelman) must appear in edge. Don't reduce "NEUTRAL because taker
   ratio inverted and OI is detaching" to "no edge" — preserve the reason.
@@ -245,6 +260,82 @@ _VALID_METRICS = {
 }
 _VALID_OPS = {">", ">=", "<", "<=", "=="}
 
+# Metrics where the underlying quantity is always non-negative in practice.
+# Conditions like `metric > 0` on these are trivially true and give the trader
+# no usable signal; we drop them at the audit layer and push Venice toward
+# either picking a non-zero INPUT-cited threshold or omitting the condition.
+_NON_NEGATIVE_METRICS: Set[str] = {
+    "taker_buy_volume", "taker_sell_volume", "taker_volume",
+    "open_interest",
+    "bid_depth_05pct", "ask_depth_05pct",
+    "spot_whale_buy_btc", "spot_whale_sell_btc",
+    "aggregate_liquidations_usd",
+}
+
+# Expected unit per metric (what the frontend formatter assumes).
+_EXPECTED_UNIT: Dict[str, str] = {
+    "price": "USD", "price_change_pct": "%",
+    "taker_buy_volume": "BTC", "taker_sell_volume": "BTC", "taker_volume": "BTC",
+    "bid_depth_05pct": "BTC", "ask_depth_05pct": "BTC",
+    "spot_whale_buy_btc": "BTC", "spot_whale_sell_btc": "BTC",
+    "open_interest": "BTC",
+    "taker_ratio": "", "bsr": "",
+    "long_short_ratio": "",
+    "bid_imbalance": "%", "ask_imbalance": "%",
+    "funding_rate": "%", "aggregate_funding_rate": "%",
+    "oi_velocity_pct": "%",
+    "rsi": "",
+    "basis_pct": "%",
+    "perp_cvd_1h": "BTC", "spot_cvd_1h": "BTC", "aggregate_cvd_1h": "BTC",
+    "rr_25d_30d": "%", "iv_30d_atm": "%",
+    "aggregate_liquidations_usd": "USD",
+}
+
+# Plausible magnitude bounds per metric. Venice has emitted things like
+# `open_interest > 0.5` (meant "OI velocity 0.5%") — the value is inside
+# INPUT somewhere (as a taker volume threshold) so the fabrication check
+# passes, but the magnitude is wildly wrong for the metric family. We
+# reject these at the validation layer so the pill never shows a nonsense
+# comparison. Bounds are loose by design — meant to catch 3+ orders of
+# magnitude mistakes, not tune pre-existing thresholds.
+_METRIC_MAGNITUDE_OK: Dict[str, Tuple[float, float]] = {
+    # quantities measured in absolute BTC — OI on Binance is ~50k-200k
+    "open_interest":          (1_000.0, 10_000_000.0),
+    # 5-min taker volume on BTCUSDT is typically 5-500 BTC; allow 0-5000
+    "taker_buy_volume":       (0.0,    10_000.0),
+    "taker_sell_volume":      (0.0,    10_000.0),
+    "taker_volume":           (0.0,    20_000.0),
+    # whale-trade volumes: 0.5-500 BTC common
+    "spot_whale_buy_btc":     (0.0,    10_000.0),
+    "spot_whale_sell_btc":    (0.0,    10_000.0),
+    # 0.5%-depth books on Binance: ~50-5000 BTC
+    "bid_depth_05pct":        (0.0,    50_000.0),
+    "ask_depth_05pct":        (0.0,    50_000.0),
+    # 1h CVD range can be signed; a few thousand BTC absolute at most
+    "perp_cvd_1h":            (-50_000.0, 50_000.0),
+    "spot_cvd_1h":            (-50_000.0, 50_000.0),
+    "aggregate_cvd_1h":       (-100_000.0, 100_000.0),
+    # price-like metrics
+    "price":                  (1_000.0, 10_000_000.0),
+    # rate-style metrics (percentage scale)
+    "price_change_pct":       (-50.0,  50.0),
+    "funding_rate":           (-5.0,   5.0),
+    "aggregate_funding_rate": (-5.0,   5.0),
+    "oi_velocity_pct":        (-100.0, 100.0),
+    "basis_pct":              (-10.0,  10.0),
+    "rr_25d_30d":             (-50.0,  50.0),
+    "iv_30d_atm":             (0.0,    500.0),
+    "bid_imbalance":          (-100.0, 100.0),
+    "ask_imbalance":          (-100.0, 100.0),
+    # ratios
+    "taker_ratio":            (0.0,    50.0),
+    "bsr":                    (0.0,    50.0),
+    "long_short_ratio":       (0.0,    50.0),
+    "rsi":                    (0.0,    100.0),
+    # big USD totals
+    "aggregate_liquidations_usd": (0.0, 10_000_000_000.0),
+}
+
 # Allowed values for the `sources` tag per bullet. Free-form but we coerce
 # to a known set; unknown tags are kept if they match the shape
 # "<section>" or "<section>.<sub>".
@@ -265,6 +356,17 @@ _TEXT_SIGNAL_FAMILIES = [
         {"bid_imbalance", "ask_imbalance", "bid_depth_05pct", "ask_depth_05pct"}),
     (re.compile(r"\bfunding\b",                          re.I),
         {"funding_rate", "aggregate_funding_rate"}),
+    # OI velocity / rate-of-change → oi_velocity_pct ONLY (unit %). The
+    # absolute OI family is separate below. If text says "OI velocity flips
+    # +0.5%" Venice must not route to `open_interest` (which is a BTC count
+    # ~100k) — the 0.5 would be a degenerate threshold on the wrong family.
+    (re.compile(r"\bOI\s+velocity\b|\bopen[- ]interest\s+velocity\b|"
+                r"\bOI\s+(flips?|change|turns?|moves?|shifts?)\b|"
+                r"\bOI\s+(rising|falling|growing|climbing|dropping|accelerat\w*)\b|"
+                r"\bOI\s+(rate[- ]of[- ]change|ROC)\b",
+                re.I),
+        {"oi_velocity_pct"}),
+    # Plain OI (absolute level)
     (re.compile(r"\bopen interest\b|\bOI\b",             re.I),
         {"open_interest", "oi_velocity_pct"}),
     (re.compile(r"\bliquidations?\b",                    re.I),
@@ -517,17 +619,43 @@ _METRIC_NAME_OK = re.compile(r"^[a-z][a-z0-9_]{1,60}$")
 
 # ── Validation (anti-fabrication + completeness) ────────────────────────
 
+_TEXT_FAMILY_EXCLUSIONS: List[Tuple[re.Pattern, Set[str]]] = [
+    # Velocity / rate-of-change text ("OI velocity", "OI rising") must NOT
+    # route to the absolute OI metric. 0.5 on oi_velocity_pct means "+0.5%";
+    # on open_interest it'd be "0.5 BTC" — 5 orders of magnitude off.
+    (re.compile(r"\bOI\s+velocity\b|\bopen[- ]interest\s+velocity\b|"
+                r"\bOI\s+(flips?|change|turns?|moves?|shifts?)\b|"
+                r"\bOI\s+(rising|falling|growing|climbing|dropping|accelerat\w*)\b|"
+                r"\bOI\s+(rate[- ]of[- ]change|ROC)\b|"
+                r"\bvelocity\s+(above|below|>|<)\s*[-+]?\d+(\.\d+)?\s*%",
+                re.I),
+     {"open_interest"}),
+]
+
+
 def _text_signal_families(text: str) -> Set[str]:
     fams: Set[str] = set()
     for rx, fam in _TEXT_SIGNAL_FAMILIES:
         if rx.search(text or ""):
             fams |= fam
+    # Subtractive pass: when text implies a rate-of-change / velocity, the
+    # absolute-quantity metric is not a valid target for the condition pill
+    # even though the broader regex matched.
+    for rx, excluded in _TEXT_FAMILY_EXCLUSIONS:
+        if rx.search(text or ""):
+            fams -= excluded
     return fams
 
 
 def _norm_conditions(raw: Any, input_canons: Set[str], input_raw: List[str]) -> Tuple[list, List[str]]:
-    """Validate + normalize conditions. Drops fabricated values (not cited in
-    INPUT) and returns (surviving_conditions, drop_notes)."""
+    """Validate + normalize conditions. Returns (surviving_conditions, drop_notes).
+
+    Preservation policy (2026-04-24, post "? UNKNOWN" incident): we keep a
+    condition even if its threshold value isn't verbatim in INPUT, tagging it
+    `heuristic: true` so the UI can still render the live value + met/unmet
+    against a rule-of-thumb floor (e.g. "BSR < 0.80 persistence"). Only drop
+    conditions that would produce an actively WRONG pill — wrong metric
+    family, wrong unit, or absurd magnitude."""
     notes: List[str] = []
     if not isinstance(raw, list):
         return [], notes
@@ -547,13 +675,56 @@ def _norm_conditions(raw: Any, input_canons: Set[str], input_raw: List[str]) -> 
             val = float(val)
         except (TypeError, ValueError):
             continue
-        if not _num_is_cited(val, input_canons, input_raw):
-            notes.append(f"fabricated_value:{metric}={val}")
-            continue
+        # Reject degenerate conditions: `>0` on an always-positive metric is
+        # trivially met and confuses the trader. Push Venice to either pick a
+        # non-zero threshold or omit the condition entirely.
+        if (val == 0 or val == 0.0) and metric in _NON_NEGATIVE_METRICS:
+            if op in (">", ">=", "=="):
+                notes.append(f"degenerate_trivial_threshold:{metric}{op}{val}")
+                continue
+        # Magnitude sanity: if Venice picks the wrong metric family but copies
+        # a value from INPUT (e.g. "open_interest > 0.5" when the 0.5 was a
+        # velocity %), the value would be 5+ orders of magnitude too small
+        # for OI. Reject — a wrong pill misleads the trader.
+        bounds = _METRIC_MAGNITUDE_OK.get(metric)
+        if bounds is not None:
+            lo, hi = bounds
+            if not (lo <= val <= hi):
+                notes.append(f"magnitude_out_of_range:{metric}{op}{val}(expected {lo}..{hi})")
+                continue
+        # Unit-sanity: the declared unit MUST match the metric family.
+        # Reject `open_interest` + unit `%`, or `oi_velocity_pct` + unit `BTC`
+        # — these indicate Venice confused the family even when the number
+        # happens to pass magnitude bounds.
+        expected_unit = _EXPECTED_UNIT.get(metric)
+        declared_unit = str(unit or "").strip()
+        if expected_unit is not None and declared_unit:
+            if declared_unit.upper() != expected_unit.upper() and expected_unit != "":
+                # Allow empty/missing declared unit — Venice often omits it.
+                # Reject only an explicit mismatch.
+                notes.append(f"unit_mismatch:{metric}(declared={declared_unit},expected={expected_unit})")
+                continue
+        # Heuristic vs cited: a value that's verbatim in INPUT is a cited
+        # level; one that isn't is a rule-of-thumb (e.g. BSR<0.80 persistence
+        # floor). Both are rendered as pills, but the UI can style heuristic
+        # pills differently so the trader knows the threshold didn't come
+        # from a live reading.
+        is_cited = _num_is_cited(val, input_canons, input_raw)
+        # Auto-correct unit to the expected one for known metrics. Venice is
+        # inconsistent here ("%" for BTC volumes, missing for rates). UI uses
+        # the metric() formatter so this is cosmetic, but we normalize so the
+        # pill label is clean across the dataset.
+        if expected_unit is not None:
+            unit_str = expected_unit
+        else:
+            unit_str = declared_unit[:16]
         out.append({
-            "metric": metric, "op": op, "value": val,
-            "unit":   str(unit or "")[:16],
+            "metric":    metric, "op": op, "value": val,
+            "unit":      unit_str,
+            "heuristic": (not is_cited),
         })
+        if not is_cited:
+            notes.append(f"heuristic_threshold_kept:{metric}{op}{val}")
         if len(out) >= 4:
             break
     return out, notes
@@ -971,12 +1142,17 @@ async def get_or_build(
                 retry_reasons.append(f"{n} bullet(s) with no source_quotes and no auto-derivable anchor")
         if audit["family_mismatch_conditions_cleared"]:
             retry_reasons.append(f"{len(audit['family_mismatch_conditions_cleared'])} bullet(s) had text naming one signal but conditions on another")
-        # Under-coverage trigger. 0.75 threshold means: if >= 25% of major INPUT
-        # signals are silently dropped, we retry. Calibrated against user
-        # feedback that a 0.667-coverage bar felt "sad and sparse" — 2 of 6
-        # signals missed shouldn't slide through.
-        if completeness["ratio"] < 0.75 and len(completeness["expected"]) >= 3:
+        # Under-coverage trigger. 0.80 threshold: if >= 20% of major INPUT
+        # signals are silently dropped, we retry. Tightened from 0.75 after
+        # 30-bar offline audit showed bars at 0.75-0.80 coverage still
+        # systematically dropping liquidations + funding.
+        if completeness["ratio"] < 0.80 and len(completeness["expected"]) >= 3:
             retry_reasons.append(f"missed major INPUT topics: {completeness['missed']}")
+        # Liquidations are the single most-dropped topic (79% drop rate in
+        # the offline corpus). Fire a dedicated retry whenever liquidations
+        # is expected but missed, even if overall coverage is otherwise ok.
+        if "liquidations" in (completeness.get("missed") or []):
+            retry_reasons.append("liquidations signal present in INPUT but absent from output")
         # Density trigger: if INPUT has 4+ signals but briefing has < 3 total
         # bullets, we retry even if coverage is technically ok (the edge line
         # alone covering a topic isn't enough — the trader needs an actionable
