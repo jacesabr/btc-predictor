@@ -3527,8 +3527,13 @@ function App() {
                   const up      = sig === "UP";
                   const neutral = sig === "NEUTRAL";
                   const clr     = neutral ? C.amber : up ? C.green : C.red;
-                  const pct     = neutral ? "0%" : (confStr ?? (conf != null ? conf.toFixed(1)+"%" : null));
-                  const barW    = neutral ? 0 : (conf ?? (up ? 65 : 35));
+                  // Use the real confidence number even for NEUTRAL — NEUTRAL
+                  // at 58% is a meaningful "abstain-with-some-information"
+                  // call, NOT "0%". Prior hard-coded "0%" was causing the
+                  // header to briefly flash "NEUTRAL 0%" during state
+                  // transitions, which looked like a bug to the trader.
+                  const pct     = confStr ?? (conf != null ? conf.toFixed(1)+"%" : null);
+                  const barW    = conf != null ? conf : (up ? 65 : neutral ? 50 : 35);
                   return (<>
                     <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
                       <span style={{ fontSize:26, fontWeight:900, color:clr, lineHeight:1 }}>
@@ -3577,9 +3582,16 @@ function App() {
                         </div>
                       )}
                     </div>
-                    {dsErr ? <div style={{ fontSize:11, color:C.red }}>{activeDeepseekPred.reasoning||"API error"}</div>
-                      : c2sig ? <SignalRow sig={c2sig} conf={c2conf} />
-                      : <div style={{ fontSize:11, color:C.muted }}>Analyzing…</div>}
+                    {/* Reserved min-height wrapper so the chart below doesn't
+                        jump up/down when the signal-row appears/disappears
+                        during bar-close → new-bar transitions. Height is
+                        sized to SignalRow's natural height (~32px for the
+                        text + 3px bar + 3px gap = ~38px). */}
+                    <div style={{ minHeight:38, display:"flex", flexDirection:"column", justifyContent:"center" }}>
+                      {dsErr ? <div style={{ fontSize:11, color:C.red }}>{activeDeepseekPred.reasoning||"API error"}</div>
+                        : c2sig ? <SignalRow sig={c2sig} conf={c2conf} />
+                        : <div style={{ fontSize:11, color:C.muted }}>Analyzing…</div>}
+                    </div>
 
                     {/* BIG ROW — accuracy % + wins/losses INLINE WITH countdown + tabs
                         All at matching size so the trader's eye takes everything in at once. */}

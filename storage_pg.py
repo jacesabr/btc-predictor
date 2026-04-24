@@ -571,75 +571,94 @@ class StoragePG:
             _put(conn)
 
     def backfill_stuck_correct(self, limit: int = 100) -> Dict:
-        """Backfill end_price + actual_direction + correct on bars stuck with
-        correct=NULL. Uses the NEXT consecutive bar's start_price as an
-        approximation of this bar's end_price (bars are contiguous in time,
-        price tick-to-tick delta across a 5-min boundary is negligible
-        compared to the 5-min price move we're classifying).
+        """Audit + recompute end_price / actual_direction / correct on the
+        last N bars, regardless of whether they already have values set.
+        Per user: "no need to look for null bars, just audit and fix if we
+        won or lost according to our prediction the last 55 bars".
 
-        Targets bars where correct IS NULL AND end_price IS NULL AND the next
-        bar (window_start + window_duration) already has a start_price we can
-        use. Returns {scanned, updated, skipped_no_next_bar}.
+        For each bar: look up the NEXT consecutive bar's start_price and
+        use it as the end_price approximation (5-min tick boundary —
+        negligible delta vs intra-bar move). Rows already matching the
+        recomputed values are left alone so re-runs are cheap no-ops.
 
-        Used to repair the 55 bars killed by the pm_odds_open NameError
-        (commit 5dc942f fix) — can also safely be called again if another
-        crash leaves correct=NULL rows in the future.
+        Returns {scanned, updated, unchanged, skipped_no_next_bar, changes}
+        where `changes` is a list of up to 50 before/after diffs for
+        visibility into what the audit corrected.
         """
         conn = _conn()
         updated = 0
-        scanned = 0
+        unchanged = 0
         no_next = 0
+        changes: List[Dict] = []
         try:
             with conn.cursor() as cur:
-                # Use a CTE self-join: for each stuck bar, find the next
-                # consecutive bar's start_price. window_end is reliably
-                # stored, so join on that.
                 cur.execute(
                     """
-                    WITH stuck AS (
-                        SELECT window_start, window_end, start_price, signal
+                    WITH recent AS (
+                        SELECT window_start, window_end, start_price, signal,
+                               end_price, actual_direction, correct
                           FROM deepseek_predictions
-                         WHERE correct IS NULL
-                           AND end_price IS NULL
-                           AND signal IN ('UP','DOWN','NEUTRAL')
+                         WHERE signal IN ('UP','DOWN','NEUTRAL')
                          ORDER BY window_start DESC
                          LIMIT %s
-                    ),
-                    nextbar AS (
-                        SELECT s.window_start AS stuck_start,
-                               s.start_price AS stuck_start_price,
-                               s.signal      AS stuck_signal,
-                               n.start_price AS next_start_price
-                          FROM stuck s
-                          LEFT JOIN deepseek_predictions n
-                            ON n.window_start = s.window_end
                     )
-                    SELECT stuck_start, stuck_start_price, stuck_signal, next_start_price
-                      FROM nextbar
+                    SELECT r.window_start, r.start_price, r.signal,
+                           r.end_price, r.actual_direction, r.correct,
+                           n.start_price AS next_start_price
+                      FROM recent r
+                      LEFT JOIN deepseek_predictions n
+                        ON n.window_start = r.window_end
                     """,
                     (int(limit),),
                 )
                 rows = cur.fetchall()
                 scanned = len(rows)
-                for stuck_start, stuck_start_price, signal, next_start_price in rows:
-                    if next_start_price is None:
+                for (ws, sp, sig, ep_old, ad_old, cr_old, next_sp) in rows:
+                    start_price = float(sp or 0)
+                    if next_sp is None or start_price == 0:
                         no_next += 1
                         continue
-                    end_price = float(next_start_price)
-                    start_price = float(stuck_start_price or 0)
+                    end_price = float(next_sp)
                     actual = "UP" if end_price >= start_price else "DOWN"
-                    correct = None if signal == "NEUTRAL" else (actual == signal)
+                    correct = None if sig == "NEUTRAL" else (actual == sig)
+                    same_end     = (ep_old is not None) and (abs(float(ep_old) - end_price) < 0.01)
+                    same_actual  = (ad_old == actual)
+                    same_correct = (cr_old == correct) if correct is not None else (cr_old is None)
+                    if same_end and same_actual and same_correct:
+                        unchanged += 1
+                        continue
                     cur.execute(
                         "UPDATE deepseek_predictions "
                         "SET end_price=%s, actual_direction=%s, correct=%s "
                         "WHERE window_start=%s",
-                        (end_price, actual, correct, stuck_start),
+                        (end_price, actual, correct, ws),
                     )
                     updated += 1
+                    if len(changes) < 50:
+                        changes.append({
+                            "window_start": ws,
+                            "signal": sig,
+                            "before": {
+                                "end_price":        float(ep_old) if ep_old is not None else None,
+                                "actual_direction": ad_old,
+                                "correct":          cr_old,
+                            },
+                            "after": {
+                                "end_price":        end_price,
+                                "actual_direction": actual,
+                                "correct":          correct,
+                            },
+                        })
             conn.commit()
         finally:
             _put(conn)
-        return {"scanned": scanned, "updated": updated, "skipped_no_next_bar": no_next}
+        return {
+            "scanned":             scanned,
+            "updated":             updated,
+            "unchanged":           unchanged,
+            "skipped_no_next_bar": no_next,
+            "changes":             changes,
+        }
 
     def save_trader_summary(self, window_start: float, summary_json: str) -> None:
         """Persist the Venice trader-summary payload for a bar alongside the
