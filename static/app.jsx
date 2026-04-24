@@ -3088,7 +3088,7 @@ function App() {
                 );
                 const briefingReady = traderSummary && pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR";
                 return (
-                  <div style={{ width:"100%", maxWidth:"40%", minWidth:360, display:"flex", flexDirection:"column", gap:8 }}>
+                  <div style={{ width:"100%", minWidth:360, display:"flex", flexDirection:"column", gap:8 }}>
                     {briefingReady && (
                       <div style={{ ...card, flexShrink:0, padding:"14px 16px",
                         background:"#FAFAF9", border:`2px solid ${C.borderSoft}` }}>
