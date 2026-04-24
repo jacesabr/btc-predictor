@@ -54,7 +54,18 @@ HARD RULES:
 - Restate only facts in the INPUT. Never invent levels, numbers, bars, or directional calls.
 - If the source is NEUTRAL or has no setup, say so plainly in edge — do not manufacture one.
 - Include numbers only when they carry trading meaning (price levels, bar IDs, ranges, time to close). Drop confidence percentages, latencies, and data-source labels.
-- Tag each bullet by which SIDE of the trade it implies (bullish, bearish, or neutral).
+- TONE = the trade direction that benefits when ALL conditions fire:
+    * "bullish"  — firing favors a LONG trade (price expected to move UP)
+    * "bearish"  — firing favors a SHORT trade (price expected to move DOWN)
+    * "neutral"  — firing suggests HOLD / stand aside (no directional edge)
+  Judge tone by reading the if_met consequence or the text's outcome clause, NOT the
+  trigger signal. Examples:
+    * "If bid imbalance collapses below X, downside acceleration likely" → BEARISH
+      (the fire condition is bid-support weakening; outcome is price drop).
+    * "If taker buy volume spikes above X, breakout confirmed" → BULLISH.
+    * "If taker volume stays below X, regime continues, no edge" → NEUTRAL.
+  A bullish-sounding trigger can have a bearish outcome (e.g. "if buyers lose control
+  at X, reversal down"). Always read the consequence to decide tone.
 - **BULLET TEXT MUST BE A COMPLETE SENTENCE.** Never emit a bullet whose text is just the signal name ("taker flow", "spot whale buy"). If you have something to say about a signal, write a full sentence. If you don't, OMIT the bullet entirely. Empty conditions does NOT mean empty text — the text carries the trader-usable info either way.
 - Each bullet = ONE sentence. Total briefing <=120 words across edge + all bullets. Scannable in 30s.
 - watch: max 3 bullets. actions: max 3 bullets. Less is more.
