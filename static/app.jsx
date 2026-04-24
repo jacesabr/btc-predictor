@@ -2698,21 +2698,27 @@ function App() {
   }, []);
 
   const fetchTaker = useCallback(async () => {
+    // Mirror the backend chain — taker flow uses Kraken spot Trades so frontend
+    // pill values match the numbers DeepSeek sees. Binance fAPI would return a
+    // different market (perp) AND inconsistently reachable from Render. Kraken
+    // side flag: "b" = market-buy (buyer was taker), "s" = market-sell (taker sold).
     try {
-      const d = await fetch("https://fapi.binance.com/futures/data/takerlongshortRatio?symbol=BTCUSDT&period=5m&limit=3").then(r=>r.json());
-      const latest = d[d.length-1]||{};
-      const bsr = parseFloat(latest.buySellRatio||1);
-      const bv  = parseFloat(latest.buyVol||0);
-      const sv  = parseFloat(latest.sellVol||0);
-      const sig = bsr>1.12?"BULLISH":bsr<0.90?"BEARISH":"NEUTRAL";
-      // 3-bar trend
-      let trend="MIXED";
-      if (d.length>=3) {
-        const r=[...d].map(x=>parseFloat(x.buySellRatio||1));
-        if (r[2]>r[1]&&r[1]>r[0]) trend="ACC↑";
-        else if (r[2]<r[1]&&r[1]<r[0]) trend="ACC↓";
+      const sinceNs = Math.floor((Date.now()/1000 - 360) * 1e9);   // last ~6 min, buffer
+      const d = await fetch(`https://api.kraken.com/0/public/Trades?pair=XBTUSD&since=${sinceNs}`).then(r=>r.json());
+      const rows = (d?.result?.XXBTZUSD || d?.result?.XBTUSD || []);
+      if (!rows.length) throw new Error("empty Kraken trades");
+      const cutoff = Date.now()/1000 - 300;   // strict 5-min aggregation window
+      let bv = 0, sv = 0;
+      for (const t of rows) {
+        const ts = parseFloat(t[2]); if (ts < cutoff) continue;
+        const vol = parseFloat(t[1]);
+        if (t[3] === "b") bv += vol;
+        else if (t[3] === "s") sv += vol;
       }
-      setTk({ bsr, bv, sv, sig, trend });
+      if (bv + sv < 0.01) throw new Error("Kraken volume too small");
+      const bsr = sv > 0 ? bv / sv : 1.0;
+      const sig = bsr > 1.12 ? "BULLISH" : bsr < 0.90 ? "BEARISH" : "NEUTRAL";
+      setTk({ bsr, bv, sv, sig, trend: "N/A" });
       dot("tk","live");
     } catch { dot("tk","err"); }
   }, []);
