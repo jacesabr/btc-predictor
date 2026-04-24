@@ -478,6 +478,14 @@ async def _fetch_taker_flow() -> Dict:
 
 
 async def _fetch_oi_funding() -> Dict:
+    """Open interest + funding. Primary path: Binance perp fAPI. Fallback:
+    OKX BTC-USDT-SWAP. Returns `venue` so downstream (DeepSeek prompt, UI)
+    knows which venue the OI/funding numbers come from — Binance perp OI is
+    ~3x OKX perp OI (different market size), so silently mixing them was
+    causing the bullet text ("OI 34,839 BTC", OKX) to disagree with a live
+    pill that hit Binance directly ("OI 96,771 BTC"). Record the venue so
+    DeepSeek's citations stay honest and the UI can match the source."""
+    venue = "binance_perp"
     try:
         oi, pi = await asyncio.gather(
             _get("https://fapi.binance.com/fapi/v1/openInterest?symbol=BTCUSDT"),
@@ -491,6 +499,7 @@ async def _fetch_oi_funding() -> Dict:
         ntf  = pi.get("nextFundingTime", 0)
     except Exception as _e:
         logger.debug("Binance OI/funding failed, using OKX fallback: %s", _e)
+        venue = "okx_perp"
         oi_r, fr_r, mk_r, ix_r = await asyncio.gather(
             _get("https://www.okx.com/api/v5/public/open-interest"
                  "?instType=SWAP&instId=BTC-USDT-SWAP"),
@@ -522,6 +531,7 @@ async def _fetch_oi_funding() -> Dict:
         "next_funding_time_ms":      ntf,
         "funding_signal":            fr_sig,
         "premium_signal":            p_sig,
+        "venue":                     venue,
     }
 
 

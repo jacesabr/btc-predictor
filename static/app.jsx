@@ -2959,8 +2959,25 @@ function App() {
         case "bsr":               return tk?.bsr != null ? { v: tk.bsr, f: fmt.num } : null;
         case "bid_imbalance":     return (obFull?.imbalance_05pct_pct != null) ? { v: obFull.imbalance_05pct_pct, f: fmt.pct } : (ob?.imb != null ? { v: ob.imb, f: fmt.pct } : null);
         case "ask_imbalance":     return (obFull?.imbalance_05pct_pct != null) ? { v: -obFull.imbalance_05pct_pct, f: fmt.pct } : (ob?.imb != null ? { v: -ob.imb, f: fmt.pct } : null);
-        case "funding_rate":      return oif?.fr != null ? { v: oif.fr*100, f: fmt.pct } : null;
-        case "open_interest":     return oif?.oi != null ? { v: oif.oi, f: fmt.btc } : null;
+        case "funding_rate":
+          // Same rationale as open_interest above: prefer the backend-relayed
+          // value so pill matches bullet text even under OKX-fallback.
+          if (ds?.oi_funding?.funding_rate_8h_pct != null)
+            return { v: ds.oi_funding.funding_rate_8h_pct, f: fmt.pct };
+          return oif?.fr != null ? { v: oif.fr*100, f: fmt.pct } : null;
+        case "open_interest":
+          // Prefer backend's open_interest_btc (same source DeepSeek
+          // reasoned over) so the pill matches the bullet text even when
+          // the backend is on OKX-fallback because Binance fAPI is
+          // geo-blocked from Render's datacenter. Fall back to the
+          // browser's direct-Binance fetch when the backend value is
+          // unavailable — those paths produce different numbers (Binance
+          // perp OI ≈ 3× OKX perp OI), which was causing visible
+          // disagreement between "OI 34,839 BTC" in the bullet text and
+          // "now 96,771 BTC" in the pill for the same bar.
+          if (ds?.oi_funding?.open_interest_btc != null)
+            return { v: ds.oi_funding.open_interest_btc, f: fmt.btc };
+          return oif?.oi != null ? { v: oif.oi, f: fmt.btc } : null;
         case "rsi":               return strategies?.rsi?.value != null ? { v: parseFloat(strategies.rsi.value), f: fmt.num } : null;
         case "long_short_ratio":  return ls?.lsr != null ? { v: ls.lsr, f: fmt.num } : null;
         case "basis_pct":         return spb?.basis_pct != null ? { v: spb.basis_pct, f: fmt.pct } : null;
