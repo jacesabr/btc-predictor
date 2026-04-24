@@ -3285,7 +3285,7 @@ function App() {
                             {actionable.length > 0 && (
                               <div style={{ marginTop:10 }}>
                                 <div style={{ fontSize:11, fontWeight:800, color:"#15803D", letterSpacing:1.2,
-                                  textTransform:"uppercase", marginBottom:6 }}>Actionable · {actionable.filter(b=>b.__allMet).length} firing, {actionable.filter(b=>!b.__hasConds).length} immediate</div>
+                                  textTransform:"uppercase", marginBottom:6 }}>Actionable · {actionable.length} live now</div>
                                 <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                                   {actionable.map((b, i) => <Bullet key={`act${b.__src}${i}`} {...b} />)}
                                 </div>
@@ -3294,7 +3294,7 @@ function App() {
                             {waiting.length > 0 && (
                               <div style={{ marginTop:12 }}>
                                 <div style={{ fontSize:11, fontWeight:800, color:C.amber, letterSpacing:1.2,
-                                  textTransform:"uppercase", marginBottom:6 }}>Waiting for conditions</div>
+                                  textTransform:"uppercase", marginBottom:6 }}>Waiting for conditions · {waiting.length}</div>
                                 <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                                   {waiting.map((b, i) => <Bullet key={`w${b.__src}${i}`} {...b} />)}
                                 </div>
