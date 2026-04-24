@@ -281,6 +281,19 @@ HARD RULES:
   briefing with rich INPUT and only 2 watch bullets is a failure, not a
   virtue. Only drop a bullet when there is literally nothing specific to
   say about that signal in the INPUT.
+- BALANCE observation-bullets with trigger-bullets. An observation-bullet
+  describes what IS happening now and has a condition whose threshold is
+  already met (e.g. "Sellers are dominating — BSR <N> with <X> BTC sells vs
+  <Y> BTC buys" + condition `taker_ratio < 1.0`). A trigger-bullet names a
+  future state (e.g. "If BSR flips above <threshold> → buyers take over").
+  A healthy briefing has BOTH: observations tell the trader what's happening
+  right now (these show in ACTIONABLE since their condition is already
+  satisfied), triggers tell them what to watch for (these show in WAITING).
+  If you put every rich observation into the `edge` sentence and reserve
+  bullets only for future triggers, the ACTIONABLE section goes empty and
+  the trader has to expand WAITING to see any detail. Don't do that. At
+  least 2 of your watch bullets should describe CURRENT state with a
+  threshold the live value is already past.
 - No hedging, no meta-commentary, no "the model says".
 
 COMPLETENESS (LAZINESS IS AUDITED):

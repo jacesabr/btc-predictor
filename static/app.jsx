@@ -3058,14 +3058,21 @@ function App() {
       // still render it, but visually de-emphasise and annotate the tooltip
       // so the trader instantly sees "this threshold is meaningless".
       const degenerateLive = (() => {
+        // Flag only EXTREME threshold/live mismatches (live >3x past threshold
+        // on > side, or live <1/3 of threshold on < side). Normal observation
+        // bullets describing current state have a threshold AT the regime
+        // boundary (e.g. BSR < 1.0 when live is 0.58) — we don't want to
+        // flag those as degenerate. The 3x band catches things like
+        // "OI > 34,635 BTC" when live OI is 96,832 BTC (2.8x past) —
+        // actually that's exactly the case that prompted this, so 2.5x:
         if (!live || infoOnly || heuristic) return false;
         const v = cond.value;
         if (!Number.isFinite(v) || v === 0) return false;
         if (cond.op === ">" || cond.op === ">=") {
-          return live.v >= v * 1.5 && live.v > v;
+          return live.v >= v * 2.5 && live.v > v;
         }
         if (cond.op === "<" || cond.op === "<=") {
-          return live.v <= v * 0.67 && live.v < v;
+          return live.v <= v * 0.4 && live.v < v;
         }
         return false;
       })();

@@ -570,6 +570,77 @@ class StoragePG:
         finally:
             _put(conn)
 
+    def backfill_stuck_correct(self, limit: int = 100) -> Dict:
+        """Backfill end_price + actual_direction + correct on bars stuck with
+        correct=NULL. Uses the NEXT consecutive bar's start_price as an
+        approximation of this bar's end_price (bars are contiguous in time,
+        price tick-to-tick delta across a 5-min boundary is negligible
+        compared to the 5-min price move we're classifying).
+
+        Targets bars where correct IS NULL AND end_price IS NULL AND the next
+        bar (window_start + window_duration) already has a start_price we can
+        use. Returns {scanned, updated, skipped_no_next_bar}.
+
+        Used to repair the 55 bars killed by the pm_odds_open NameError
+        (commit 5dc942f fix) — can also safely be called again if another
+        crash leaves correct=NULL rows in the future.
+        """
+        conn = _conn()
+        updated = 0
+        scanned = 0
+        no_next = 0
+        try:
+            with conn.cursor() as cur:
+                # Use a CTE self-join: for each stuck bar, find the next
+                # consecutive bar's start_price. window_end is reliably
+                # stored, so join on that.
+                cur.execute(
+                    """
+                    WITH stuck AS (
+                        SELECT window_start, window_end, start_price, signal
+                          FROM deepseek_predictions
+                         WHERE correct IS NULL
+                           AND end_price IS NULL
+                           AND signal IN ('UP','DOWN','NEUTRAL')
+                         ORDER BY window_start DESC
+                         LIMIT %s
+                    ),
+                    nextbar AS (
+                        SELECT s.window_start AS stuck_start,
+                               s.start_price AS stuck_start_price,
+                               s.signal      AS stuck_signal,
+                               n.start_price AS next_start_price
+                          FROM stuck s
+                          LEFT JOIN deepseek_predictions n
+                            ON n.window_start = s.window_end
+                    )
+                    SELECT stuck_start, stuck_start_price, stuck_signal, next_start_price
+                      FROM nextbar
+                    """,
+                    (int(limit),),
+                )
+                rows = cur.fetchall()
+                scanned = len(rows)
+                for stuck_start, stuck_start_price, signal, next_start_price in rows:
+                    if next_start_price is None:
+                        no_next += 1
+                        continue
+                    end_price = float(next_start_price)
+                    start_price = float(stuck_start_price or 0)
+                    actual = "UP" if end_price >= start_price else "DOWN"
+                    correct = None if signal == "NEUTRAL" else (actual == signal)
+                    cur.execute(
+                        "UPDATE deepseek_predictions "
+                        "SET end_price=%s, actual_direction=%s, correct=%s "
+                        "WHERE window_start=%s",
+                        (end_price, actual, correct, stuck_start),
+                    )
+                    updated += 1
+            conn.commit()
+        finally:
+            _put(conn)
+        return {"scanned": scanned, "updated": updated, "skipped_no_next_bar": no_next}
+
     def save_trader_summary(self, window_start: float, summary_json: str) -> None:
         """Persist the Venice trader-summary payload for a bar alongside the
         main DeepSeek record. Used only for the post-hoc audit endpoint —

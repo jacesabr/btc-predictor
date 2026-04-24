@@ -300,6 +300,18 @@ async def get_deepseek_prediction_detail(window_start: float):
     return {}
 
 
+@app.post("/admin/backfill-correct", dependencies=[Depends(require_admin)])
+async def backfill_correct(limit: int = 100):
+    """One-shot backfill for bars stuck with correct=NULL (e.g. from the
+    pm_odds_open crash before commit 5dc942f). For each stuck bar, uses the
+    NEXT consecutive bar's start_price as the end_price approximation
+    (5-min tick boundary — inter-bar delta is negligible vs intra-bar move).
+    Idempotent: only updates bars where correct IS NULL AND end_price IS
+    NULL. Returns counts."""
+    limit = max(1, min(int(limit or 100), 500))
+    return _safe_storage(storage.backfill_stuck_correct, limit, default={"error": "storage_unavailable"})
+
+
 @app.get("/audit/trader-summary", dependencies=[Depends(require_admin)])
 async def get_trader_summary_audit(n: int = 100):
     """Rolling last-N audit view for the Venice trader-summary translation
