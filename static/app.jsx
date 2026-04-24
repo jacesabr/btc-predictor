@@ -17,7 +17,6 @@ const STRATEGY_META = [
   { key: "fib_pullback", name: "Fibonacci",    color: "#047857" },
   { key: "harmonic",     name: "Harmonic",     color: "#9D174D" },
   { key: "vwap",         name: "AVWAP",        color: "#0369A1" },
-  { key: "polymarket",   name: "Crowd",        color: "#3730A3" },
   { key: "ml_logistic",  name: "Lin Reg",      color: "#6B21A8" },
 ];
 
@@ -36,7 +35,6 @@ const STRATEGY_DESC = {
   fib_pullback: { short:"Price naturally gravitates to Fibonacci retracement levels.", how:"Bounce off 61.8% = strong trend continuation. Break through 61.8% = deeper pullback to 78.6% or full retrace." },
   harmonic:     { short:"Geometric patterns (Bat, Gartley, Crab) predict reversals.", how:"A pattern completing near the D leg PRZ (reversal zone) combines timing + price with a pre-defined tight stop." },
   vwap:         { short:"Anchored VWAP at peak-volume bar + 1/2/3σ bands.", how:"Anchor is the highest-volume bar in 50 bars — where fair value was most contested. Price above VWAP = long bias; below = short. σ band shows extension: 1σ=momentum, 2σ=extended, 3σ=extreme." },
-  polymarket:   { short:"Real-money crowd prediction markets aggregate directional bias.", how:"High percentage alignment from participants with money on the line is statistically reliable directional pressure." },
   ml_logistic:  { short:"Logistic regression trained on 100+ historical features.", how:"Slope shows trend angle; coefficient magnitude shows confidence. Feature agreement across multiple inputs = high edge." },
 };
 
@@ -1120,7 +1118,6 @@ function BackendTab({ backendSnap, deepseekPred }) {
   const stratPreds = snap.strategy_preds || {};
   const dashSigs = snap.dashboard_signals || {};
   const ensRes = snap.ensemble_result || {};
-  const pm = snap.polymarket || {};
   const ds = deepseekPred || {};
 
   const stratKeys = Object.keys(stratPreds);
@@ -1341,7 +1338,7 @@ function BackendTab({ backendSnap, deepseekPred }) {
           </div>
         )}
 
-        {/* Ensemble + Polymarket */}
+        {/* Ensemble Vote */}
         <div style={{ display:"flex", gap:5, flexShrink:0 }}>
           {ensRes.signal && (
             <div style={{ ...card, flex:1, borderLeft:`3px solid ${ensRes.signal==="UP"?C.green:ensRes.signal==="NEUTRAL"?C.amber:C.red}` }}>
@@ -1354,17 +1351,6 @@ function BackendTab({ backendSnap, deepseekPred }) {
                 <div style={{ width:`${(ensRes.confidence||0)*100}%`, height:"100%", background:ensRes.signal==="UP"?C.green:ensRes.signal==="NEUTRAL"?C.amber:C.red }} />
               </div>
               <div style={{ fontSize:9, color:C.muted }}>{ensRes.bullish_count}↑ {ensRes.bearish_count}↓</div>
-            </div>
-          )}
-          {pm.is_live && (
-            <div style={{ ...card, flex:1 }}>
-              <div style={{ ...label, marginBottom:4 }}>Polymarket</div>
-              <div style={{ fontSize:14, fontWeight:900, color:C.green }}>{((pm.yes_price||0)*100).toFixed(1)}% UP</div>
-              <div style={{ height:3, background:C.borderSoft, borderRadius:2, margin:"4px 0" }}>
-                <div style={{ width:`${(pm.yes_price||0)*100}%`, height:"100%", background:C.green }} />
-                <div style={{ width:`${(1-(pm.yes_price||0))*100}%`, height:"100%", background:C.red, marginTop:-3 }} />
-              </div>
-              <div style={{ fontSize:9, color:C.muted }}>Odds: 1:{pm.market_odds?.toFixed(3)}</div>
             </div>
           )}
         </div>
@@ -2443,7 +2429,6 @@ function App() {
   const [preds,          setPreds]          = useState([]);
   const [weights,        setWeights]        = useState({});
 
-  const [polymarket,            setPolymarket]            = useState(null);
   const [pendingDeepseekReady,  setPendingDeepseekReady]  = useState(false);
   const [pendingDeepseekPred,   setPendingDeepseekPred]   = useState(null);
   const [historicalAnalysis,    setHistoricalAnalysis]    = useState("");
@@ -2512,7 +2497,6 @@ function App() {
         if (d.deepseek_prediction)                    setDeepseekPred(d.deepseek_prediction);
         if (d.pending_deepseek_prediction)            setPendingDeepseekPred(d.pending_deepseek_prediction);
         if (d.agree_accuracy)                         setAgreeAcc(d.agree_accuracy);
-        if (d.polymarket)                             setPolymarket(d.polymarket);
         if (d.pending_deepseek_ready !== undefined)   setPendingDeepseekReady(d.pending_deepseek_ready);
         if (d.bar_historical_analysis !== undefined)  setHistoricalAnalysis(d.bar_historical_analysis || "");
         if (d.bar_historical_context !== undefined)   setHistoricalContext(d.bar_historical_context || "");
@@ -2815,7 +2799,6 @@ function App() {
   // ── Derived values ────────────────────────────────────────────
   const priceDelta = (price&&winStartPrice) ? price-winStartPrice : 0;
   const pricePct   = winStartPrice ? priceDelta/winStartPrice*100 : 0;
-  const polyLive   = polymarket?.is_live===true && polymarket?.market_odds>0;
   const totalPreds     = backtest?.total_predictions??0;
   const correctPreds   = backtest?.correct_predictions??0;
   const accuracy       = totalPreds>0?correctPreds/totalPreds*100:0;
@@ -3025,16 +3008,82 @@ function App() {
                 const toneColor = (t) => t==="bullish" ? C.green : t==="bearish" ? C.red : C.amber;
                 const toneBg    = (t) => t==="bullish" ? C.greenBg : t==="bearish" ? C.redBg : C.amberBg;
                 const toneBorder= (t) => t==="bullish" ? C.greenBorder : t==="bearish" ? C.redBorder : C.amberBorder;
-                const Bullet = ({ tone, text }) => (
-                  <div style={{ display:"flex", gap:10, alignItems:"flex-start",
+
+                // Live-value lookup: map each Venice metric name to (current value, formatter,
+                // data-available flag). Anything missing returns null → pill shows "no data".
+                const fmt = {
+                  btc:  (v) => `${v.toFixed(1)} BTC`,
+                  usd:  (v) => `$${v.toLocaleString(undefined,{maximumFractionDigits:0})}`,
+                  pct:  (v) => `${v.toFixed(2)}%`,
+                  num:  (v) => v.toFixed(2),
+                };
+                const metric = (m) => {
+                  switch (m) {
+                    case "price":             return price != null ? { v: price, f: fmt.usd } : null;
+                    case "taker_buy_volume":  return tk?.bv  != null ? { v: tk.bv,  f: fmt.btc } : null;
+                    case "taker_sell_volume": return tk?.sv  != null ? { v: tk.sv,  f: fmt.btc } : null;
+                    case "taker_volume":      return tk?.bv!=null && tk?.sv!=null ? { v: tk.bv + tk.sv, f: fmt.btc } : null;
+                    case "taker_ratio":       return tk?.bsr != null ? { v: tk.bsr, f: fmt.num } : null;
+                    case "bid_imbalance":     return ob?.imb != null ? { v: ob.imb,  f: fmt.pct } : null;
+                    case "ask_imbalance":     return ob?.imb != null ? { v: -ob.imb, f: fmt.pct } : null;
+                    case "funding_rate":      return oif?.fr != null ? { v: oif.fr*100, f: fmt.pct } : null;
+                    case "open_interest":     return oif?.oi != null ? { v: oif.oi, f: fmt.btc } : null;
+                    case "rsi":               return strategies?.rsi?.value != null ? { v: parseFloat(strategies.rsi.value), f: fmt.num } : null;
+                    case "long_short_ratio":  return ls?.lsr != null ? { v: ls.lsr, f: fmt.num } : null;
+                    default: return null;
+                  }
+                };
+                const opCheck = { ">": (a,b)=>a>b, ">=": (a,b)=>a>=b, "<": (a,b)=>a<b, "<=": (a,b)=>a<=b, "==": (a,b)=>Math.abs(a-b)<1e-9 };
+                // Human label for each metric
+                const metricLabel = {
+                  price: "price", taker_buy_volume: "taker buy", taker_sell_volume: "taker sell",
+                  taker_volume: "taker vol", taker_ratio: "BSR", bid_imbalance: "bid imb",
+                  ask_imbalance: "ask imb", funding_rate: "funding", open_interest: "OI",
+                  rsi: "RSI", long_short_ratio: "L/S",
+                };
+
+                // Condition pill: shows current live value, threshold, and ✓/✗ whether met.
+                // Neutral grey if live data isn't available (don't lie with ✓).
+                const ConditionPill = ({ cond }) => {
+                  const live = metric(cond.metric);
+                  const thresholdStr = live ? live.f(cond.value) : `${cond.value}${cond.unit||""}`;
+                  const isMet = live ? opCheck[cond.op](live.v, cond.value) : null;
+                  const ok = isMet === true;
+                  const bad = isMet === false;
+                  const borderC = ok ? C.green : bad ? C.red : C.muted;
+                  const bgC     = ok ? C.greenBg : bad ? C.redBg : C.surface;
+                  const fgC     = ok ? "#166534" : bad ? "#991B1B" : C.muted;
+                  const icon    = ok ? "✓" : bad ? "✗" : "—";
+                  return (
+                    <span style={{ display:"inline-flex", alignItems:"center", gap:5,
+                      fontSize:11, fontWeight:700, padding:"2px 7px", borderRadius:4,
+                      background: bgC, color: fgC, border:`1px solid ${borderC}` }}>
+                      <span style={{ fontWeight:900 }}>{icon}</span>
+                      <span>{metricLabel[cond.metric] || cond.metric} {cond.op} {thresholdStr}</span>
+                      {live && (
+                        <span style={{ color:C.muted, fontWeight:500 }}>· now {live.f(live.v)}</span>
+                      )}
+                    </span>
+                  );
+                };
+
+                const Bullet = ({ tone, text, conditions }) => (
+                  <div style={{ display:"flex", flexDirection:"column", gap:6,
                     padding:"9px 12px", borderRadius:6,
                     background: toneBg(tone),
                     borderLeft: `4px solid ${toneColor(tone)}`,
                     border: `1px solid ${toneBorder(tone)}` }}>
-                    <span style={{ fontSize:18, lineHeight:1.2, flexShrink:0, paddingTop:1 }}>
-                      {toneEmoji(tone)}
-                    </span>
-                    <BullBearText text={text} size={15} baseColor={tone==="neutral" ? C.text : toneColor(tone)} />
+                    <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+                      <span style={{ fontSize:18, lineHeight:1.2, flexShrink:0, paddingTop:1 }}>
+                        {toneEmoji(tone)}
+                      </span>
+                      <BullBearText text={text} size={15} baseColor={tone==="neutral" ? C.text : toneColor(tone)} />
+                    </div>
+                    {conditions?.length > 0 && (
+                      <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginLeft:28 }}>
+                        {conditions.map((c, i) => <ConditionPill key={i} cond={c} />)}
+                      </div>
+                    )}
                   </div>
                 );
                 const briefingReady = traderSummary && pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR";

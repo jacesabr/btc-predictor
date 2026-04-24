@@ -151,9 +151,16 @@ async def _fetch_taker_flow() -> Dict:
                 for r in reversed(rows)
             ]
         except Exception as _e2:
-            logger.debug("OKX taker flow also failed (%s) — using neutral defaults", _e2)
-            bsr, bv, sv = 1.0, 0.0, 0.0
-            _data_for_trend = []
+            # Both Binance and OKX failed — don't fabricate "balanced flow" from the
+            # bsr=1.0 default. Return UNAVAILABLE so downstream (prompt builder,
+            # dashboard accuracy tally) can distinguish "measured neutral" from
+            # "data gap" and omit the section rather than mislead the model.
+            logger.warning("Taker flow fetch failed on both Binance and OKX: %s", _e2)
+            return {
+                "signal":            "UNAVAILABLE",
+                "data_available":    False,
+                "interpretation":    "Taker flow data unavailable — both Binance and OKX fetches failed.",
+            }
     sig = "BULLISH" if bsr > 1.12 else "BEARISH" if bsr < 0.90 else "NEUTRAL"
     if len(_data_for_trend) >= 3:
         ratios  = [float(d.get("buySellRatio", 1)) for d in _data_for_trend]
@@ -180,6 +187,7 @@ async def _fetch_taker_flow() -> Dict:
         "taker_buy_vol_btc": round(bv,  1),
         "taker_sell_vol_btc":round(sv,  1),
         "signal":            sig,
+        "data_available":    True,
         "trend_3bars":       trend,
         "interpretation":    interp,
     }
@@ -234,24 +242,36 @@ async def _fetch_oi_funding() -> Dict:
 
 
 async def _fetch_liquidations() -> Dict:
+    fetch_failed = False
     try:
         data = await _get(
             "https://www.okx.com/api/v5/public/liquidation-orders"
             "?instType=SWAP&mgnMode=cross&instId=BTC-USDT-SWAP&state=filled&limit=100"
         )
     except Exception as _e:
-        logger.debug("OKX liquidations failed: %s", _e)
+        logger.warning("OKX liquidations fetch failed: %s", _e)
         data = {}
+        fetch_failed = True
     rows = []
     for event in (data.get("data") or []):
         for detail in (event.get("details") or []):
             rows.append(detail)
     if not rows:
+        # If the fetch itself failed, this "no rows" is data-gap, not observed
+        # calm — never tell the model "stable market, no cascades" when we
+        # couldn't check. Prompt builder should omit the section entirely.
+        if fetch_failed:
+            return {
+                "signal":         "UNAVAILABLE",
+                "data_available": False,
+                "interpretation": "Liquidation data unavailable — OKX fetch failed.",
+            }
         return {
             "total": 0, "long_liq_count": 0, "short_liq_count": 0,
             "long_liq_usd": 0, "short_liq_usd": 0,
             "velocity_per_min": 0.0,
             "signal": "NEUTRAL",
+            "data_available": True,
             "interpretation": "No recent liquidations — stable market, no cascades detected.",
         }
     now_ms = time.time() * 1000
@@ -298,6 +318,7 @@ async def _fetch_liquidations() -> Dict:
         "velocity_per_min":  velocity,
         "price_range":       p_range,
         "signal":            sig,
+        "data_available":    True,
         "interpretation":    interp,
     }
 

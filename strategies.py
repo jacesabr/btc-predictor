@@ -2,7 +2,7 @@
 Trading Strategies, Ensemble, and EV Calculator
 ================================================
 Active rule-based strategies for BTC 5-minute prediction:
-  RSI, MACD, Stochastic, EMA Cross, VWAP, Polymarket,
+  RSI, MACD, Stochastic, EMA Cross, VWAP,
   Supertrend, ADX, Alligator, Acc/Dist, Dow Theory, Fib Pullback, Harmonic
 
 Plus LinearRegressionChannel (key: ml_logistic), EnsemblePredictor, and EV tools.
@@ -373,30 +373,6 @@ class VWAPStrategy(BaseStrategy):
         return {"signal": signal, "confidence": self._clamp_confidence(conf),
                 "reasoning": reasoning, "value": f"${vwap:.2f}",
                 "htf_signal": "N/A", "crossover": crossover, "crossunder": crossunder, "mtf_agree": None}
-
-
-class PolymarketStrategy(BaseStrategy):
-    """Polymarket crowd wisdom — implied probability as a signal."""
-    name = "polymarket"
-
-    def predict(self, prices: List[float], **kwargs) -> Dict:
-        prob = kwargs.get("polymarket_prob")
-        if prob is None:
-            return self._no_data("No market data")
-        prob = float(prob)
-        _base = {"htf_signal": "N/A", "crossover": False, "crossunder": False, "mtf_agree": None}
-        if prob > 0.58:
-            return {"signal": "UP",   "confidence": self._clamp_confidence(0.50 + (prob - 0.50)),
-                    "reasoning": f"Crowd {prob*100:.1f}% UP (strong)", "value": f"{prob*100:.1f}%", **_base}
-        elif prob < 0.42:
-            return {"signal": "DOWN", "confidence": self._clamp_confidence(0.50 + (0.50 - prob)),
-                    "reasoning": f"Crowd {(1-prob)*100:.1f}% DOWN (strong)", "value": f"{prob*100:.1f}%", **_base}
-        elif prob >= 0.50:
-            return {"signal": "UP",   "confidence": self._clamp_confidence(0.47 + (prob - 0.50)),
-                    "reasoning": f"Crowd leans UP at {prob*100:.1f}%", "value": f"{prob*100:.1f}%", **_base}
-        else:
-            return {"signal": "DOWN", "confidence": self._clamp_confidence(0.47 + (0.50 - prob)),
-                    "reasoning": f"Crowd leans DOWN at {prob*100:.1f}%", "value": f"{prob*100:.1f}%", **_base}
 
 
 class SupertrendStrategy(BaseStrategy):
@@ -794,7 +770,7 @@ ALL_STRATEGIES = [
     EMACrossStrategy(), SupertrendStrategy(), ADXStrategy(),
     WilliamsAlligatorStrategy(), AccDistStrategy(), DowTheoryStrategy(),
     FibPullbackStrategy(), HarmonicPatternStrategy(),
-    VWAPStrategy(), PolymarketStrategy(),
+    VWAPStrategy(),
 ]
 
 

@@ -31,8 +31,6 @@ class Config:
         "harmonic":    1.0,
         # Volume / VWAP
         "vwap":        1.1,
-        # Market / crowd
-        "polymarket":  1.3,
         # Linear regression channel
         "ml_logistic": 1.2,
     })

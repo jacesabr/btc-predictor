@@ -497,7 +497,7 @@ async def get_all_accuracy(n: int = 100):
         "rsi":"RSI","macd":"MACD","stochastic":"Stochastic","ema_cross":"EMA Fast",
         "supertrend":"Supertrend","adx":"ADX","alligator":"Alligator","acc_dist":"Acc/Dist",
         "dow_theory":"Dow Theory","fib_pullback":"Fibonacci","harmonic":"Harmonic",
-        "vwap":"AVWAP","polymarket":"Crowd","ml_logistic":"Lin Reg",
+        "vwap":"AVWAP","ml_logistic":"Lin Reg",
     }
     SPEC_NAMES = {
         "spec:dow_theory":"DOW Theory","spec:fib_pullback":"FIB Pullback",
@@ -763,7 +763,6 @@ async def websocket_endpoint(websocket: WebSocket):
                         "pending_deepseek_prediction": _pred_for_ws(current_state.get("pending_deepseek_prediction")),
                         "pending_deepseek_ready":      current_state.get("pending_deepseek_ready", False),
                         "agree_accuracy":              current_state.get("agree_accuracy"),
-                        "polymarket":                  polymarket_feed.to_dict(),
                         "specialist_completed_at":     current_state.get("specialist_completed_at"),
                         "bar_historical_analysis":     current_state.get("bar_historical_analysis", ""),
                         "bar_historical_context":      current_state.get("bar_historical_context", ""),

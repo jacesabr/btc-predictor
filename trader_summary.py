@@ -36,8 +36,16 @@ SYSTEM_PROMPT = """You compress a BTC 5-minute prediction analysis into a trader
 OUTPUT STRICT JSON ONLY, exactly this shape:
 {
   "edge": "1-2 plain-English sentences describing what the setup IS. NEVER just echo the signal direction. Speak to a human trader making a decision in the next few minutes.",
-  "watch": [{"tone": "bullish|bearish|neutral", "text": "a condition, level, or bar-level event that would confirm or invalidate the setup"}],
-  "actions": [{"tone": "bullish|bearish|neutral", "text": "concrete IF-THEN guidance — 'if price breaks X do Y', 'stand aside unless Z'. NEVER a bare 'buy' or 'sell'."}]
+  "watch": [{
+    "tone": "bullish|bearish|neutral",
+    "text": "a condition, level, or bar-level event that would confirm or invalidate the setup",
+    "conditions": [{"metric": "<name>", "op": ">"|">="|"<"|"<="|"==", "value": <number>, "unit": "<unit>"}]
+  }],
+  "actions": [{
+    "tone": "bullish|bearish|neutral",
+    "text": "concrete IF-THEN guidance — 'if price breaks X do Y', 'stand aside unless Z'. NEVER a bare 'buy' or 'sell'.",
+    "conditions": [same shape as watch]
+  }]
 }
 
 HARD RULES:
@@ -48,11 +56,34 @@ HARD RULES:
 - Each bullet <= 2 sentences. No hedging, no meta-commentary, no "the model says".
 - watch: max 4 bullets. actions: max 3 bullets.
 
+CONDITIONS — machine-checkable thresholds that back the bullet:
+- If the bullet's text references a threshold ("breaks $78,288", "taker volume above 5 BTC",
+  "RSI below 30", "funding above 0.02%"), add a matching "conditions" entry so the UI
+  can show live-vs-threshold and tick/X whether it is currently met.
+- Valid "metric" values ONLY (use these exact strings): price, taker_buy_volume,
+  taker_sell_volume, taker_volume, taker_ratio, bid_imbalance, ask_imbalance,
+  funding_rate, open_interest, rsi, long_short_ratio.
+- "op" must be one of: ">", ">=", "<", "<=", "==".
+- "value" must be a plain number (no strings, no ranges). For "between X and Y", emit TWO
+  conditions: one with op ">=" X and one with op "<=" Y.
+- "unit": "USD" for price levels, "BTC" for volume, "%" for imbalance/funding/ratios, "" otherwise.
+- If the bullet text does NOT contain any measurable threshold (pure narrative), omit "conditions" or leave it as an empty list. Do NOT invent a threshold to fill the field.
+
 NO JARGON WITHOUT EVIDENCE:
 - Do NOT use technical-analysis terminology (Wyckoff, Elliott wave, harmonic patterns, distribution phase, accumulation phase, liquidity grab, stop hunt, market structure break, order block, fair value gap, etc.) unless the INPUT gives a concrete price level, bar index, or measured condition that backs it. A percentage alone is NOT evidence. A name alone is NOT evidence.
 - If the INPUT contains such a term but only hand-waves it, DROP the term and describe the underlying observation in plain words (e.g., "price compressed for 3 bars" instead of "accumulation phase").
 - Prefer plain English: "buyers stepped in at $95,150" over "demand zone held".
 """
+
+# Whitelist of metrics the frontend can look up a live value for. If Venice
+# emits a different name, validate will drop the condition rather than let the
+# UI show a meaningless pill.
+_VALID_METRICS = {
+    "price", "taker_buy_volume", "taker_sell_volume", "taker_volume",
+    "taker_ratio", "bid_imbalance", "ask_imbalance",
+    "funding_rate", "open_interest", "rsi", "long_short_ratio",
+}
+_VALID_OPS = {">", ">=", "<", "<=", "=="}
 
 
 def _truncate(s: Any, n: int) -> str:
@@ -65,26 +96,35 @@ def _truncate(s: Any, n: int) -> str:
 def _build_user_prompt(pred: dict, historical: str, binance_expert: dict) -> str:
     """Assemble the INPUT block from the main-page fields."""
     parts = ["INPUT:"]
-    parts.append(f"signal: {pred.get('signal', '?')}")
+    signal = (pred.get("signal") or "?").upper()
+    parts.append(f"signal: {signal}")
     parts.append(f"confidence: {pred.get('confidence', '?')}")
+
+    # For NEUTRAL bars the abstention rationale is often long and nuanced —
+    # truncating it kills the case for not-trading and forces Venice to invent
+    # an "edge" story where there isn't one. Skip truncation for NEUTRAL.
+    is_neutral = signal == "NEUTRAL"
 
     reasoning = pred.get("reasoning") or ""
     if reasoning:
-        parts.append(f"reasoning:\n{_truncate(reasoning, 3000)}")
+        r = reasoning if is_neutral else _truncate(reasoning, 3000)
+        parts.append(f"reasoning:\n{r}")
 
     narrative = pred.get("narrative") or ""
     if narrative:
-        parts.append(f"narrative: {_truncate(narrative, 800)}")
+        n = narrative if is_neutral else _truncate(narrative, 800)
+        parts.append(f"narrative: {n}")
 
     free_obs = pred.get("free_observation") or ""
     if free_obs:
-        parts.append(f"free_observation: {_truncate(free_obs, 600)}")
+        f = free_obs if is_neutral else _truncate(free_obs, 600)
+        parts.append(f"free_observation: {f}")
 
     if historical:
-        parts.append(f"historical_pattern:\n{_truncate(historical, 2000)}")
+        h = historical if is_neutral else _truncate(historical, 2000)
+        parts.append(f"historical_pattern:\n{h}")
 
     if binance_expert:
-        # bar_binance_expert is a specialist dict; pull whatever text field is there.
         notes = (
             binance_expert.get("narrative")
             or binance_expert.get("analysis")
@@ -93,7 +133,8 @@ def _build_user_prompt(pred: dict, historical: str, binance_expert: dict) -> str
         )
         sig = binance_expert.get("signal")
         if notes or sig:
-            parts.append(f"binance_expert: signal={sig or '?'} notes={_truncate(notes, 1500)}")
+            n = notes if is_neutral else _truncate(notes, 1500)
+            parts.append(f"binance_expert: signal={sig or '?'} notes={n}")
 
     return "\n\n".join(parts)
 
@@ -127,6 +168,35 @@ async def _call_venice(
             return data["choices"][0]["message"]["content"]
 
 
+def _norm_conditions(raw: Any) -> list:
+    """Validate + normalize a bullet's conditions array. Drops anything malformed."""
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for c in raw:
+        if not isinstance(c, dict):
+            continue
+        metric = c.get("metric")
+        op     = c.get("op")
+        val    = c.get("value")
+        unit   = c.get("unit", "")
+        if metric not in _VALID_METRICS:
+            continue
+        if op not in _VALID_OPS:
+            continue
+        try:
+            val = float(val)
+        except (TypeError, ValueError):
+            continue
+        out.append({
+            "metric": metric, "op": op, "value": val,
+            "unit":   str(unit or "")[:16],
+        })
+        if len(out) >= 4:   # a single bullet shouldn't have more than 4 thresholds
+            break
+    return out
+
+
 def _validate(obj: Any) -> Optional[dict]:
     """Return a normalized summary dict or None if shape is wrong."""
     if not isinstance(obj, dict):
@@ -149,7 +219,11 @@ def _validate(obj: Any) -> Optional[dict]:
                 continue
             if tone not in ("bullish", "bearish", "neutral"):
                 tone = "neutral"
-            out.append({"tone": tone, "text": text.strip()})
+            out.append({
+                "tone":       tone,
+                "text":       text.strip(),
+                "conditions": _norm_conditions(b.get("conditions")),
+            })
             if len(out) >= cap:
                 break
         return out

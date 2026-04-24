@@ -51,9 +51,11 @@ CRITICAL RULES:
       * All specialists + historical analyst + microstructure return genuinely mixed reads
     Invalid NEUTRAL cases (TAKE THE CALL INSTEAD):
       * "I lean UP but only at 58% — better to abstain" ← NO. Output UP 58%.
-      * "Historical analyst said NEUTRAL 55% so I'll match" ← NO. They summarize history;
-        your job is to integrate THAT with everything else and make a real call.
       * "Conflict between specialists" ← conflict is the default. Weigh and decide.
+    When the historical analyst returns NEUTRAL, do NOT auto-match them — integrate their
+    view with every other signal. If your integrated picture still has no dominant side
+    after steelmanning both, matching their NEUTRAL is valid; if independent evidence
+    (microstructure, structure, specialists) points one way, take that call.
 
   - When you have a weak but real edge, TAKE THE CALL at 55–64%. Over many bars, a
     genuine 58% call with positive expected value is profitable. Abstention at that

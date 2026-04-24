@@ -708,9 +708,8 @@ async def _run_full_prediction(prices, is_force=False):
                 tag, deepseek.window_count + 1 if deepseek else 0,
                 time.strftime("%H:%M:%S UTC", time.gmtime(window_start_time)), window_start_price)
 
-    poly_prob     = polymarket_feed.implied_prob if polymarket_feed.is_live else None
     klines        = list(binance_klines)
-    strategy_preds = get_all_predictions(prices, ohlcv=klines, polymarket_prob=poly_prob)
+    strategy_preds = get_all_predictions(prices, ohlcv=klines)
     features_dict  = feature_engine.compute_all(prices, ohlcv=klines or None)
     try:
         strategy_preds["ml_logistic"] = lr_strategy.predict(prices, ohlcv=klines)
@@ -912,10 +911,6 @@ async def _run_full_prediction(prices, is_force=False):
     # Binance expert already ran at Step 5a above (result in binance_expert_result);
     # pass it directly to the main predictor instead of an in-flight task.
 
-    pm_odds_open = polymarket_feed.market_odds if polymarket_feed.is_live else None
-    pm_ev_open   = (calculate_ev(pred["confidence"], pm_odds_open).expected_value
-                    if pm_odds_open else None)
-
     # Accuracy stats + weight update
     rolling_acc = 0.0; ds_acc = {}; indicator_acc_full = {}
     if deepseek and features_dict:
@@ -950,7 +945,6 @@ async def _run_full_prediction(prices, is_force=False):
             "weighted_up_score":   pred.get("weighted_up_score", 0),
             "weighted_down_score": pred.get("weighted_down_score", 0),
         },
-        "polymarket":  polymarket_feed.to_dict(),
         "rolling_acc": rolling_acc,
         "ds_acc":      ds_acc,
         "captured_at": time.time(),
@@ -1220,9 +1214,8 @@ async def _refresh_indicators():
     if len(prices) < 30:
         return
     try:
-        poly_prob = polymarket_feed.implied_prob if polymarket_feed.is_live else None
         klines    = list(binance_klines)
-        preds     = get_all_predictions(prices, ohlcv=klines, polymarket_prob=poly_prob)
+        preds     = get_all_predictions(prices, ohlcv=klines)
         try:
             preds["ml_logistic"] = lr_strategy.predict(prices, ohlcv=klines)
         except Exception as lr_exc:

@@ -943,8 +943,6 @@ def build_prompt(
 
     ts_start = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(window_start_time))
     ts_end   = time.strftime("%H:%M:%S UTC", time.gmtime(window_start_time + 300))
-    pm_url   = (f"https://polymarket.com/event/{polymarket_slug}"
-                if polymarket_slug else "N/A (market slug not available)")
     n_bars_v = sa['n_bars']
 
     return f"""\
@@ -974,8 +972,6 @@ there is NO confidence floor. A genuine 55% edge with a clean rebuttal is a call
   END   : {ts_end}  (5-minute window closes at this time)
   Entry price  : ${window_start_price:,.2f}
   QUESTION     : ABOVE or BELOW ${window_start_price:,.2f} at {ts_end}?
-
-  Polymarket market  : {pm_url}
 ══════════════════════════════════════════════
 
 ──────────────────────────────────────────────
@@ -1789,7 +1785,7 @@ def _bar_embed_text(record: Dict) -> str:
         ("alligator","Alligator"), ("acc_dist","Accumulation/Distribution"),
         ("dow_theory","Dow Theory"), ("fib_pullback","Fibonacci"),
         ("harmonic","Harmonic Pattern"), ("vwap","VWAP"),
-        ("polymarket","Crowd (Polymarket)"), ("ml_logistic","Linear Regression"),
+        ("ml_logistic","Linear Regression"),
     ]
 
     # ── Dashboard signals ────────────────────────────────────────
