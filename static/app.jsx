@@ -3010,6 +3010,9 @@ function App() {
                 ]);
                 const BullBearText = ({ text, size, baseColor }) => {
                   const parts = text.split(/(\s+|[,;:.!?()\[\]])/);
+                  // Numeric refs ($X,XXX, X%, X BTC) get bumped one step bigger than the
+                  // surrounding prose so the trader's eye latches onto them first.
+                  const refSize = size + 2;
                   return (
                     <span style={{ fontSize:size, color:baseColor, lineHeight:1.55 }}>
                       {parts.map((p, i) => {
@@ -3017,7 +3020,7 @@ function App() {
                         if (clean && BULL_WORDS.has(clean)) return <strong key={i} style={{ color:"#16A34A", fontWeight:800 }}>{p}</strong>;
                         if (clean && BEAR_WORDS.has(clean)) return <strong key={i} style={{ color:"#DC2626", fontWeight:800 }}>{p}</strong>;
                         if (/^\$[\d,]+(\.\d+)?(k|K)?$/.test(p) || /^\d+(\.\d+)?%$/.test(p)) {
-                          return <strong key={i} style={{ color:C.text, fontWeight:800 }}>{p}</strong>;
+                          return <strong key={i} style={{ color:C.text, fontWeight:900, fontSize:refSize }}>{p}</strong>;
                         }
                         return <span key={i}>{p}</span>;
                       })}
@@ -3075,37 +3078,60 @@ function App() {
                   const fgC     = ok ? "#166534" : bad ? "#991B1B" : C.muted;
                   const icon    = ok ? "✓" : bad ? "✗" : "—";
                   return (
-                    <span style={{ display:"inline-flex", alignItems:"center", gap:5,
-                      fontSize:11, fontWeight:700, padding:"2px 7px", borderRadius:4,
+                    <span style={{ display:"inline-flex", alignItems:"center", gap:6,
+                      fontSize:13, fontWeight:700, padding:"3px 9px", borderRadius:5,
                       background: bgC, color: fgC, border:`1px solid ${borderC}` }}>
-                      <span style={{ fontWeight:900 }}>{icon}</span>
-                      <span>{metricLabel[cond.metric] || cond.metric} {cond.op} {thresholdStr}</span>
+                      <span style={{ fontSize:14, fontWeight:900 }}>{icon}</span>
+                      <span>{metricLabel[cond.metric] || cond.metric} {cond.op} <strong style={{ fontSize:14 }}>{thresholdStr}</strong></span>
                       {live && (
-                        <span style={{ color:C.muted, fontWeight:500 }}>· now {live.f(live.v)}</span>
+                        <span style={{ color:C.muted, fontWeight:600 }}>· now <strong style={{ color:C.text, fontWeight:800, fontSize:14 }}>{live.f(live.v)}</strong></span>
                       )}
                     </span>
                   );
                 };
 
-                const Bullet = ({ tone, text, conditions }) => (
-                  <div style={{ display:"flex", flexDirection:"column", gap:6,
-                    padding:"9px 12px", borderRadius:6,
-                    background: toneBg(tone),
-                    borderLeft: `4px solid ${toneColor(tone)}`,
-                    border: `1px solid ${toneBorder(tone)}` }}>
-                    <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
-                      <span style={{ fontSize:18, lineHeight:1.2, flexShrink:0, paddingTop:1 }}>
-                        {toneEmoji(tone)}
-                      </span>
-                      <BullBearText text={text} size={15} baseColor={tone==="neutral" ? C.text : toneColor(tone)} />
-                    </div>
-                    {conditions?.length > 0 && (
-                      <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginLeft:28 }}>
-                        {conditions.map((c, i) => <ConditionPill key={i} cond={c} />)}
+                const Bullet = ({ tone, text, conditions }) => {
+                  // All conditions met → flip the background green so the trader sees
+                  // "this is live RIGHT NOW" at a glance, regardless of bullet tone.
+                  const evalCond = (c) => {
+                    const live = metric(c.metric);
+                    return live ? opCheck[c.op](live.v, c.value) : null;
+                  };
+                  const results  = (conditions || []).map(evalCond);
+                  const hasConds = results.length > 0;
+                  const allMet   = hasConds && results.every(r => r === true);
+                  const liveBg     = allMet ? "#ECFDF5" : toneBg(tone);
+                  const liveBorder = allMet ? C.green    : toneBorder(tone);
+                  const liveLeft   = allMet ? C.green    : toneColor(tone);
+                  return (
+                    <div style={{ display:"flex", flexDirection:"column", gap:6,
+                      padding:"8px 12px", borderRadius:6,
+                      background: liveBg,
+                      borderLeft: `4px solid ${liveLeft}`,
+                      border: `1px solid ${liveBorder}` }}>
+                      <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+                        <span style={{ fontSize:16, lineHeight:1.3, flexShrink:0, paddingTop:1 }}>
+                          {allMet ? "✅" : toneEmoji(tone)}
+                        </span>
+                        <span style={{ flex:1 }}>
+                          <BullBearText text={text} size={13} baseColor={tone==="neutral" ? C.text : toneColor(tone)} />
+                        </span>
+                        {allMet && (
+                          <span style={{ fontSize:9, fontWeight:900, color:"#15803D",
+                            background:"#D1FAE5", border:`1px solid ${C.green}`,
+                            borderRadius:3, padding:"1px 6px", letterSpacing:1, flexShrink:0 }}>
+                            LIVE
+                          </span>
+                        )}
                       </div>
-                    )}
-                  </div>
-                );
+                      {hasConds && (
+                        <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginLeft:28 }}>
+                          {conditions.map((c, i) => <ConditionPill key={i} cond={c} />)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                };
                 const briefingReady = traderSummary && pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR";
                 return (
                   <div style={{ width:"100%", minWidth:360, display:"flex", flexDirection:"column", gap:8 }}>
@@ -3127,7 +3153,7 @@ function App() {
                         {traderSummary.watch?.length > 0 && (
                           <div style={{ marginTop:10 }}>
                             <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:1,
-                              textTransform:"uppercase", marginBottom:6 }}>Watch</div>
+                              textTransform:"uppercase", marginBottom:6 }}>Potential</div>
                             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                               {traderSummary.watch.map((b, i) => <Bullet key={`w${i}`} {...b} />)}
                             </div>
@@ -3136,7 +3162,7 @@ function App() {
                         {traderSummary.actions?.length > 0 && (
                           <div style={{ marginTop:12 }}>
                             <div style={{ fontSize:10, fontWeight:700, color:C.muted, letterSpacing:1,
-                              textTransform:"uppercase", marginBottom:6 }}>Actions</div>
+                              textTransform:"uppercase", marginBottom:6 }}>Actionable</div>
                             <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                               {traderSummary.actions.map((b, i) => <Bullet key={`a${i}`} {...b} />)}
                             </div>
