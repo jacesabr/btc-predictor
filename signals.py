@@ -395,7 +395,14 @@ async def _fetch_taker_flow() -> Dict:
             "?symbol=BTCUSDT&period=5m&limit=3"
         )
         latest = data[-1] if data else {}
-        bsr = float(latest.get("buySellRatio", 1.0))
+        # Only accept the response when the required fields are ACTUALLY present.
+        # Previous version silently used default values (BSR=1.0, buyVol=0,
+        # sellVol=0) on an empty/missing response, which then flowed to the UI
+        # as a real "live" neutral BSR reading — fabricated data dressed up as
+        # the taker-flow signal.
+        if not latest or "buySellRatio" not in latest:
+            raise ValueError("Binance taker-ratio response missing buySellRatio")
+        bsr = float(latest["buySellRatio"])
         bv  = float(latest.get("buyVol",  0.0))
         sv  = float(latest.get("sellVol", 0.0))
         _data_for_trend = data

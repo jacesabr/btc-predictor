@@ -2544,10 +2544,12 @@ function App() {
         if (d.pending_deepseek_prediction)            setPendingDeepseekPred(d.pending_deepseek_prediction);
         if (d.agree_accuracy)                         setAgreeAcc(d.agree_accuracy);
         if (d.pending_deepseek_ready !== undefined)   setPendingDeepseekReady(d.pending_deepseek_ready);
-        if (d.trader_summary !== undefined) {
-          // Stabilize reference: only setState when content actually changes.
-          // WS delivers the same summary every tick otherwise, and the new
-          // object ref triggers re-renders + text flashing.
+        if (d.trader_summary) {
+          // Only accept a TRUTHY summary — ignore null sent by the backend
+          // briefly between bar-open and Venice completion. The JSON-equality
+          // guard still suppresses re-renders when the same summary ships on
+          // every 1-sec tick. The earlier fix (commit 14d0ca5) was only
+          // applied to the REST poll; mirror it here so both code paths agree.
           setTraderSummary(prev => {
             const a = JSON.stringify(prev), b = JSON.stringify(d.trader_summary);
             return a === b ? prev : d.trader_summary;
@@ -3076,17 +3078,17 @@ function App() {
                            source: { label: "Coinglass", url: "/#sources" } },
       taker_volume:      { label: "taker vol",  layman: "Total BTC that crossed the market (buys + sells) in the last 5 minutes. Near zero = no one is acting.",
                            source: { label: "Coinglass", url: "/#sources" } },
-      taker_ratio:       { label: "BSR",        layman: "BSR = Buy/Sell Ratio. How many BTC are being market-bought compared to market-sold right now. Above 1 means buyers are pushing, below 1 means sellers are. At 1 = balanced.",
+      taker_ratio:       { label: "BSR",        layman: "BSR tells you who's actually pressing the trigger right now. Think of it like this: every second, some people click BUY at the current price and some click SELL. BSR just divides those two numbers. Above 1 means more people are clicking BUY than SELL (buyers in charge, price likely to keep going up). Below 1 means the SELL side is winning (price pressure is down). At 1 they're even. Extreme readings (like 3 or 0.3) mean one side is dominating hard — but also tells you to watch for exhaustion (the side pushing too hard often runs out of steam).",
                            source: { label: "Coinglass", url: "/#sources" } },
-      bsr:               { label: "BSR",        layman: "BSR = Buy/Sell Ratio. How many BTC are being market-bought compared to market-sold right now. Above 1 means buyers are pushing, below 1 means sellers are. At 1 = balanced.",
+      bsr:               { label: "BSR",        layman: "BSR tells you who's actually pressing the trigger right now. Think of it like this: every second, some people click BUY at the current price and some click SELL. BSR just divides those two numbers. Above 1 means more people are clicking BUY than SELL (buyers in charge, price likely to keep going up). Below 1 means the SELL side is winning (price pressure is down). At 1 they're even. Extreme readings (like 3 or 0.3) mean one side is dominating hard — but also tells you to watch for exhaustion (the side pushing too hard often runs out of steam).",
                            source: { label: "Coinglass", url: "/#sources" } },
       bid_imbalance:     { label: "bid imb",    layman: "How lopsided the order book is near the current price. Positive = more buy orders sitting than sell orders, so there's a cushion below.",
                            source: { label: "Binance depth", url: "/#sources" } },
       ask_imbalance:     { label: "ask imb",    layman: "How lopsided the order book is near the current price. Positive = more sell orders sitting than buy orders, so there's resistance above.",
                            source: { label: "Binance depth", url: "/#sources" } },
-      funding_rate:      { label: "funding",    layman: "The % that long positions pay short positions every 8 hours on Binance perps. Positive = too many longs crowded in (pay-to-stay). Negative = too many shorts crowded in.",
+      funding_rate:      { label: "funding",    layman: "The % that long positions pay short positions every 8 hours. Pulled from Binance perps by default; falls back to OKX when Binance is geo-blocked from our backend. Positive = too many longs crowded in. Negative = too many shorts crowded in.",
                            source: { label: "Coinglass", url: "/#sources" } },
-      open_interest:     { label: "OI",         layman: "Open Interest = total BTC sitting in open perpetual-futures positions on Binance. Rising = new money entering; falling = traders closing positions.",
+      open_interest:     { label: "OI",         layman: "Open Interest = total BTC sitting in open perpetual-futures positions. Binance perp numbers are ~3x larger than OKX; the venue this reading came from is tagged in the backend so the number matches what DeepSeek reasoned on. Rising = new money entering; falling = traders closing out.",
                            source: { label: "Coinglass", url: "/#sources" } },
       rsi:               { label: "RSI",        layman: "RSI = Relative Strength Index, a momentum gauge on the 5-minute chart. Over 70 = price ran up fast, may pull back. Under 30 = price dropped fast, may bounce. Near 50 = no momentum.",
                            source: { label: "TradingView", url: "/#sources" } },
@@ -3126,9 +3128,9 @@ function App() {
     // instead of a "? UNKNOWN" badge.
     const TEXT_FAMILY_RULES = [
       { rx: /\bwhale\b/i,                        metrics: ["spot_whale_buy_btc", "spot_whale_sell_btc"] },
-      { rx: /\btaker (buy|sell) (volume|flow)\b/i, metrics: ["taker_ratio", "taker_buy_volume", "taker_sell_volume"] },
+      { rx: /\btaker (buy|sell) (volume|flow)\b/i, metrics: ["taker_ratio", "taker_buy_volume", "taker_sell_volume", "taker_volume"] },
       { rx: /\bBSR\b|taker ratio/i,              metrics: ["taker_ratio"] },
-      { rx: /\b(bid|ask) (imbalance|depth|wall)\b/i, metrics: ["bid_imbalance", "bid_depth_05pct", "ask_depth_05pct"] },
+      { rx: /\b(bid|ask) (imbalance|depth|wall)\b/i, metrics: ["bid_imbalance", "ask_imbalance", "bid_depth_05pct", "ask_depth_05pct"] },
       { rx: /\bfunding\b/i,                      metrics: ["funding_rate", "aggregate_funding_rate"] },
       { rx: /\bOI\s+velocity\b|\bOI\s+(flips?|change|turns?|rising|falling|accelerat\w*)\b/i,
         metrics: ["oi_velocity_pct"] },
@@ -3249,12 +3251,19 @@ function App() {
             <span style={{ color:C.muted, fontWeight:600, fontStyle:"italic" }}>· source unavailable</span>
           )}
           {meta.source && (
-            <a href={meta.source.url} target="_blank" rel="noopener noreferrer"
-               title={`Verify at ${meta.source.label}`}
-               style={{ color:C.muted, textDecoration:"underline",
-                 textDecorationColor:C.borderSoft, textUnderlineOffset:2,
-                 fontSize:10, fontWeight:700, marginLeft:4, letterSpacing:0.3 }}
-               onClick={(e)=>e.stopPropagation()}>↗ {meta.source.label}</a>
+            (() => {
+              const url = meta.source.url || "";
+              const isInternal = url.startsWith("/#") || url.startsWith("#");
+              return (
+                <a href={url}
+                   title={`Jump to ${meta.source.label} in the Sources tab`}
+                   {...(isInternal ? {} : { target:"_blank", rel:"noopener noreferrer" })}
+                   style={{ color:C.muted, textDecoration:"underline",
+                     textDecorationColor:C.borderSoft, textUnderlineOffset:2,
+                     fontSize:10, fontWeight:700, marginLeft:4, letterSpacing:0.3 }}
+                   onClick={(e)=>e.stopPropagation()}>↗ {meta.source.label}</a>
+              );
+            })()
           )}
         </span>
       );
@@ -3415,11 +3424,15 @@ function App() {
                     stableMet={(__condResults && __condResults[i]) ? __condResults[i].stable : undefined} />
                 </div>
               ))}
-              {sourced ? (
-                <a href={sourced.source.url} target="_blank" rel="noopener noreferrer"
+              {sourced ? (() => {
+                const url = sourced.source.url || "";
+                const isInternal = url.startsWith("/#") || url.startsWith("#");
+                return (
+                <a href={url}
+                   {...(isInternal ? {} : { target:"_blank", rel:"noopener noreferrer" })}
                    title={inferredSrc
-                     ? `Inferred source: ${sourced.source.label} (bullet prose names this family)`
-                     : `Verify at ${sourced.source.label}`}
+                     ? `Inferred source: ${sourced.source.label} (bullet prose names this family) — jump to the Sources tab to see live readings.`
+                     : `Jump to ${sourced.source.label} in the Sources tab`}
                    onClick={(e)=>e.stopPropagation()}
                    style={{ color:"#B91C1C", textDecoration:"none",
                      fontSize:9, fontWeight:800, letterSpacing:1,
@@ -3428,7 +3441,8 @@ function App() {
                      borderRadius:3, background:"#FFFFFF", lineHeight:1.3, whiteSpace:"nowrap" }}>
                   ↗ SOURCE
                 </a>
-              ) : (
+                );
+              })() : (
                 <span title="No verifiable source mapped for this claim — flag for audit"
                       style={{ color:C.muted, fontSize:9, fontWeight:700, letterSpacing:1,
                         padding:"3px 8px", border:`1px dashed ${C.muted}`, alignSelf:"flex-start",
@@ -3442,7 +3456,11 @@ function App() {
         </div>
       );
     };
-    const briefingReady = traderSummary && pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR";
+    // Treat UNAVAILABLE like ERROR — in both cases DeepSeek didn't produce a
+    // valid directional call, so the briefing + SignalRow shouldn't render
+    // as if they did. Previously only ERROR was gated.
+    const _dsBad = (s) => s === "ERROR" || s === "UNAVAILABLE";
+    const briefingReady = traderSummary && pendingDeepseekReady && activeDeepseekPred && !_dsBad(activeDeepseekPred.signal);
     return (
       <div style={{ width:"100%", minWidth:360, display:"flex", flexDirection:"column", gap:8 }}>
         {briefingReady && (
@@ -3585,8 +3603,12 @@ function App() {
         )}
       </div>
     );
+  // `price` intentionally omitted — it ticks every ~1s and putting it in
+  // deps rebuilds the entire briefingJSX tree on every tick, defeating
+  // the memoization and re-mounting Bullet / ConditionPill components.
+  // `winStartPrice` changes only at bar boundaries so it stays.
   }, [traderSummary, pendingDeepseekReady, activeDeepseekPred, backendSnap,
-      price, winStartPrice, tk, ob, oif, ls, strategies, infoOpen, barCloseUTC]);
+      winStartPrice, tk, ob, oif, ls, strategies, infoOpen, barCloseUTC]);
 
   const strats = STRATEGY_META.filter(m=>strategies[m.key]).map(m=>({...m,...strategies[m.key]}));
 
@@ -3710,7 +3732,9 @@ function App() {
                 // While pending_deepseek_ready=false (fresh analysis running after bar close)
                 // we intentionally render nothing — showing the previous bar's signal during
                 // the analysis window can mislead fast traders into trading on a stale call.
-                const dsLive = pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR";
+                const dsLive = pendingDeepseekReady && activeDeepseekPred
+                  && activeDeepseekPred.signal !== "ERROR"
+                  && activeDeepseekPred.signal !== "UNAVAILABLE";
                 const dsErr  = pendingDeepseekReady && activeDeepseekPred?.signal==="ERROR";
                 const c2src  = dsLive ? activeDeepseekPred : null;
                 const c2sig  = c2src?.signal || null;

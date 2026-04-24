@@ -392,17 +392,25 @@ NO JARGON WITHOUT EVIDENCE:
   cited in the INPUT, never invent one).
 """
 
-# Whitelist of metrics the frontend can look up a live value for. If Venice
-# emits a different name, validate will keep the condition (UI renders "source
-# unavailable") rather than let the UI show a meaningless pill.
+# Whitelist of metrics the frontend's metric() lookup can resolve to a live
+# value. Conditions with a metric NOT in this set are dropped in
+# _norm_conditions — otherwise Venice could invent arbitrary metric names
+# like "spot_vol_bursts" and the UI would render a pointless "source
+# unavailable" pill. Every metric here has a matching case in static/app.jsx
+# metric() and a matching METRIC_META entry.
 _VALID_METRICS = {
     "price", "price_change_pct",
     "taker_buy_volume", "taker_sell_volume", "taker_volume",
-    "taker_ratio", "bid_imbalance", "ask_imbalance",
-    "funding_rate", "open_interest", "rsi", "long_short_ratio",
+    "taker_ratio", "bsr",
+    "bid_imbalance", "ask_imbalance",
+    "funding_rate", "aggregate_funding_rate",
+    "open_interest", "oi_velocity_pct",
+    "rsi", "long_short_ratio",
     "basis_pct", "perp_cvd_1h", "spot_cvd_1h", "aggregate_cvd_1h",
     "bid_depth_05pct", "ask_depth_05pct",
     "rr_25d_30d", "iv_30d_atm",
+    "spot_whale_buy_btc", "spot_whale_sell_btc",
+    "aggregate_liquidations_usd",
 }
 _VALID_OPS = {">", ">=", "<", "<=", "=="}
 
@@ -691,13 +699,17 @@ def _build_live_metrics_block(backend_snapshot: Optional[dict]) -> str:
         if oi30: lines.append(f"  oi_velocity_pct (30min): {oi30}%")
 
     # Backend key is `oi_funding`, field names are `open_interest_btc` and
-    # `funding_rate_8h_pct` (already pre-multiplied by 100).
+    # `funding_rate_8h_pct` (already pre-multiplied by 100). We also forward
+    # the `venue` tag so Venice knows whether OI/funding came from Binance
+    # (primary) or OKX (fallback, ~3x smaller OI pool). Without this,
+    # Venice would cite Binance-labeled numbers even under OKX fallback.
     oif = ds.get("oi_funding") or {}
     if isinstance(oif, dict):
         oi = _fmt_num(oif.get("open_interest_btc"), "{:.1f}")
         fr_pct = _fmt_num(oif.get("funding_rate_8h_pct"), "{:.5f}")
-        if oi:     lines.append(f"  open_interest: {oi} BTC")
-        if fr_pct: lines.append(f"  funding_rate: {fr_pct}%")
+        venue = oif.get("venue") or "binance_perp"
+        if oi:     lines.append(f"  open_interest: {oi} BTC (venue: {venue})")
+        if fr_pct: lines.append(f"  funding_rate: {fr_pct}% (venue: {venue})")
 
     agg_fr = ds.get("aggregate_funding") or {}
     if isinstance(agg_fr, dict):
@@ -938,6 +950,14 @@ def _norm_conditions(raw: Any, input_canons: Set[str], input_raw: List[str]) -> 
         if not isinstance(metric, str) or not _METRIC_NAME_OK.match(metric):
             continue
         if op not in _VALID_OPS:
+            continue
+        # Whitelist enforcement — the UI metric() lookup can only resolve
+        # values for metrics in _VALID_METRICS. Anything else would render as
+        # an unresolved "source unavailable" pill, which is worse than no
+        # pill. Drop so the frontend's family-inference fallback can
+        # synthesize a proper pill from the bullet prose instead.
+        if metric not in _VALID_METRICS:
+            notes.append(f"metric_not_in_whitelist:{metric}")
             continue
         try:
             val = float(val)
@@ -1381,14 +1401,18 @@ async def get_or_build(
     if not api_key or not window_start_time or not pred or pred.get("signal") in (None, "ERROR", "UNAVAILABLE"):
         return None
 
+    # Max age for a cached Venice output: 15 minutes (3 bars). Beyond that we
+    # regenerate — covers the edge case where an engine stall leaves an old
+    # window's summary lingering and get_cached would serve stale data.
+    _TTL_S = 900
     cached = _cache.get(window_start_time)
-    if cached:
+    if cached and (time.time() - (cached.get("generated_at") or 0)) < _TTL_S:
         return cached
 
     lock = _locks.setdefault(window_start_time, asyncio.Lock())
     async with lock:
         cached = _cache.get(window_start_time)
-        if cached:
+        if cached and (time.time() - (cached.get("generated_at") or 0)) < _TTL_S:
             return cached
 
         started = time.time()
@@ -1522,18 +1546,34 @@ async def get_or_build(
             user_prompt, strict=True,
         )
         if not strict_cleaned:
-            # Strict pass stripped the edge to empty (all numbers fabricated)
-            # or all bullets got dropped. Rather than return None and leave
-            # the trader with no briefing at all, fall back to the lenient
-            # result. Lenient keeps fabricated-number bullets but flags them
-            # in audit.fabricated_text_numbers, so the UI can still render
-            # something + the audit dataset records the failure mode.
+            # Strict pass stripped the edge to empty or all bullets dropped.
+            # Fall back to the lenient result BUT hard-drop any bullet whose
+            # text still contains fabricated numbers — the earlier version
+            # kept those bullets "because they're flagged", but the UI
+            # doesn't render the audit flags, so the fabricated numbers
+            # reached the trader unmarked. Safer: drop the flagged bullets
+            # and rescue the edge text.
             logger.warning(
-                "trader_summary strict-pass emptied briefing for bar %s — falling back to lenient",
+                "trader_summary strict-pass emptied briefing for bar %s — falling back to lenient with fabrication drop",
                 window_start_time,
             )
-            final_cleaned = lenient_cleaned
-            final_audit_strict = {"strict_pass_fallback_to_lenient": True}
+            input_canons, input_raw = _extract_input_number_set(user_prompt)
+            # Rescue edge text of fabricated numbers
+            rescued_edge = lenient_cleaned["edge"]
+            edge_bad = _bullet_text_numeric_coherence(rescued_edge, input_canons, input_raw)
+            if edge_bad:
+                rescued_edge = _rescue_text(rescued_edge, edge_bad)
+            def _bullet_is_clean(b):
+                txt = b.get("text") or ""
+                ifm = b.get("if_met") or ""
+                return (not _bullet_text_numeric_coherence(txt, input_canons, input_raw)
+                        and not _bullet_text_numeric_coherence(ifm, input_canons, input_raw))
+            final_cleaned = {
+                "edge":    rescued_edge or lenient_cleaned["edge"],
+                "watch":   [b for b in lenient_cleaned["watch"]   if _bullet_is_clean(b)],
+                "actions": [b for b in lenient_cleaned["actions"] if _bullet_is_clean(b)],
+            }
+            final_audit_strict = {"strict_pass_fallback_to_lenient_with_drop": True}
         else:
             final_cleaned = strict_cleaned
         # Merge audit trails

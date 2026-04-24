@@ -786,6 +786,15 @@ async def websocket_endpoint(websocket: WebSocket):
                     # pill rendered "source unavailable" — bullets never fired.
                     _bs = current_state.get("backend_snapshot") or {}
                     _dash = _bs.get("dashboard_signals") if isinstance(_bs, dict) else None
+                    # Strip the (admin-only) internal audit payload from the
+                    # trader_summary before broadcasting — the UI doesn't render
+                    # `audit.fabricated_text_numbers` / `dropped_values` /
+                    # `completeness` / `retry_reasons`, it's only read by the
+                    # /audit/trader-summary admin endpoint from Postgres. Saves
+                    # ~0.5-2KB on every 1-sec tick * every connected client.
+                    _ts = current_state.get("trader_summary")
+                    if isinstance(_ts, dict) and "audit" in _ts:
+                        _ts = {k: v for k, v in _ts.items() if k != "audit"}
                     payload = _json_safe({
                         "type":                        "tick",
                         "price":                       current_state["price"],
@@ -802,7 +811,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "bar_historical_analysis":     current_state.get("bar_historical_analysis", ""),
                         "bar_historical_context":      current_state.get("bar_historical_context", ""),
                         "bar_binance_expert":          current_state.get("bar_binance_expert", {}),
-                        "trader_summary":              current_state.get("trader_summary"),
+                        "trader_summary":              _ts,
                         "service_unavailable":         current_state.get("service_unavailable", False),
                         "service_unavailable_reason":  current_state.get("service_unavailable_reason", ""),
                         "dashboard_signals":           _dash,

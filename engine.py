@@ -1026,8 +1026,16 @@ async def _resolve_window(
     end_prices = collector.get_prices(1)
     if end_prices:
         end_price = end_prices[-1]
-        actual    = "UP" if end_price >= window_start_price else "DOWN"
-        correct   = None if pred["signal"] == "NEUTRAL" else (actual == pred["signal"])
+        # Flat bars (end == start) are not directional — previously `>=`
+        # classified them as UP and inflated UP accuracy. Leave
+        # actual/correct NULL so they don't count in the W/L tally.
+        if not window_start_price or not end_price or \
+           abs(end_price - window_start_price) < 1e-6:
+            actual  = None
+            correct = None
+        else:
+            actual  = "UP" if end_price > window_start_price else "DOWN"
+            correct = None if pred["signal"] == "NEUTRAL" else (actual == pred["signal"])
 
         await _safe_storage_async(
             storage.store_prediction,

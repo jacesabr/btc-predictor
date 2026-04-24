@@ -557,8 +557,26 @@ class StoragePG:
                 if not row:
                     return
                 signal, start_price = row
+                # Guard against zero/null prices: if either end is missing the
+                # bar can't be classified. The next bar's close will backfill
+                # this row via backfill_stuck_correct if possible.
+                if not start_price or not end_price or start_price <= 0 or end_price <= 0:
+                    return
                 if actual is None:
-                    actual = "UP" if end_price >= start_price else "DOWN"
+                    # Flat bars (start == end within tick precision) are
+                    # neither UP nor DOWN — previously we treated them as UP
+                    # because of `>=`, which silently inflated UP accuracy.
+                    # Leave actual/correct NULL for true flats.
+                    if abs(end_price - start_price) < 1e-6:
+                        cur.execute(
+                            "UPDATE deepseek_predictions "
+                            "SET end_price=%s, actual_direction=NULL, correct=NULL "
+                            "WHERE window_start=%s",
+                            (end_price, window_start),
+                        )
+                        conn.commit()
+                        return
+                    actual = "UP" if end_price > start_price else "DOWN"
                 correct = None if signal == "NEUTRAL" else (actual == signal)
                 cur.execute(
                     "UPDATE deepseek_predictions "
@@ -615,12 +633,21 @@ class StoragePG:
                 scanned = len(rows)
                 for (ws, sp, sig, ep_old, ad_old, cr_old, next_sp) in rows:
                     start_price = float(sp or 0)
-                    if next_sp is None or start_price == 0:
+                    if next_sp is None or start_price <= 0:
                         no_next += 1
                         continue
                     end_price = float(next_sp)
-                    actual = "UP" if end_price >= start_price else "DOWN"
-                    correct = None if sig == "NEUTRAL" else (actual == sig)
+                    if end_price <= 0:
+                        no_next += 1
+                        continue
+                    # Flat bars (start == end) aren't directional — leave
+                    # actual/correct NULL so they don't inflate UP stats.
+                    if abs(end_price - start_price) < 1e-6:
+                        actual = None
+                        correct = None
+                    else:
+                        actual = "UP" if end_price > start_price else "DOWN"
+                        correct = None if sig == "NEUTRAL" else (actual == sig)
                     same_end     = (ep_old is not None) and (abs(float(ep_old) - end_price) < 0.01)
                     same_actual  = (ad_old == actual)
                     same_correct = (cr_old == correct) if correct is not None else (cr_old is None)
