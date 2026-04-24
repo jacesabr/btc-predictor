@@ -161,11 +161,19 @@ function PriceChart() {
     loadTV(() => {
       if (!document.getElementById(id)) return;
       new TradingView.widget({
-        autosize:true, symbol:"BINANCE:BTCUSDT", interval:"1",
+        autosize:true, symbol:"BINANCE:BTCUSDT", interval:"5",
         timezone:"Etc/UTC", theme:"light", style:"1", locale:"en",
         toolbar_bg:C.bg, enable_publishing:false, hide_side_toolbar:false,
         allow_symbol_change:false, save_image:false, hide_volume:false,
         withdateranges:true, container_id:id,
+        hide_top_toolbar:false,
+        // Lock the interval selector to 5m only — matches our prediction
+        // window so chart + briefing always agree on "what bar is this".
+        disabled_features: ["header_resolutions", "header_compare",
+                            "header_symbol_search", "header_interval_dialog_button",
+                            "show_interval_dialog_on_key_press"],
+        // Keep core timescale + chart tools enabled.
+        enabled_features: [],
       });
     });
     return () => { el.innerHTML=""; el.id=""; };
@@ -2458,7 +2466,6 @@ function App() {
   const [traderSummary,         setTraderSummary]         = useState(null);
   // Collapsed by default — users said "waiting" section was too much scroll.
   // Keep one dense summary visible with expand toggle for the full list.
-  const [waitingOpen,           setWaitingOpen]           = useState(false);
   // INFO defaults VISIBLE — these are the current-state expert observations
   // (whale flow, taker flow narrative, book shape, funding regime) that
   // explain the chart story. They pair with the edge sentence to form the
@@ -3508,7 +3515,10 @@ function App() {
               // lumped into "Actionable · live now" — misleading since there's
               // nothing firing. Split into a dedicated context section.
               const info       = all.filter(b => !b.__actionable && !b.__hasConds);
-              const waiting    = all.filter(b => !b.__actionable && b.__hasConds);
+              // Bullets whose conditions haven't fired are intentionally
+              // excluded from the briefing (user directive: waiting-for-
+              // conditions is noise). If we need them later for diagnostics,
+              // they're still in the raw Venice output.
               return (<>
                 {actionable.length > 0 && (
                   <div style={{ marginTop:10 }}>
@@ -3541,28 +3551,9 @@ function App() {
                     )}
                   </div>
                 )}
-                {waiting.length > 0 && (
-                  <div style={{ marginTop:12 }}>
-                    <button onClick={() => setWaitingOpen(v => !v)}
-                      style={{ width:"100%", display:"flex", alignItems:"center",
-                        justifyContent:"space-between", gap:8,
-                        background:"none", border:"none", padding:"4px 0",
-                        cursor:"pointer", fontFamily:"inherit" }}>
-                      <span style={{ fontSize:11, fontWeight:700, color:C.muted,
-                        letterSpacing:1.2, textTransform:"uppercase" }}>
-                        {waitingOpen ? "▾" : "▸"} Waiting for conditions · {waiting.length}
-                      </span>
-                      <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>
-                        {waitingOpen ? "hide" : "show"}
-                      </span>
-                    </button>
-                    {waitingOpen && (
-                      <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:6 }}>
-                        {waiting.map((b, i) => <Bullet key={`w${b.__src}${i}`} {...b} />)}
-                      </div>
-                    )}
-                  </div>
-                )}
+                {/* WAITING FOR CONDITIONS section removed per user directive
+                    — unfired conditions are noise. Only ACTIONABLE (live-fired)
+                    and INFO (current-state narrative) bullets remain visible. */}
               </>);
             })()}
           </div>
@@ -3591,8 +3582,7 @@ function App() {
       </div>
     );
   }, [traderSummary, pendingDeepseekReady, activeDeepseekPred, backendSnap,
-      price, winStartPrice, tk, ob, oif, ls, strategies,
-      waitingOpen, barCloseUTC]);
+      price, winStartPrice, tk, ob, oif, ls, strategies, infoOpen, barCloseUTC]);
 
   const strats = STRATEGY_META.filter(m=>strategies[m.key]).map(m=>({...m,...strategies[m.key]}));
 
@@ -3637,19 +3627,24 @@ function App() {
         {tab==="live" && (
           <div style={{ display:"flex", gap:6, height:"100%" }}>
 
-            {/* LEFT: Chart (full height) */}
-            <div style={{ flex:"0 0 46%", minWidth:0, display:"flex", flexDirection:"column" }}>
+            {/* LEFT: Chart — takes 60% so it's the dominant viewport item
+                (user is watching price first, reading analysis second). */}
+            <div style={{ flex:"0 0 60%", minWidth:0, display:"flex", flexDirection:"column" }}>
               <div style={{ ...card, flex:1, display:"flex", flexDirection:"column", minHeight:0 }}>
                 <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1.5,
                   textTransform:"uppercase", marginBottom:4, flexShrink:0 }}>
-                  BTC/USD · 1m · Binance via TradingView
+                  BTC/USD · 5m · Binance via TradingView
                 </div>
                 <div style={{ flex:1, minHeight:0 }}><PriceChart /></div>
               </div>
             </div>
 
-            {/* RIGHT: Predictions + DeepSeek + EV + Strategies */}
-            <div style={{ flex:"0 0 54%", minWidth:0, display:"flex", flexDirection:"column", gap:5, overflowY:"auto", zoom:0.87 }}>
+            {/* RIGHT: Trader briefing + DeepSeek header — compact at 40%
+                of the screen. Removed the 0.87 zoom: now that the column
+                is narrower the content fits natively at 100% zoom, which
+                renders crisper text and keeps the 2-column Bullet layout
+                from re-wrapping because of artificial shrink. */}
+            <div style={{ flex:"0 0 40%", minWidth:0, display:"flex", flexDirection:"column", gap:5, overflowY:"auto" }}>
 
               {/* ① PREDICTION BAR — DeepSeek only */}
               {(() => {
