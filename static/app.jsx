@@ -3403,10 +3403,45 @@ function App() {
                 ~30s read · decision-ready
               </span>
             </div>
-            <div style={{ marginBottom: (traderSummary.watch?.length || traderSummary.actions?.length) ? 10 : 0,
-              fontWeight:600 }}>
-              <BullBearText text={traderSummary.edge} size={15} baseColor={C.text} />
-            </div>
+            {(() => {
+              // Split the edge into a bottom-line HEADLINE + supporting DETAIL
+              // so the trader gets the takeaway in one second and can read the
+              // rationale underneath only if they want. Venice emits edges like
+              // "<headline>. <detail>" or "<headline> — <detail>"; we split on
+              // the first period/em-dash to separate. If there's no obvious
+              // break, the whole edge renders as the headline.
+              const raw = (traderSummary.edge || "").trim();
+              const mEm = raw.indexOf(" — ");
+              const mDash = raw.indexOf(" – ");
+              const mSentence = raw.search(/[.!?]\s+\S/);
+              let splitAt = -1;
+              if (mEm   > 0)  splitAt = mEm;
+              else if (mDash > 0) splitAt = mDash;
+              else if (mSentence > 0 && mSentence < raw.length - 3) splitAt = mSentence + 1; // after the period
+              let headline, detail;
+              if (splitAt > 0) {
+                headline = raw.slice(0, splitAt).trim().replace(/[.!?]$/, "");
+                detail   = raw.slice(splitAt).replace(/^[\s—–.!?]+/, "").trim();
+              } else {
+                headline = raw;
+                detail   = "";
+              }
+              const hasMore = (traderSummary.watch?.length || traderSummary.actions?.length);
+              return (
+                <div style={{ marginBottom: hasMore ? 10 : 0 }}>
+                  <div style={{ fontSize:17, fontWeight:800, color:C.text,
+                    lineHeight:1.3, letterSpacing:0.1 }}>
+                    <BullBearText text={headline} size={17} baseColor={C.text} />
+                  </div>
+                  {detail && (
+                    <div style={{ marginTop:5, fontSize:13, fontWeight:400,
+                      color:C.textSec, lineHeight:1.4 }}>
+                      <BullBearText text={detail} size={13} baseColor={C.textSec} />
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             {(() => {
               const all = [
                 ...(traderSummary.watch   || []).map(b => ({ ...b, __src: "w" })),
