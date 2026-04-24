@@ -2913,6 +2913,7 @@ function App() {
         case "taker_sell_volume": return tk?.sv  != null ? { v: tk.sv,  f: fmt.btc } : null;
         case "taker_volume":      return tk?.bv!=null && tk?.sv!=null ? { v: tk.bv + tk.sv, f: fmt.btc } : null;
         case "taker_ratio":       return tk?.bsr != null ? { v: tk.bsr, f: fmt.num } : null;
+        case "bsr":               return tk?.bsr != null ? { v: tk.bsr, f: fmt.num } : null;
         case "bid_imbalance":     return (obFull?.imbalance_05pct_pct != null) ? { v: obFull.imbalance_05pct_pct, f: fmt.pct } : (ob?.imb != null ? { v: ob.imb, f: fmt.pct } : null);
         case "ask_imbalance":     return (obFull?.imbalance_05pct_pct != null) ? { v: -obFull.imbalance_05pct_pct, f: fmt.pct } : (ob?.imb != null ? { v: -ob.imb, f: fmt.pct } : null);
         case "funding_rate":      return oif?.fr != null ? { v: oif.fr*100, f: fmt.pct } : null;
@@ -2943,6 +2944,8 @@ function App() {
       taker_volume:      { label: "taker vol",  layman: "Total aggressor volume (buys + sells) in the last 5 min — pure noise when near zero.",
                            source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
       taker_ratio:       { label: "BSR",        layman: "Buy-to-sell aggressor ratio. >1 = buyers dominating, <1 = sellers dominating.",
+                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+      bsr:               { label: "BSR",        layman: "Buy-to-sell aggressor ratio. >1 = buyers dominating, <1 = sellers dominating.",
                            source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
       bid_imbalance:     { label: "bid imb",    layman: "Positive = more bids than asks in the top 20 book levels. Shows buyer support depth.",
                            source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
