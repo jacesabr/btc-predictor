@@ -35,18 +35,18 @@ SYSTEM_PROMPT = """You compress a BTC 5-minute prediction analysis into a trader
 
 OUTPUT STRICT JSON ONLY, exactly this shape:
 {
-  "edge": "1-2 plain-English sentences describing what the setup IS. NEVER just echo the signal direction. Speak to a human trader making a decision in the next few minutes.",
+  "edge": "1-2 plain-English sentences describing what the setup IS — the 'story of the chart' right now. NEVER just echo the signal direction. Every factual claim MUST be traceable to a specific line in the INPUT (reasoning, narrative, free_observation, historical_pattern, or binance_expert). If the INPUT flags data as UNAVAILABLE, say so here.",
   "watch": [{
     "tone": "bullish|bearish|neutral",
-    "text": "a condition, level, or bar-level event that would confirm or invalidate the setup",
+    "text": "a condition, level, or bar-level event that would confirm or invalidate the setup. Copy the SPECIFIC signal name from the INPUT (e.g. 'taker flow', 'spot whale buy', 'bid imbalance') — do NOT paraphrase into a different signal.",
     "conditions": [{"metric": "<name>", "op": ">"|">="|"<"|"<="|"==", "value": <number>, "unit": "<unit>"}],
-    "if_met": "short plain-English phrase (<=15 words) describing what it MEANS for the trader when ALL conditions are met — e.g. 'breakout confirmed, bearish thesis invalidated' or 'momentum accelerating, reversal odds rising'. Omit or empty if the text already states the consequence."
+    "if_met": "short plain-English phrase (<=15 words) — the DIRECT consequence that the INPUT text states or strongly implies when ALL conditions fire. NEVER invent sentiment beyond what the INPUT supports. Omit if the text already states the consequence."
   }],
   "actions": [{
     "tone": "bullish|bearish|neutral",
     "text": "concrete IF-THEN guidance — 'if price breaks X do Y', 'stand aside unless Z'. NEVER a bare 'buy' or 'sell'.",
     "conditions": [same shape as watch],
-    "if_met": "short plain-English phrase (<=15 words) describing what the trader should DO when ALL conditions are met — e.g. 'enter long with stop at $78,200' or 'trigger fired — consider short'. Usually this IS the action in the text's 'then' clause."
+    "if_met": "short plain-English phrase (<=15 words) — the direct action the trader should take when conditions fire. Usually this IS the action in the text's 'then' clause."
   }]
 }
 
@@ -74,20 +74,31 @@ SCOPE-MATCHING (CRITICAL):
   INPUT may only appear in `edge` as background, never in `conditions`.
 
 CONDITIONS — machine-checkable thresholds that back the bullet:
-- If the bullet's text references a threshold ("breaks $78,288", "taker volume above 5 BTC",
-  "RSI below 30", "funding above 0.02%"), add a matching "conditions" entry so the UI
-  can show live-vs-threshold and tick/X whether it is currently met.
-- Valid "metric" values ONLY (use these exact strings): price, price_change_pct
-  (percent move from the current bar's open; use this for thresholds like
-  "moves more than 0.2%"), taker_buy_volume, taker_sell_volume, taker_volume,
-  taker_ratio, bid_imbalance, ask_imbalance, funding_rate, open_interest, rsi,
-  long_short_ratio, basis_pct, perp_cvd_1h, spot_cvd_1h, aggregate_cvd_1h,
+- Emit a condition ONLY when (a) the bullet text cites a specific number/range from the
+  INPUT verbatim, AND (b) the signal that number describes has a DIRECT match in the
+  whitelist below. NEVER substitute a near-metric because the exact one isn't in the
+  whitelist — that creates false signals (e.g. mapping "whale buy flow" to
+  "taker_buy_volume" conflates two different data sources).
+- Valid "metric" values ONLY (exact strings): price, price_change_pct
+  (percent move from the current bar's open), taker_buy_volume, taker_sell_volume,
+  taker_volume, taker_ratio, bid_imbalance, ask_imbalance, funding_rate, open_interest,
+  rsi, long_short_ratio, basis_pct, perp_cvd_1h, spot_cvd_1h, aggregate_cvd_1h,
   bid_depth_05pct, ask_depth_05pct, rr_25d_30d, iv_30d_atm.
+- If the INPUT references a signal NOT in this list (whale flow, OI velocity, SOPR,
+  MVRV, fear/greed, mempool, cross-exchange premium, etc.), keep the reference in the
+  bullet TEXT but OMIT the conditions array — do NOT force it into a near-metric.
 - "op" must be one of: ">", ">=", "<", "<=", "==".
-- "value" must be a plain number (no strings, no ranges). For "between X and Y", emit TWO
-  conditions: one with op ">=" X and one with op "<=" Y.
-- "unit": "USD" for price levels, "BTC" for volume, "%" for imbalance/funding/ratios, "" otherwise.
-- If the bullet text does NOT contain any measurable threshold (pure narrative), omit "conditions" or leave it as an empty list. Do NOT invent a threshold to fill the field.
+- "value" must be a plain number matching what the INPUT stated. No ranges — for
+  "between X and Y", emit TWO conditions: op ">=" X and op "<=" Y.
+- "unit": "USD" for price levels, "BTC" for volume, "%" for imbalance/funding/ratios,
+  "" otherwise.
+- If the bullet is pure narrative with no cited number, omit conditions.
+
+DATA AVAILABILITY:
+- If the INPUT includes lines like "[TAKER FLOW] unavailable" or "data_requests: X", the
+  trader must know the setup is incomplete. Flag it in the edge (e.g. "Note: backend
+  taker-flow unavailable — assessment relies on order book only"). Do NOT silently fill
+  the gap with assumptions.
 
 NO JARGON WITHOUT EVIDENCE:
 - Do NOT use technical-analysis terminology (Wyckoff, Elliott wave, harmonic patterns, distribution phase, accumulation phase, liquidity grab, stop hunt, market structure break, order block, fair value gap, etc.) unless the INPUT gives a concrete price level, bar index, or measured condition that backs it. A percentage alone is NOT evidence. A name alone is NOT evidence.
@@ -124,6 +135,15 @@ def _build_user_prompt(pred: dict, historical: str, binance_expert: dict) -> str
     signal = (pred.get("signal") or "?").upper()
     parts.append(f"signal: {signal}")
     parts.append(f"confidence: {pred.get('confidence', '?')}")
+
+    # Data availability flags — surface to Venice so it can warn the trader when
+    # critical signals are missing rather than silently filling with assumptions.
+    data_received = pred.get("data_received") or ""
+    data_requests = pred.get("data_requests") or ""
+    if data_received:
+        parts.append(f"data_received: {_truncate(data_received, 400)}")
+    if data_requests and data_requests.upper() != "NONE":
+        parts.append(f"data_requests (gaps flagged by DeepSeek): {_truncate(data_requests, 400)}")
 
     # For NEUTRAL bars the abstention rationale is often long and nuanced —
     # truncating it kills the case for not-trading and forces Venice to invent
