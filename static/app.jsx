@@ -2467,6 +2467,12 @@ function App() {
   const wsRef           = useRef(null);
   const reconnectRef    = useRef(null);
   const prevDsWindowRef = useRef(null);
+  // Hysteresis state for condition pill met/unmet. A condition must be met for
+  // HYSTERESIS_MS continuously before the pill flips to "met", and unmet for
+  // HYSTERESIS_MS continuously before flipping back — prevents flashing when
+  // live values bounce around the threshold.
+  const hysteresisRef   = useRef({});
+  const HYSTERESIS_MS   = 10000;
 
   // ── Microstructure live state ─────────────────────────────────
   // (displayed live; DeepSeek gets a fresh snapshot at each bar open via Python backend)
@@ -3197,10 +3203,14 @@ function App() {
 
                 // Condition pill: shows current live value, threshold, and ✓/✗ whether met.
                 // Neutral grey if live data isn't available (don't lie with ✓).
-                const ConditionPill = ({ cond }) => {
+                const ConditionPill = ({ cond, stableMet }) => {
                   const live = metric(cond.metric);
                   const thresholdStr = live ? live.f(cond.value) : `${cond.value}${cond.unit||""}`;
-                  const isMet = live ? opCheck[cond.op](live.v, cond.value) : null;
+                  // Use the hysteresis-filtered stable state from the parent Bullet if
+                  // provided (prevents flickering). Fall back to raw live check only if
+                  // the parent didn't supply it (e.g. no live feed at all).
+                  const rawMet = live ? opCheck[cond.op](live.v, cond.value) : null;
+                  const isMet = (stableMet !== undefined && stableMet !== null) ? stableMet : rawMet;
                   const ok = isMet === true;
                   const bad = isMet === false;
                   // No live feed for this metric → still show the threshold (preserves
@@ -3264,18 +3274,55 @@ function App() {
                 //     should act on NOW — e.g. "stand aside, no edge"; these have no trigger
                 //     to wait on so they're always "live advice")
                 //   - hasConds + not all met       → POTENTIAL (waiting for trigger)
+                // Hysteresis helper: returns a STABLE met-state for a single condition.
+                // Raw met/unmet from live lookup flips instantly, but stableMet only
+                // commits to a new state after it has held continuously for HYSTERESIS_MS.
+                // Prevents the bullet from toggling ACTIONABLE ↔ WAITING every second
+                // when a live value is bouncing right at its threshold.
+                const stableMet = (condKey, rawMet) => {
+                  const now = Date.now();
+                  const ref = hysteresisRef.current;
+                  let t = ref[condKey];
+                  if (!t) {
+                    t = { committed: rawMet, raw: rawMet, changeAt: now };
+                    ref[condKey] = t;
+                    return rawMet;
+                  }
+                  // raw value changed → reset the stability clock
+                  if (rawMet !== t.raw) {
+                    t.raw = rawMet;
+                    t.changeAt = now;
+                  }
+                  // if raw has held steady ≥ HYSTERESIS_MS and differs from committed, commit
+                  if (rawMet !== t.committed && (now - t.changeAt) >= HYSTERESIS_MS) {
+                    t.committed = rawMet;
+                  }
+                  return t.committed;
+                };
                 const evalBullet = (b) => {
                   const results = (b.conditions || []).map((c) => {
                     const live = metric(c.metric);
-                    return live ? opCheck[c.op](live.v, c.value) : null;
+                    const raw  = live ? opCheck[c.op](live.v, c.value) : null;
+                    // null (no live source) can't be stabilized — pass through.
+                    if (raw === null) return { raw: null, stable: null };
+                    const key  = `${b.text || ""}|${c.metric}|${c.op}|${c.value}`;
+                    return { raw, stable: stableMet(key, raw) };
                   });
                   const hasConds = results.length > 0;
-                  const allMet   = hasConds && results.every(r => r === true);
-                  const actionable = !hasConds || allMet;  // immediate advice OR fired trigger
-                  return { ...b, __allMet: allMet, __hasConds: hasConds, __actionable: actionable };
+                  // allMet uses the STABLE (hysteresis-filtered) met-state so the bullet
+                  // only flips actionable/waiting after 10s of sustained change.
+                  const allMet = hasConds && results.every(r => r.stable === true);
+                  const actionable = !hasConds || allMet;
+                  return {
+                    ...b,
+                    __allMet: allMet, __hasConds: hasConds, __actionable: actionable,
+                    // Expose raw + stable so ConditionPill can show the stable status
+                    // (keeps pill pills coherent with the bullet-level decision).
+                    __condResults: results,
+                  };
                 };
 
-                const Bullet = ({ tone, text, conditions, if_met, __allMet, __hasConds, __actionable }) => {
+                const Bullet = ({ tone, text, conditions, if_met, __allMet, __hasConds, __actionable, __condResults }) => {
                   // A bullet is "active right now" when it has no conditions (immediate
                   // narrative like "stand aside") OR all its conditions have fired.
                   const fired     = __allMet;
@@ -3330,7 +3377,10 @@ function App() {
                       </div>
                       {__hasConds && (
                         <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginLeft:28 }}>
-                          {conditions.map((c, i) => <ConditionPill key={i} cond={c} />)}
+                          {conditions.map((c, i) => (
+                            <ConditionPill key={i} cond={c}
+                              stableMet={(__condResults && __condResults[i]) ? __condResults[i].stable : undefined} />
+                          ))}
                         </div>
                       )}
                       {/* "What this means" — always visible when Venice emits it. The
