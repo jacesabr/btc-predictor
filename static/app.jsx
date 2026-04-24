@@ -3095,11 +3095,15 @@ function App() {
                   pct:  (v) => `${v.toFixed(2)}%`,
                   num:  (v) => v.toFixed(2),
                 };
-                const ds = data?.microstructure_data || data?.dashboard_signals || {};
-                const spb = ds.spot_perp_basis;
+                // Backend microstructure snapshot — lives in the backendSnap payload.
+                // Safe fallback to {} if the snapshot isn't loaded yet, so the metric()
+                // switch falls through to null (pill renders as "no data") rather than
+                // crashing the whole app with ReferenceError.
+                const ds     = (backendSnap?.snapshot?.dashboard_signals) || {};
+                const spb    = ds.spot_perp_basis;
                 const cvdBlk = ds.cvd;
                 const obFull = ds.order_book;
-                const skew = ds.deribit_skew_term;
+                const skew   = ds.deribit_skew_term;
                 const metric = (m) => {
                   switch (m) {
                     case "price":             return price != null ? { v: price, f: fmt.usd } : null;
