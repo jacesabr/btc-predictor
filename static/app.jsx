@@ -3209,7 +3209,15 @@ function App() {
                   const borderC = ok ? C.green : bad ? C.red : C.borderSoft;
                   const bgC     = ok ? C.greenBg : bad ? C.redBg : "#F5F5F4";
                   const fgC     = ok ? "#166534" : bad ? "#991B1B" : C.textSec;
-                  const icon    = ok ? "✓" : bad ? "✗" : "?";
+                  // Pill icon reflects the op direction, not a binary checkmark:
+                  //   > / >= → ▲ (threshold is "above X")
+                  //   < / <= → ▼ (threshold is "below X")
+                  //   ==     → ● (equality / at level)
+                  //   no live source → ⓘ (info only, can't verify)
+                  const icon = !live        ? "ⓘ"
+                             : cond.op === ">" || cond.op === ">=" ? "▲"
+                             : cond.op === "<" || cond.op === "<=" ? "▼"
+                             : "●";
                   const meta    = METRIC_META[cond.metric] || {};
                   const labelText = meta.label || cond.metric.replace(/_/g," ");
                   return (
@@ -3282,10 +3290,14 @@ function App() {
                   const firedBull = active && tone === "bullish" && directional;
                   const firedBear = active && tone === "bearish" && directional;
                   // Color policy: ONLY directional (BUY/SELL) uses colored backgrounds.
-                  // PAUSE and waiting use neutral gray — nothing to act on, no need to shout.
+                  // PAUSE / INFO / waiting use neutral gray — nothing to act on directionally.
+                  // Special case: if a bullet has NO conditions and neutral tone, it's a pure
+                  // market observation ("note / context"), not a pause directive. Show ℹ INFO.
+                  const pureInfo = active && !__hasConds && tone === "neutral";
                   let bg, border, leftBar, msgColor, actionLabel, actionIcon;
                   if (firedBull)       { bg = "#ECFDF5"; border = C.green;        leftBar = C.green;  msgColor = "#15803D"; actionLabel = "BUY";   actionIcon = "▲"; }
                   else if (firedBear)  { bg = "#FEF2F2"; border = C.red;          leftBar = C.red;    msgColor = "#B91C1C"; actionLabel = "SELL";  actionIcon = "▼"; }
+                  else if (pureInfo)   { bg = "#F5F5F4"; border = C.borderSoft;   leftBar = C.muted;  msgColor = "#57534E"; actionLabel = "INFO";  actionIcon = "ⓘ"; }
                   else if (active)     { bg = "#F5F5F4"; border = C.borderSoft;   leftBar = C.muted;  msgColor = "#57534E"; actionLabel = "PAUSE"; actionIcon = "⏸"; }
                   else                 { bg = "#FAFAF9"; border = C.borderSoft;   leftBar = C.muted;  msgColor = C.muted;   actionLabel = null;    actionIcon = "⏸"; }
                   return (
@@ -3403,29 +3415,8 @@ function App() {
                             )}
                           </>);
                         })()}
-                        {/* SOURCES FOOTER — universal click-through for every number in
-                            the briefing (edge, bullets, pills). If Venice cites a value,
-                            the trader can verify it from the listed upstream dashboards. */}
-                        <div style={{ marginTop:12, paddingTop:8, borderTop:`1px solid ${C.borderSoft}`,
-                          display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                          <span style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1,
-                            textTransform:"uppercase" }}>Verify sources ↗</span>
-                          {[
-                            { label:"Binance spot",    url:"https://www.binance.com/en/trade/BTC_USDT" },
-                            { label:"Binance futures", url:"https://www.binance.com/en/futures/BTCUSDT" },
-                            { label:"Taker flow",      url:"https://www.coinglass.com/BitcoinTakerBuySellVolume" },
-                            { label:"Funding",         url:"https://www.coinglass.com/FundingRate" },
-                            { label:"OI",              url:"https://www.coinglass.com/BitcoinOpenInterest" },
-                            { label:"L/S ratio",       url:"https://www.coinglass.com/LongShortRatio" },
-                            { label:"Liquidations",    url:"https://www.coinglass.com/BitcoinLiquidations" },
-                          ].map((s) => (
-                            <a key={s.label} href={s.url} target="_blank" rel="noopener noreferrer"
-                               style={{ color:C.textSec, textDecoration:"underline", textDecorationColor:C.borderSoft,
-                                 fontSize:10, fontWeight:600 }}>
-                              {s.label}
-                            </a>
-                          ))}
-                        </div>
+                        {/* (global sources footer removed — every pill carries its own
+                            ↗ source link inline, directly next to the number it claims) */}
                       </div>
                     )}
                     {!briefingReady && (

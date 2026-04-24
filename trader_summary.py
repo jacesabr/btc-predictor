@@ -182,20 +182,27 @@ def _build_user_prompt(pred: dict, historical: str, binance_expert: dict) -> str
         parts.append(f"free_observation: {f}")
 
     if historical:
-        h = historical if is_neutral else _truncate(historical, 2000)
+        # Raise cap to 4000 — historical analyst carries AGAINST/FOR/EDGE/SUGGESTION
+        # sections that were getting clipped at 2000, losing the full steelman.
+        h = historical if is_neutral else _truncate(historical, 4000)
         parts.append(f"historical_pattern:\n{h}")
 
+    # Binance expert output is STRUCTURED — forward every section so Venice can
+    # reference the specific micro-signal it wants (taker_flow / whale_flow /
+    # oi_funding / order_book / confluence / edge / watch). Previously only one
+    # narrative field was passed; Venice lost the rich breakdown.
     if binance_expert:
-        notes = (
-            binance_expert.get("narrative")
-            or binance_expert.get("analysis")
-            or binance_expert.get("reasoning")
-            or ""
-        )
         sig = binance_expert.get("signal")
-        if notes or sig:
-            n = notes if is_neutral else _truncate(notes, 1500)
-            parts.append(f"binance_expert: signal={sig or '?'} notes={n}")
+        be_parts = [f"binance_expert signal: {sig or '?'}"]
+        for field in ("edge", "watch", "confluence", "taker_flow", "whale_flow",
+                      "oi_funding", "positioning", "order_book",
+                      "analysis", "narrative", "reasoning"):
+            v = binance_expert.get(field)
+            if v:
+                v = str(v)
+                cap = 600 if is_neutral else 400
+                be_parts.append(f"  {field}: {_truncate(v, cap)}")
+        parts.append("\n".join(be_parts))
 
     return "\n\n".join(parts)
 
