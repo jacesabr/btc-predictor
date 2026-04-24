@@ -481,18 +481,24 @@ async def _embed_bar_background(window_start: float, bar_record: dict):
     Fire after bar resolves: embed full bar text via Cohere and store in
     pattern_history.embedding via pgvector. PostgreSQL owns it.
 
-    Skips if this window_start is already embedded (defensive — a double-resolve
-    or admin replay should not burn an extra Cohere call).
+    Fail-closed dedup: if this bar already has a vector, or the dedup check
+    itself raises, do NOT call Cohere. A prior bug re-embedded everything on
+    each deploy — we skip on any uncertainty rather than risk burning budget.
+    store_embedding is also idempotent at the SQL layer as a last resort.
     """
     if not config.cohere_api_key:
         return
     try:
         from semantic_store import embedded_window_starts
-        if float(window_start) in embedded_window_starts():
-            logger.info("Cohere embed skipped — bar %.0f already has a vector", window_start)
-            return
-    except Exception:
-        pass  # if the check itself fails, fall through and embed
+        already = float(window_start) in embedded_window_starts()
+    except Exception as exc:
+        logger.warning("Cohere embed ABORTED — dedup check failed for bar %.0f: %s "
+                       "(fail-closed; would rather skip one embed than risk mass re-embed)",
+                       window_start, exc)
+        return
+    if already:
+        logger.info("Cohere embed skipped — bar %.0f already has a vector", window_start)
+        return
     try:
         text = _bar_embed_text(bar_record)
         vec  = await embed_text(config.cohere_api_key, text, input_type="search_document")

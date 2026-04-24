@@ -235,7 +235,13 @@ def fetch_postmortems(window_starts: List[float]) -> Dict[float, str]:
 # ── Vector search ─────────────────────────────────────────────────────────────
 
 def store_embedding(window_start: float, vector: np.ndarray):
-    """Store a Cohere 1024-dim embedding for a resolved bar as a REAL[] array."""
+    """Store a Cohere 1024-dim embedding for a resolved bar as a REAL[] array.
+
+    Idempotent: the UPDATE refuses to overwrite an existing vector. Rationale —
+    an earlier bug silently mass-re-embedded every bar on each deploy, burning
+    Cohere budget; this invariant is the last line of defense against that
+    ever happening again, even if a caller skips its own dedup check.
+    """
     _init()
     if vector is None:
         logger.warning("store_embedding: skipping None vector for window_start=%.0f", window_start)
@@ -244,14 +250,22 @@ def store_embedding(window_start: float, vector: np.ndarray):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE pattern_history SET embedding = %s WHERE window_start = %s",
+                "UPDATE pattern_history SET embedding = %s "
+                "WHERE window_start = %s AND embedding IS NULL",
                 (vector.astype(np.float32).tolist(), float(window_start)),
             )
             if cur.rowcount == 0:
-                logger.warning(
-                    "store_embedding: no pattern_history row for window_start=%.0f — bar not embedded",
-                    window_start,
+                # Either the row doesn't exist, or it already has a vector.
+                # Distinguish so the log is actionable.
+                cur.execute(
+                    "SELECT embedding IS NOT NULL FROM pattern_history WHERE window_start = %s",
+                    (float(window_start),),
                 )
+                row = cur.fetchone()
+                if row is None:
+                    logger.warning("store_embedding: no pattern_history row for window_start=%.0f — bar not embedded", window_start)
+                else:
+                    logger.info("store_embedding: bar %.0f already has a vector — skipping overwrite", window_start)
             else:
                 logger.info("store_embedding: saved %d-dim vector for bar %.0f", len(vector), window_start)
         conn.commit()

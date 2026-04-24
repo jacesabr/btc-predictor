@@ -876,7 +876,7 @@ function AccuracySection({ title, rows, showWeight, emptyMsg }) {
   );
 }
 
-function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, cz, cg, dots, price, allAccuracy, allAccuracyErr, onRefreshAccuracy }) {
+function EnsembleTab({ weights, ob, ls, tk, oif, lq, fg, mp, cz, cg, dots, price, allAccuracy, allAccuracyErr, onRefreshAccuracy }) {
   // Build micro accuracy lookup for inline display: dash key → {accuracy, correct, total}
   const microAcc = {};
   (allAccuracy?.microstructure || []).forEach(r => {
@@ -917,26 +917,8 @@ function EnsembleTab({ weights, setWeights, ob, ls, tk, oif, lq, fg, mp, cz, cg,
       {/* LEFT: comprehensive accuracy table */}
       <div style={{ flex:"0 0 54%", overflowY:"auto", paddingRight:2 }}>
         <div style={{ ...card, borderLeft:`3px solid ${C.amber}` }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+          <div style={{ marginBottom:10 }}>
             <div style={{ ...label, fontSize:10 }}>Prediction Accuracy — All Sources</div>
-            <button
-              onClick={() => {
-                if (!confirm("Reset all win/loss scores? Historical bars are kept but scores restart from now.")) return;
-                fetch("/reset-scores",{method:"POST"})
-                  .then(()=>fetch("/weights/update",{method:"POST"}))
-                  .then(()=>Promise.all([
-                    fetch("/weights").then(r=>r.json()).then(setWeights).catch(()=>{}),
-                    fetch("/accuracy/all?n=200").then(r=>r.json()).then(d=>{ if(d&&!d.error) setAllAccuracy(d); }).catch(()=>{}),
-                    fetch("/deepseek/accuracy").then(r=>r.json()).then(setDeepseekAcc).catch(()=>{}),
-                    fetch("/accuracy/agree").then(r=>r.json()).then(setAgreeAcc).catch(()=>{}),
-                    fetch("/predictions/recent?n=500").then(r=>r.json()).then(setPreds).catch(()=>{}),
-                  ]));
-              }}
-              style={{ fontSize:9, padding:"2px 8px", borderRadius:3,
-                border:`1px solid ${C.border}`, background:C.surface,
-                color:C.textSec, cursor:"pointer", fontFamily:"inherit", letterSpacing:1 }}>
-              RECALIBRATE
-            </button>
           </div>
 
           {!hasAccuracy ? (
@@ -1971,44 +1953,24 @@ function TimingTab({ timings }) {
 
 function EmbeddingAuditTab({ embeddingAuditLog, setEmbeddingAuditLog, deepseekInspect, setDeepseekInspect }) {
   const [expandedAudit, setExpandedAudit] = React.useState(null);
-  const [auditStatus,   setAuditStatus]   = React.useState(null); // "running" | "done" | "timeout" | null
-  const pollRef = React.useRef(null);
 
-  const refreshInspect = React.useCallback(() => {
-    fetch("/api/inspect/last-deepseek").then(r=>r.json()).then(setDeepseekInspect).catch(()=>{});
-  }, [setDeepseekInspect]);
-
-  const startAudit = React.useCallback(() => {
-    if (auditStatus === "running") return;
-    const baselineLen = (embeddingAuditLog || []).length;
-    setAuditStatus("running");
-    fetch("/api/embedding-audit/run", { method:"POST" }).catch(()=>{});
-    const started = Date.now();
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(() => {
-      fetch("/api/embedding-audit").then(r=>r.json()).then(d => {
-        const log = d.audit_log || [];
-        if (log.length > baselineLen) {
-          setEmbeddingAuditLog(log);
-          setAuditStatus("done");
-          clearInterval(pollRef.current); pollRef.current = null;
-        } else if (Date.now() - started > 180000) {
-          setAuditStatus("timeout");
-          clearInterval(pollRef.current); pollRef.current = null;
-        }
-      }).catch(()=>{});
-    }, 5000);
-  }, [auditStatus, embeddingAuditLog, setEmbeddingAuditLog]);
-
-  React.useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+  // Auto-poll both data sources every 30s while the tab is visible. No manual
+  // trigger surface — audits fire on their 4h schedule; file inspect refreshes
+  // whenever a bar completes on the server.
+  React.useEffect(() => {
+    const load = () => {
+      fetch("/api/embedding-audit").then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) setEmbeddingAuditLog(d.audit_log || []); }).catch(()=>{});
+      fetch("/api/inspect/last-deepseek").then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) setDeepseekInspect(d); }).catch(()=>{});
+    };
+    load();
+    const id = setInterval(load, 30000);
+    return () => clearInterval(id);
+  }, [setEmbeddingAuditLog, setDeepseekInspect]);
 
   const files = deepseekInspect?.files || {};
   const anyFilePresent = Object.values(files).some(f => f && f.exists && f.content && f.content.trim().length > 0);
-  const auditPill =
-    auditStatus === "running" ? { label:"AUDIT RUNNING…", bg:C.amberBg, fg:C.amber, br:C.amberBorder } :
-    auditStatus === "done"    ? { label:"AUDIT COMPLETE", bg:C.greenBg, fg:C.green, br:C.greenBorder } :
-    auditStatus === "timeout" ? { label:"AUDIT TIMEOUT (3m) — check logs", bg:C.redBg, fg:C.red, br:C.redBorder } :
-    null;
 
   // ── Build the "flow proof" from the most recent audit ──────────
   const latest = (embeddingAuditLog || [])[embeddingAuditLog?.length - 1] || null;
@@ -2113,23 +2075,6 @@ function EmbeddingAuditTab({ embeddingAuditLog, setEmbeddingAuditLog, deepseekIn
               )}
             </div>
           )}
-        </div>
-        <div style={{ display:"flex", gap:8, alignItems:"center", flexShrink:0 }}>
-          {auditPill && (
-            <span style={{ background:auditPill.bg, color:auditPill.fg, border:`1px solid ${auditPill.br}`,
-              padding:"4px 8px", borderRadius:4, fontSize:9, fontWeight:600 }}>{auditPill.label}</span>
-          )}
-          <button onClick={refreshInspect}
-            style={{ background:C.bg, color:C.textSec, border:`1px solid ${C.border}`,
-              padding:"6px 10px", borderRadius:4, cursor:"pointer", fontSize:10, fontFamily:"inherit", fontWeight:600 }}>
-            Refresh files
-          </button>
-          <button onClick={startAudit} disabled={auditStatus==="running"}
-            style={{ background:C.amberBg, color:C.amber, border:`1px solid ${C.amberBorder}`,
-              padding:"6px 12px", borderRadius:4, cursor:auditStatus==="running"?"default":"pointer",
-              opacity:auditStatus==="running"?0.6:1, fontSize:10, fontFamily:"inherit", fontWeight:600 }}>
-            Run audit now
-          </button>
         </div>
       </div>
 
@@ -2272,7 +2217,7 @@ function EmbeddingAuditTab({ embeddingAuditLog, setEmbeddingAuditLog, deepseekIn
 
         {(!embeddingAuditLog || embeddingAuditLog.length === 0) && (
           <div style={{ padding:"16px", color:C.muted, fontSize:11, textAlign:"center" }}>
-            No embedding audits in the log yet. First auto-audit fires ~4 hours after startup, or click "Run audit now".
+            No embedding audits in the log yet. Auto-audit fires every 4 hours via deepseek-reasoner.
           </div>
         )}
       </div>
@@ -3285,7 +3230,7 @@ function App() {
         {/* ══ ENSEMBLE TAB ══ */}
         {tab==="ensemble" && (
           <EnsembleTab
-            weights={weights} setWeights={setWeights}
+            weights={weights}
             ob={ob} ls={ls} tk={tk} oif={oif} lq={lq}
             fg={fg} mp={mp} cz={cz} cg={cg}
             dots={dots} price={price}

@@ -170,14 +170,6 @@ async def get_weights():
     return result
 
 
-@app.post("/weights/update")
-async def update_weights():
-    strategy_acc = _safe_storage(storage.get_strategy_rolling_accuracy, default={})
-    if strategy_acc:
-        ensemble.update_weights(strategy_acc)
-    return {"status": "updated", "weights": ensemble.get_weights()}
-
-
 @app.get("/deepseek/accuracy")
 async def get_deepseek_accuracy():
     acc = _safe_storage(storage.get_deepseek_accuracy, default={"total": 0, "correct": 0, "accuracy": 0.0})
@@ -343,15 +335,6 @@ async def get_embedding_audit():
         "last_audit": log[0] if log else None,
         "last_audit_time": log[0].get("timestamp_str") if log else None,
     }
-
-
-@app.post("/api/embedding-audit/run")
-async def trigger_embedding_audit():
-    """Trigger an embedding audit immediately (non-blocking)."""
-    from engine import run_embedding_audit
-    history = _safe_storage(load_pattern_history, default=[])
-    asyncio.create_task(run_embedding_audit(config.deepseek_api_key, history))
-    return {"status": "audit triggered", "will_appear_in_log": True}
 
 
 @app.get("/api/inspect/last-deepseek")
@@ -595,16 +578,6 @@ async def force_predict():
             current_state[k] = v
         logger.error("Force predict failed: %s", exc)
         return {"status": "error", "detail": str(exc)}
-
-
-@app.post("/reset-scores")
-async def reset_scores():
-    import time as _time
-    from storage_pg import set_reset_at
-    now  = _time.time()
-    note = f"Score reset {__import__('datetime').datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')} via dashboard"
-    set_reset_at(now, note)
-    return {"status": "ok", "reset_at": now, "note": note}
 
 
 @app.post("/admin/reset")
