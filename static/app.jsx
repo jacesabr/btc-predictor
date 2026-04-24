@@ -3374,6 +3374,28 @@ function App() {
                         <span style={{ flex:1 }}>
                           <BullBearText text={text} size={12} baseColor={C.text} />
                         </span>
+                        {/* Per-statement SOURCE button in the bullet's top-right.
+                            Points to the first condition's source when we have one,
+                            else falls back to Binance spot as a general market view.
+                            Red-bordered button per user's request — makes "verify
+                            the claim" a one-click option on every statement. */}
+                        {(() => {
+                          const primaryCond = (conditions || [])[0];
+                          const pMeta = primaryCond ? (METRIC_META[primaryCond.metric] || {}) : {};
+                          const src = pMeta.source || { label: "Binance", url: "https://www.binance.com/en/trade/BTC_USDT" };
+                          return (
+                            <a href={src.url} target="_blank" rel="noopener noreferrer"
+                               title={`Verify at ${src.label}`}
+                               onClick={(e)=>e.stopPropagation()}
+                               style={{ color:"#B91C1C", textDecoration:"none",
+                                 fontSize:9, fontWeight:800, letterSpacing:1,
+                                 padding:"2px 7px", border:"1px solid #DC2626",
+                                 borderRadius:3, background:"#FFFFFF",
+                                 flexShrink:0, lineHeight:1.3, whiteSpace:"nowrap" }}>
+                              ↗ SOURCE
+                            </a>
+                          );
+                        })()}
                       </div>
                       {__hasConds && (
                         <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginLeft:28 }}>
@@ -3417,10 +3439,24 @@ function App() {
                             ~30s read · decision-ready
                           </span>
                         </div>
-                        {/* Edge — 1-2 sentence headline with inline bull/bear coloring */}
+                        {/* Edge — 1-2 sentence headline with inline bull/bear coloring,
+                            plus a red SOURCE button so the trader can verify the claim
+                            from the primary market dashboard. */}
                         <div style={{ marginBottom: (traderSummary.watch?.length || traderSummary.actions?.length) ? 10 : 0,
-                          fontWeight:600 }}>
-                          <BullBearText text={traderSummary.edge} size={15} baseColor={C.text} />
+                          fontWeight:600, display:"flex", alignItems:"baseline", gap:8, flexWrap:"wrap" }}>
+                          <span style={{ flex:"1 1 auto" }}>
+                            <BullBearText text={traderSummary.edge} size={15} baseColor={C.text} />
+                          </span>
+                          <a href="https://www.binance.com/en/trade/BTC_USDT"
+                             target="_blank" rel="noopener noreferrer"
+                             title="Verify market state at Binance"
+                             style={{ color:"#B91C1C", textDecoration:"none",
+                               fontSize:9, fontWeight:800, letterSpacing:1,
+                               padding:"2px 7px", border:"1px solid #DC2626",
+                               borderRadius:3, background:"#FFFFFF",
+                               flexShrink:0, whiteSpace:"nowrap" }}>
+                            ↗ SOURCE
+                          </a>
                         </div>
                         {(() => {
                           const all = [
