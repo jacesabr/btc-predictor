@@ -496,6 +496,117 @@ def _extract_output_numbers_in_text(text: str) -> List[float]:
 
 # ── Prompt assembly ────────────────────────────────────────────────────
 
+def _fmt_num(v: Any, fmt: str = "{:g}") -> Optional[str]:
+    try:
+        return fmt.format(float(v))
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_live_metrics_block(backend_snapshot: Optional[dict]) -> str:
+    """Serialize the current-bar backend snapshot into a block of verbatim
+    numeric tokens Venice can cite. Any number Venice emits that matches a
+    value here passes the anti-fabrication check and reaches the UI as a
+    live-anchored condition pill.
+
+    Critical: these are the *same* numbers the UI displays. Keeping them
+    verbatim in INPUT means DeepSeek mentions of BSR/OI/funding/etc. can be
+    preserved as machine-checkable conditions instead of being dropped as
+    "unsourced thresholds"."""
+    if not backend_snapshot:
+        return ""
+    ds = backend_snapshot.get("dashboard_signals") or {}
+    if not isinstance(ds, dict):
+        return ""
+    lines: List[str] = []
+
+    tk = ds.get("taker_flow") or {}
+    if isinstance(tk, dict):
+        bsr = _fmt_num(tk.get("buy_sell_ratio"), "{:.4f}")
+        bv  = _fmt_num(tk.get("taker_buy_vol_btc"), "{:.2f}")
+        sv  = _fmt_num(tk.get("taker_sell_vol_btc"), "{:.2f}")
+        if bsr: lines.append(f"  BSR (taker_ratio): {bsr}")
+        if bv:  lines.append(f"  taker_buy_volume: {bv} BTC")
+        if sv:  lines.append(f"  taker_sell_volume: {sv} BTC")
+
+    ob = ds.get("order_book") or {}
+    if isinstance(ob, dict):
+        imb  = _fmt_num(ob.get("imbalance_05pct_pct"), "{:.2f}")
+        bidd = _fmt_num(ob.get("bid_depth_05pct_btc"), "{:.1f}")
+        askd = _fmt_num(ob.get("ask_depth_05pct_btc"), "{:.1f}")
+        if imb:  lines.append(f"  bid_imbalance: {imb}%")
+        if bidd: lines.append(f"  bid_depth_05pct: {bidd} BTC")
+        if askd: lines.append(f"  ask_depth_05pct: {askd} BTC")
+
+    # `oi_velocity` block (preferred) or `aggregate_oi` if present
+    aoi = ds.get("aggregate_oi") or ds.get("oi_velocity") or {}
+    if isinstance(aoi, dict):
+        oi30 = _fmt_num(aoi.get("change_30min_pct"), "{:.3f}")
+        if oi30: lines.append(f"  oi_velocity_pct (30min): {oi30}%")
+
+    # Backend key is `oi_funding`, field names are `open_interest_btc` and
+    # `funding_rate_8h_pct` (already pre-multiplied by 100).
+    oif = ds.get("oi_funding") or {}
+    if isinstance(oif, dict):
+        oi = _fmt_num(oif.get("open_interest_btc"), "{:.1f}")
+        fr_pct = _fmt_num(oif.get("funding_rate_8h_pct"), "{:.5f}")
+        if oi:     lines.append(f"  open_interest: {oi} BTC")
+        if fr_pct: lines.append(f"  funding_rate: {fr_pct}%")
+
+    agg_fr = ds.get("aggregate_funding") or {}
+    if isinstance(agg_fr, dict):
+        afr = agg_fr.get("weighted_funding_rate")
+        if isinstance(afr, (int, float)):
+            afr_pct = _fmt_num(afr * 100, "{:.5f}")
+            if afr_pct: lines.append(f"  aggregate_funding_rate: {afr_pct}%")
+
+    al = ds.get("aggregate_liquidations") or {}
+    if isinstance(al, dict):
+        liq = _fmt_num(al.get("total_usd"), "{:.0f}")
+        if liq: lines.append(f"  aggregate_liquidations_usd: ${liq}")
+
+    wf = ds.get("spot_whale_flow") or {}
+    if isinstance(wf, dict):
+        wb = _fmt_num(wf.get("whale_buy_btc"), "{:.2f}")
+        ws = _fmt_num(wf.get("whale_sell_btc"), "{:.2f}")
+        if wb: lines.append(f"  spot_whale_buy_btc: {wb} BTC")
+        if ws: lines.append(f"  spot_whale_sell_btc: {ws} BTC")
+
+    cvd = ds.get("cvd") or {}
+    if isinstance(cvd, dict):
+        pc = _fmt_num(cvd.get("perp_cvd_1h_btc"), "{:.1f}")
+        sc = _fmt_num(cvd.get("spot_cvd_1h_btc"), "{:.1f}")
+        ac = _fmt_num(cvd.get("aggregate_cvd_1h_btc"), "{:.1f}")
+        if pc: lines.append(f"  perp_cvd_1h: {pc} BTC")
+        if sc: lines.append(f"  spot_cvd_1h: {sc} BTC")
+        if ac: lines.append(f"  aggregate_cvd_1h: {ac} BTC")
+
+    spb = ds.get("spot_perp_basis") or {}
+    if isinstance(spb, dict):
+        bp = _fmt_num(spb.get("basis_pct"), "{:.4f}")
+        if bp: lines.append(f"  basis_pct: {bp}%")
+
+    sk = ds.get("deribit_skew_term") or {}
+    if isinstance(sk, dict):
+        rr = _fmt_num(sk.get("rr_25d_30d_pct"), "{:.3f}")
+        iv = _fmt_num(sk.get("iv_30d_atm_pct"), "{:.2f}")
+        if rr: lines.append(f"  rr_25d_30d: {rr}%")
+        if iv: lines.append(f"  iv_30d_atm: {iv}%")
+
+    ls = ds.get("long_short_ratio") or {}
+    if isinstance(ls, dict):
+        lsr = _fmt_num(ls.get("long_short_ratio"), "{:.3f}")
+        if lsr: lines.append(f"  long_short_ratio: {lsr}")
+
+    if not lines:
+        return ""
+    return (
+        "current_live_metrics (live readings for THIS bar — reference these exact\n"
+        "values in conditions[] so the UI can anchor pills to live data):\n"
+        + "\n".join(lines)
+    )
+
+
 def _build_user_prompt(
     pred: dict,
     historical: str,
@@ -503,15 +614,26 @@ def _build_user_prompt(
     historical_context: str = "",
     specialist_signals: Optional[dict] = None,
     ensemble_result: Optional[dict] = None,
+    backend_snapshot: Optional[dict] = None,
 ) -> str:
     """Assemble the INPUT block from the main-page fields. Now forwards more of
     DeepSeek's intelligence than before — specialist_signals (5 strategies),
     ensemble vote, current-bar historical_context, and raised truncation caps
-    so rich sections reach Venice intact."""
+    so rich sections reach Venice intact.
+
+    backend_snapshot: current-bar live metric readings (BSR, OI, funding,
+    whale flow, liquidations, depth, CVD, basis, skew, L/S). Embedded as a
+    `current_live_metrics:` block so every live number becomes an
+    INPUT-verbatim anchor for conditions[] — without this block, Venice
+    can't cite current readings and the UI sees empty conditions."""
     parts = ["INPUT:"]
     signal = (pred.get("signal") or "?").upper()
     parts.append(f"signal: {signal}")
     parts.append(f"confidence: {pred.get('confidence', '?')}")
+
+    live_block = _build_live_metrics_block(backend_snapshot)
+    if live_block:
+        parts.append(live_block)
 
     if ensemble_result and ensemble_result.get("signal"):
         bull = ensemble_result.get("bullish_count", 0)
@@ -812,7 +934,8 @@ def _validate(obj: Any, input_text: str, strict: bool = False) -> Tuple[Optional
     audit = {"dropped_values": [], "dropped_quotes": [],
              "family_mismatch_conditions_cleared": [],
              "fabricated_text_numbers": [], "bullets_dropped": [],
-             "bullets_rescued": [], "missing_quotes_bullets": []}
+             "bullets_rescued": [], "missing_quotes_bullets": [],
+             "heuristic_thresholds_kept": []}
 
     if not isinstance(obj, dict):
         return None, audit
@@ -850,10 +973,15 @@ def _validate(obj: Any, input_text: str, strict: bool = False) -> Tuple[Optional
 
             # STRICT: condition values must be cited. Drop fabricated values
             # immediately on BOTH passes — a wrong pill is always worse than
-            # no pill.
+            # no pill. Heuristic thresholds (rule-of-thumb values not in INPUT)
+            # are KEPT but flagged so the UI can style the pill differently
+            # and the retry loop doesn't treat them as drops.
             conds, drop_notes = _norm_conditions(b.get("conditions"), input_canons, input_raw)
-            if drop_notes:
-                audit["dropped_values"].extend(drop_notes)
+            for n in drop_notes:
+                if n.startswith("heuristic_threshold_kept:"):
+                    audit["heuristic_thresholds_kept"].append(n)
+                else:
+                    audit["dropped_values"].append(n)
 
             # Text fabrication: flag on pass 1, rescue / drop on pass 2.
             text_bad   = _bullet_text_numeric_coherence(text,   input_canons, input_raw)
@@ -1079,6 +1207,7 @@ async def get_or_build(
     historical_context: str = "",
     specialist_signals: Optional[dict] = None,
     ensemble_result: Optional[dict] = None,
+    backend_snapshot: Optional[dict] = None,
 ) -> Optional[dict]:
     """
     Return the cached summary for this bar, or build it once. Returns None on
@@ -1108,6 +1237,7 @@ async def get_or_build(
                 historical_context=historical_context,
                 specialist_signals=specialist_signals or {},
                 ensemble_result=ensemble_result or {},
+                backend_snapshot=backend_snapshot,
             )
             raw = await _call_venice(api_key, model, SYSTEM_PROMPT, user_prompt)
         except Exception as exc:
@@ -1132,7 +1262,11 @@ async def get_or_build(
         completeness = _completeness_score(cleaned, user_prompt)
         retry_reasons: List[str] = []
         if audit["dropped_values"]:
-            retry_reasons.append(f"dropped fabricated condition values: {audit['dropped_values'][:5]}")
+            # Dropped because of: degenerate_trivial_threshold (e.g. OI>0),
+            # magnitude_out_of_range (e.g. open_interest > 0.5 when OI ~96k),
+            # or unit_mismatch (e.g. oi_velocity_pct + unit BTC). These are
+            # wrong-family errors, not heuristic thresholds (those are kept).
+            retry_reasons.append(f"dropped wrong-family condition values: {audit['dropped_values'][:5]}")
         if audit["fabricated_text_numbers"]:
             nums = [n for f in audit["fabricated_text_numbers"] for n in f["nums"]][:5]
             retry_reasons.append(f"bullet/edge text cites numbers not in INPUT: {nums}")

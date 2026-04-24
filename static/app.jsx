@@ -2960,8 +2960,8 @@ function App() {
                            source: { label: "Coinglass", url: "https://www.coinglass.com/FundingRate" } },
       open_interest:     { label: "OI",         layman: "Total open BTC perpetual futures contracts on Binance — proxy for speculative engagement.",
                            source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinOpenInterest" } },
-      rsi:               { label: "RSI",        layman: "Momentum oscillator. >70 overbought (pullback risk), <30 oversold (bounce risk).",
-                           source: null },
+      rsi:               { label: "RSI",        layman: "Momentum oscillator (5m window). >70 overbought (pullback risk), <30 oversold (bounce risk).",
+                           source: { label: "TradingView", url: "https://www.tradingview.com/chart/?symbol=BINANCE%3ABTCUSDT&interval=5" } },
       long_short_ratio:  { label: "L/S",        layman: "Retail longs vs shorts on Binance futures. Often a contrarian indicator at extremes.",
                            source: { label: "Coinglass", url: "https://www.coinglass.com/LongShortRatio" } },
       basis_pct:             { label: "basis",           layman: "Spot-perp premium. Positive = perp trades above spot (bullish speculation).",
@@ -2991,33 +2991,90 @@ function App() {
       oi_velocity_pct:       { label: "OI velocity",     layman: "% change in open interest over 30 min — new positioning entering or exiting.",
                                source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinOpenInterest" } },
     };
+    // Text → signal-family map (mirrors server-side _TEXT_SIGNAL_FAMILIES in
+    // trader_summary.py). When a bullet has conditions:[] but its text names
+    // a known signal, we synthesize an info-only pill from the first matched
+    // family member so the trader still sees live value + source link
+    // instead of a "? UNKNOWN" badge.
+    const TEXT_FAMILY_RULES = [
+      { rx: /\bwhale\b/i,                        metrics: ["spot_whale_buy_btc", "spot_whale_sell_btc"] },
+      { rx: /\btaker (buy|sell) (volume|flow)\b/i, metrics: ["taker_ratio", "taker_buy_volume", "taker_sell_volume"] },
+      { rx: /\bBSR\b|taker ratio/i,              metrics: ["taker_ratio"] },
+      { rx: /\b(bid|ask) (imbalance|depth|wall)\b/i, metrics: ["bid_imbalance", "bid_depth_05pct", "ask_depth_05pct"] },
+      { rx: /\bfunding\b/i,                      metrics: ["funding_rate", "aggregate_funding_rate"] },
+      { rx: /\bOI\s+velocity\b|\bOI\s+(flips?|change|turns?|rising|falling|accelerat\w*)\b/i,
+        metrics: ["oi_velocity_pct"] },
+      { rx: /\bopen interest\b|\bOI\b/i,         metrics: ["open_interest", "oi_velocity_pct"] },
+      { rx: /\bliquidations?\b/i,                metrics: ["aggregate_liquidations_usd"] },
+      { rx: /\bRSI\b/i,                          metrics: ["rsi"] },
+      { rx: /\blong\/short\b|\bL\/S ratio\b/i,   metrics: ["long_short_ratio"] },
+      { rx: /\bCVD\b/i,                          metrics: ["aggregate_cvd_1h", "perp_cvd_1h", "spot_cvd_1h"] },
+      { rx: /\bbasis\b/i,                        metrics: ["basis_pct"] },
+      { rx: /\b(IV|implied vol|skew|risk[- ]reversal)\b/i, metrics: ["iv_30d_atm", "rr_25d_30d"] },
+    ];
+    const inferMetricsFromText = (text) => {
+      if (!text) return [];
+      const found = new Set();
+      for (const { rx, metrics } of TEXT_FAMILY_RULES) {
+        if (rx.test(text)) {
+          for (const m of metrics) {
+            if (metric(m) != null) { found.add(m); break; } // first live one per family
+          }
+        }
+      }
+      return [...found];
+    };
     const ConditionPill = ({ cond, stableMet }) => {
       const live = metric(cond.metric);
+      const heuristic = !!cond.heuristic;
+      const infoOnly  = !!cond.__infoOnly;
       const thresholdStr = live ? live.f(cond.value) : `${cond.value}${cond.unit||""}`;
-      const rawMet = live ? opCheck[cond.op](live.v, cond.value) : null;
-      const isMet = (stableMet !== undefined && stableMet !== null) ? stableMet : rawMet;
+      const rawMet = (live && !infoOnly) ? opCheck[cond.op](live.v, cond.value) : null;
+      const isMet = infoOnly ? null
+                  : (stableMet !== undefined && stableMet !== null) ? stableMet : rawMet;
       const ok = isMet === true;
       const bad = isMet === false;
-      const borderC = ok ? C.green : bad ? C.red : C.borderSoft;
-      const bgC     = ok ? C.greenBg : bad ? C.redBg : "#F5F5F4";
-      const fgC     = ok ? "#166534" : bad ? "#991B1B" : C.textSec;
-      const icon = !live        ? "ⓘ"
+      // Heuristic thresholds: green/red still indicates met/unmet, but the
+      // border is dashed to signal "rule of thumb, not a live-anchored level".
+      // Info-only pills (no threshold, text-inferred): neutral grey always.
+      const borderC = infoOnly ? C.borderSoft
+                    : ok ? C.green : bad ? C.red : C.borderSoft;
+      const bgC     = infoOnly ? "#F5F5F4"
+                    : ok ? C.greenBg : bad ? C.redBg : "#F5F5F4";
+      const fgC     = infoOnly ? C.textSec
+                    : ok ? "#166534" : bad ? "#991B1B" : C.textSec;
+      const icon = infoOnly     ? "ⓘ"
+                 : !live        ? "ⓘ"
                  : cond.op === ">" || cond.op === ">=" ? "▲"
                  : cond.op === "<" || cond.op === "<=" ? "▼"
                  : "●";
       const meta    = METRIC_META[cond.metric] || {};
       const labelText = meta.label || cond.metric.replace(/_/g," ");
+      const borderStyle = (heuristic && !infoOnly) ? "dashed" : "solid";
       return (
         <span style={{ display:"inline-flex", flexDirection:"column", gap:2 }}>
           <span style={{ display:"inline-flex", alignItems:"center", gap:7,
             fontSize:13, fontWeight:700, padding:"4px 10px", borderRadius:5,
-            background: bgC, color: fgC, border:`1px solid ${borderC}` }}>
+            background: bgC, color: fgC, border:`1px ${borderStyle} ${borderC}` }}>
             <span style={{ fontSize:15, fontWeight:900 }}>{icon}</span>
-            <span>{labelText} {cond.op}{" "}
-              <strong style={{ fontSize:17, color:C.text }}>{thresholdStr}</strong>
-            </span>
+            {infoOnly ? (
+              <span>{labelText} · live reading</span>
+            ) : (
+              <span>{labelText} {cond.op}{" "}
+                <strong style={{ fontSize:17, color:C.text }}>{thresholdStr}</strong>
+                {heuristic && (
+                  <span title="Rule-of-thumb threshold from DeepSeek — not a live-anchored level"
+                        style={{ marginLeft:5, fontSize:9, fontWeight:900, letterSpacing:0.6,
+                          color:C.muted, background:"#FFFFFF",
+                          border:`1px dashed ${C.borderSoft}`, borderRadius:3,
+                          padding:"0 4px", textTransform:"uppercase" }}>
+                    rule of thumb
+                  </span>
+                )}
+              </span>
+            )}
             {live ? (
-              <span style={{ color:C.muted, fontWeight:600 }}>· now{" "}
+              <span style={{ color:C.muted, fontWeight:600 }}>{infoOnly ? "" : "· "}now{" "}
                 <strong style={{ color:C.text, fontWeight:900, fontSize:17 }}>{live.f(live.v)}</strong>
               </span>
             ) : (
@@ -3062,19 +3119,42 @@ function App() {
       return t.committed;
     };
     const evalBullet = (b) => {
-      const results = (b.conditions || []).map((c) => {
+      const realConds = Array.isArray(b.conditions) ? b.conditions : [];
+      // If Venice shipped no conditions but the bullet text names a signal
+      // family, synthesize info-only pills so the user always sees live
+      // value + source for every metric the prose references.
+      let effectiveConds = realConds;
+      let inferred = false;
+      if (realConds.length === 0) {
+        const combined = `${b.text || ""} ${b.if_met || ""}`;
+        const inferredMetrics = inferMetricsFromText(combined);
+        if (inferredMetrics.length > 0) {
+          effectiveConds = inferredMetrics.map((m) => ({
+            metric: m, op: "==", value: 0, unit: "", __infoOnly: true,
+          }));
+          inferred = true;
+        }
+      }
+      const results = effectiveConds.map((c) => {
+        if (c.__infoOnly) return { raw: null, stable: null };
         const live = metric(c.metric);
         const raw  = live ? opCheck[c.op](live.v, c.value) : null;
         if (raw === null) return { raw: null, stable: null };
         const key  = `${b.text || ""}|${c.metric}|${c.op}|${c.value}`;
         return { raw, stable: stableMet(key, raw) };
       });
-      const hasConds = results.length > 0;
-      const allMet = hasConds && results.every(r => r.stable === true);
-      const actionable = !hasConds || allMet;
-      return { ...b, __allMet: allMet, __hasConds: hasConds, __actionable: actionable, __condResults: results };
+      const hasRealConds = realConds.length > 0;
+      const allMet = hasRealConds && results.every(r => r.stable === true);
+      // Narrative-only bullets (no machine-checkable threshold) are no longer
+      // falsely marked "actionable · live now". They show as info context.
+      const actionable = hasRealConds && allMet;
+      return { ...b,
+        conditions: effectiveConds,
+        __allMet: allMet, __hasConds: hasRealConds,
+        __inferred: inferred, __actionable: actionable,
+        __condResults: results };
     };
-    const Bullet = ({ tone, text, conditions, if_met, __allMet, __hasConds, __actionable, __condResults }) => {
+    const Bullet = ({ tone, text, conditions, if_met, __allMet, __hasConds, __actionable, __inferred, __condResults }) => {
       const fired     = __allMet;
       const active    = __actionable;
       const phrase         = `${if_met || ""} ${text || ""}`.toLowerCase();
@@ -3083,11 +3163,11 @@ function App() {
       const directional    = DIRECTIONAL_RE.test(phrase) && !NEUTRAL_RE.test(phrase);
       const firedBull = active && tone === "bullish" && directional;
       const firedBear = active && tone === "bearish" && directional;
-      const pureInfo = active && !__hasConds && tone === "neutral";
+      const narrative = !__hasConds;  // no machine-checkable thresholds at all
       let bg, border, leftBar, msgColor, actionLabel, actionIcon;
       if (firedBull)       { bg = "#ECFDF5"; border = C.green;        leftBar = C.green;  msgColor = "#15803D"; actionLabel = "BUY";   actionIcon = "▲"; }
       else if (firedBear)  { bg = "#FEF2F2"; border = C.red;          leftBar = C.red;    msgColor = "#B91C1C"; actionLabel = "SELL";  actionIcon = "▼"; }
-      else if (pureInfo)   { bg = "#F5F5F4"; border = C.borderSoft;   leftBar = C.muted;  msgColor = "#57534E"; actionLabel = "INFO";  actionIcon = "ⓘ"; }
+      else if (narrative)  { bg = "#F5F5F4"; border = C.borderSoft;   leftBar = C.muted;  msgColor = "#57534E"; actionLabel = "INFO";  actionIcon = "ⓘ"; }
       else if (active)     { bg = "#F5F5F4"; border = C.borderSoft;   leftBar = C.muted;  msgColor = "#57534E"; actionLabel = "PAUSE"; actionIcon = "⏸"; }
       else                 { bg = "#FAFAF9"; border = C.borderSoft;   leftBar = C.muted;  msgColor = C.muted;   actionLabel = null;    actionIcon = "⏸"; }
       return (
@@ -3143,8 +3223,17 @@ function App() {
               );
             })()}
           </div>
-          {__hasConds && (
+          {(conditions && conditions.length > 0) && (
             <div style={{ display:"flex", flexWrap:"wrap", gap:5, marginLeft:28 }}>
+              {__inferred && (
+                <span title="Bullet prose names these signals; pill synthesized from text so you still see live value + source."
+                      style={{ fontSize:9, fontWeight:800, color:C.muted, letterSpacing:1,
+                        padding:"2px 7px", border:`1px dashed ${C.borderSoft}`,
+                        borderRadius:3, background:"#FFFFFF", alignSelf:"center",
+                        textTransform:"uppercase" }}>
+                  inferred from text
+                </span>
+              )}
               {conditions.map((c, i) => (
                 <ConditionPill key={i} cond={c}
                   stableMet={(__condResults && __condResults[i]) ? __condResults[i].stable : undefined} />
@@ -3155,7 +3244,7 @@ function App() {
             <div style={{ marginLeft:28, marginTop:3, lineHeight:1.4,
               display:"flex", flexWrap:"wrap", alignItems:"baseline", gap:6 }}>
               <span style={{ fontSize:15, fontWeight:900, color:C.text, letterSpacing:0.3 }}>
-                {fired ? "→ what this means:" : "→ if conditions fire:"}
+                {fired ? "→ what this means:" : narrative ? "→ context:" : "→ if conditions fire:"}
               </span>
               <span style={{
                 fontSize: fired ? 14 : 12,
@@ -3192,7 +3281,12 @@ function App() {
                 ...(traderSummary.actions || []).map(b => ({ ...b, __src: "a" })),
               ].map(evalBullet);
               const actionable = all.filter(b => b.__actionable);
-              const waiting    = all.filter(b => !b.__actionable);
+              // Info bullets: no machine-checkable threshold at all (either
+              // pure narrative or only inferred info-pills). These used to be
+              // lumped into "Actionable · live now" — misleading since there's
+              // nothing firing. Split into a dedicated context section.
+              const info       = all.filter(b => !b.__actionable && !b.__hasConds);
+              const waiting    = all.filter(b => !b.__actionable && b.__hasConds);
               return (<>
                 {actionable.length > 0 && (
                   <div style={{ marginTop:10 }}>
@@ -3200,6 +3294,17 @@ function App() {
                       textTransform:"uppercase", marginBottom:6 }}>Actionable · {actionable.length} live now</div>
                     <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                       {actionable.map((b, i) => <Bullet key={`act${b.__src}${i}`} {...b} />)}
+                    </div>
+                  </div>
+                )}
+                {info.length > 0 && (
+                  <div style={{ marginTop:12 }}>
+                    <div style={{ fontSize:11, fontWeight:800, color:"#57534E", letterSpacing:1.2,
+                      textTransform:"uppercase", marginBottom:6 }}>
+                      Info · live context · {info.length}
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                      {info.map((b, i) => <Bullet key={`info${b.__src}${i}`} {...b} />)}
                     </div>
                   </div>
                 )}
