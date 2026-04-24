@@ -58,6 +58,21 @@ HARD RULES:
 - Each bullet <= 2 sentences. No hedging, no meta-commentary, no "the model says".
 - watch: max 4 bullets. actions: max 3 bullets.
 
+SCOPE-MATCHING (CRITICAL):
+- Every metric in the INPUT is scope-tagged (e.g. "Binance-perp 5m", "aggregate 5-venue
+  0.5% band", "daily macro"). Do NOT compare metrics across incompatible scopes in the
+  same bullet. Examples of INVALID comparisons to avoid:
+    * Aggregate book depth (hundreds of BTC, multi-venue) vs single-venue 5m taker flow
+    * Single-exchange OI vs cross-exchange liquidations
+    * Daily F&G/SOPR/MVRV as if they were bar-level triggers
+- When referencing a number from INPUT, preserve its scope in your text. A "bid wall"
+  must cite the depth band it was measured in ("within 0.5% of mid, across N venues").
+- Bar-level conditions in `watch`/`actions` MUST use metrics that actually change
+  bar-to-bar: price, price_change_pct, taker_buy_volume, taker_sell_volume, taker_ratio,
+  bid_imbalance, ask_imbalance, funding_rate, open_interest, rsi, long_short_ratio,
+  basis_pct, cvd_1h, rr_25d_30d. Metrics flagged as "MACRO CONTEXT" or "daily" in the
+  INPUT may only appear in `edge` as background, never in `conditions`.
+
 CONDITIONS — machine-checkable thresholds that back the bullet:
 - If the bullet's text references a threshold ("breaks $78,288", "taker volume above 5 BTC",
   "RSI below 30", "funding above 0.02%"), add a matching "conditions" entry so the UI
@@ -66,7 +81,8 @@ CONDITIONS — machine-checkable thresholds that back the bullet:
   (percent move from the current bar's open; use this for thresholds like
   "moves more than 0.2%"), taker_buy_volume, taker_sell_volume, taker_volume,
   taker_ratio, bid_imbalance, ask_imbalance, funding_rate, open_interest, rsi,
-  long_short_ratio.
+  long_short_ratio, basis_pct, perp_cvd_1h, spot_cvd_1h, aggregate_cvd_1h,
+  bid_depth_05pct, ask_depth_05pct, rr_25d_30d, iv_30d_atm.
 - "op" must be one of: ">", ">=", "<", "<=", "==".
 - "value" must be a plain number (no strings, no ranges). For "between X and Y", emit TWO
   conditions: one with op ">=" X and one with op "<=" Y.
@@ -87,6 +103,10 @@ _VALID_METRICS = {
     "taker_buy_volume", "taker_sell_volume", "taker_volume",
     "taker_ratio", "bid_imbalance", "ask_imbalance",
     "funding_rate", "open_interest", "rsi", "long_short_ratio",
+    # Phase 2.5 / 6.5 additions: bar-level metrics only
+    "basis_pct", "perp_cvd_1h", "spot_cvd_1h", "aggregate_cvd_1h",
+    "bid_depth_05pct", "ask_depth_05pct",
+    "rr_25d_30d", "iv_30d_atm",
 }
 _VALID_OPS = {">", ">=", "<", "<=", "=="}
 

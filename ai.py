@@ -529,11 +529,11 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
         lines += [f"  [LONG/SHORT RATIO] unavailable — {ls.get('interpretation','fetch failed')}", ""]
     elif ls:
         lines += [
-            "  [LONG / SHORT RATIO — Binance Futures 5m]",
-            f"  Retail     : L/S = {ls.get('retail_lsr',1):.3f}   Long {ls.get('retail_long_pct',50):.1f}%  /  Short {ls.get('retail_short_pct',50):.1f}%   "
+            "  [LONG / SHORT RATIO — Binance Futures 5m · account-count based, Binance-only]",
+            f"  All accounts : L/S = {ls.get('retail_lsr',1):.3f}   Long {ls.get('retail_long_pct',50):.1f}%  /  Short {ls.get('retail_short_pct',50):.1f}%   "
             f"Contrarian signal: {ls.get('retail_signal_contrarian','NEUTRAL')}{_acc_tag('long_short')}",
-            f"  Smart money: Long {ls.get('smart_money_long_pct',50):.1f}%  /  Short {ls.get('smart_money_short_pct',50):.1f}%   "
-            f"Signal: {ls.get('smart_money_signal','NEUTRAL')}   Divergence vs retail: {ls.get('smart_vs_retail_div_pct',0):+.1f}%",
+            f"  Top 20% by margin: Long {ls.get('top_accounts_long_pct', ls.get('smart_money_long_pct',50)):.1f}%  /  Short {ls.get('top_accounts_short_pct', ls.get('smart_money_short_pct',50)):.1f}%   "
+            f"Signal: {ls.get('top_accounts_signal', ls.get('smart_money_signal','NEUTRAL'))}   Divergence vs all: {ls.get('top_vs_all_div_pct', ls.get('smart_vs_retail_div_pct',0)):+.1f}%",
             f"  → {ls.get('interpretation','')}", "",
         ]
     else:
@@ -636,7 +636,7 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
         ("kraken_premium",     "[KRAKEN PREMIUM — Kraken vs OKX institutional spread]"),
         ("oi_velocity",        "[OI VELOCITY — Binance Futures OI change rate over 30 min]"),
         ("spot_whale_flow",    "[SPOT WHALE FLOW — Binance spot aggTrades ≥5 BTC]"),
-        ("bybit_liquidations", "[BYBIT LIQUIDATIONS — cross-exchange cascade validation]"),
+        ("bybit_liquidations", "[OKX ISOLATED-MARGIN LIQUIDATIONS — independent cross-margin validation]"),
         ("okx_funding",        "[OKX FUNDING RATE — independent cross-exchange funding]"),
         ("btc_dominance",      "[BTC DOMINANCE — CoinGecko global market share]"),
         ("top_position_ratio", "[TOP TRADER POSITION RATIO — Binance Futures notional-weighted]"),
@@ -696,7 +696,7 @@ def _build_dashboard_accuracy_block(dashboard_accuracy):
         "mempool": "Mempool", "coinalyze": "Coinalyze", "coingecko": "CoinGecko",
         "deribit_dvol": "Deribit DVOL",
         "kraken_premium": "Kraken Premium", "oi_velocity": "OI Velocity",
-        "spot_whale_flow": "Spot Whale Flow", "bybit_liquidations": "Bybit Liquidations",
+        "spot_whale_flow": "Spot Whale Flow", "bybit_liquidations": "OKX Isolated Liqs",
         "okx_funding": "OKX Funding", "btc_dominance": "BTC Dominance",
         "top_position_ratio": "Top Position Ratio", "funding_trend": "Funding Rate Trend",
         "deribit_options": "Deribit Options P/C", "btc_onchain": "BTC On-Chain SOPR",
@@ -968,6 +968,18 @@ You are NOT a vote-tallier. You synthesize evidence from independent specialists
 microstructure expert, historical similarity analyst, unified technical analyst, ensemble vote)
 into a single probabilistic call. Each specialist is fallible in predictable ways; your job is
 to know which one's call to trust when they disagree.
+
+SOURCE DISCIPLINE (critical for client-facing output):
+- Every data block in this prompt is scope-tagged and followed by a "source:" line naming the
+  exact API/venue the number came from. Example scope labels you will see:
+    "Binance-perp 5m", "aggregate 5-venue 0.5% band", "OKX cross-margin USD"
+- When you reference a number in your reasoning or narrative, preserve its scope. Do NOT
+  compare numbers from incompatible scopes in the same claim. A bid-wall depth number is
+  aggregated across venues within a price band; a taker-flow number is 5-min flow on ONE
+  venue. Saying "X bid wall absorbed by Y taker surge" only makes sense if X and Y are from
+  comparable scopes — otherwise describe each separately.
+- Treat "MACRO CONTEXT" items (Fear & Greed, SOPR, MVRV, BTC dominance) as slow-moving
+  regime context only. Do NOT cite them as evidence for a 5-minute directional move.
 
 PAYOFF: Correct UP/DOWN = +1. Wrong UP/DOWN = −1. NEUTRAL = 0. NEUTRAL is not a free win — it is
 a deliberate choice to preserve capital when the data genuinely does not support either side. Every
@@ -1821,7 +1833,7 @@ def _bar_embed_text(record: Dict) -> str:
         ("kraken_premium","Kraken BTC premium"),
         ("oi_velocity","Open interest velocity"),
         ("spot_whale_flow","Spot whale order flow"),
-        ("bybit_liquidations","Bybit liquidation cascade"),
+        ("bybit_liquidations","OKX isolated-margin liquidations"),
         ("top_position_ratio","Top trader position ratio"),
         ("funding_trend","Funding rate trend"),
     ]
@@ -2152,9 +2164,26 @@ def _build_current_bar(
     if len(vol_parts) > 1:
         parts.append(" ".join(vol_parts))
 
-    # ── Microstructure (raw values + fetcher interpretations) ─────────────
+    # ── BAR-LEVEL microstructure (actionable signals — change every 5 min) ─
+    # Every block is followed by a "source:" line so DeepSeek can cite the
+    # venue/API each number came from. Keys map to signals.SIGNAL_SOURCES.
+    def _src(key: str) -> str:
+        v = (dash.get(key) or {}).get("source") if isinstance(dash.get(key), dict) else None
+        if not v: return ""
+        return f" [source: {v.get('scope','')} — {v.get('api','')}]"
+
     ob = dash.get("order_book") or {}
-    if ob.get("imbalance_pct") is not None:
+    if ob.get("bid_depth_05pct_btc") is not None:
+        venues = ob.get("venues_included") or []
+        parts.append(
+            f"ORDER BOOK DEPTH ({len(venues)}-venue aggregate, 0.5% band around ${ob.get('mid_usd','?')}): "
+            f"{ob.get('bid_depth_05pct_btc','?')} BTC bids vs {ob.get('ask_depth_05pct_btc','?')} BTC asks "
+            f"(imbalance {ob.get('imbalance_05pct_pct',0):+.2f}%). "
+            f"1.0% band: {ob.get('bid_depth_1pct_btc','?')} bids / {ob.get('ask_depth_1pct_btc','?')} asks. "
+            f"{ob.get('interpretation','')}{_src('order_book')}".strip()
+        )
+    elif ob.get("imbalance_pct") is not None:
+        # Back-compat for older single-venue payloads in transition
         parts.append(
             f"ORDER BOOK: {ob.get('bid_vol_btc','?')} BTC bid vs {ob.get('ask_vol_btc','?')} BTC ask, "
             f"imbalance {ob.get('imbalance_pct'):+.2f}%. {ob.get('interpretation','')}".strip()
@@ -2162,37 +2191,95 @@ def _build_current_bar(
     tf = dash.get("taker_flow") or {}
     if tf.get("buy_sell_ratio") is not None:
         parts.append(
-            f"TAKER FLOW: BSR {tf.get('buy_sell_ratio'):.3f} "
+            f"TAKER FLOW (Binance-perp 5m): BSR {tf.get('buy_sell_ratio'):.3f} "
             f"({tf.get('taker_buy_vol_btc','?')} BTC aggressive buys vs {tf.get('taker_sell_vol_btc','?')} BTC aggressive sells over last 3 bars). "
-            f"3-bar trend: {tf.get('trend_3bars','?')}. {tf.get('interpretation','')}".strip()
+            f"3-bar trend: {tf.get('trend_3bars','?')}. {tf.get('interpretation','')}{_src('taker_flow')}".strip()
+        )
+    cvd = dash.get("cvd") or {}
+    if cvd.get("aggregate_cvd_1h_btc") is not None:
+        parts.append(
+            f"CVD (1h Binance spot+perp): aggregate {cvd.get('aggregate_cvd_1h_btc'):+.0f} BTC, "
+            f"perp {cvd.get('perp_cvd_1h_btc',0):+.0f} / spot {cvd.get('spot_cvd_1h_btc',0):+.0f}, "
+            f"spot-perp divergence {cvd.get('spot_perp_divergence_btc',0):+.0f} BTC. "
+            f"{cvd.get('interpretation','')}{_src('cvd')}".strip()
+        )
+    spb = dash.get("spot_perp_basis") or {}
+    if spb.get("basis_pct") is not None:
+        parts.append(
+            f"SPOT-PERP BASIS: {spb.get('basis_pct'):+.3f}% ({spb.get('basis_usd',0):+.2f} USD, "
+            f"perp ${spb.get('perp_mark','?')} vs spot ${spb.get('spot_mid','?')}). "
+            f"{spb.get('interpretation','')}{_src('spot_perp_basis')}".strip()
         )
     swf = dash.get("spot_whale_flow") or {}
     if swf.get("whale_buy_btc") is not None:
+        venues_data = swf.get("venues_with_data") or []
         parts.append(
-            f"SPOT WHALE FLOW: {swf.get('whale_buy_btc','?')} BTC whale buys, {swf.get('whale_sell_btc','?')} BTC whale sells "
-            f"({swf.get('whale_buy_pct','?')}% buy-side). {swf.get('interpretation','')}".strip()
+            f"SPOT WHALE FLOW (5m, ≥0.5 BTC, {','.join(venues_data) or 'no venues'}): "
+            f"{swf.get('whale_buy_btc','?')} BTC buys / {swf.get('whale_sell_btc','?')} BTC sells "
+            f"({swf.get('whale_buy_pct','?')}% buy-side, {swf.get('whale_trade_count',0)} trades). "
+            f"{swf.get('interpretation','')}{_src('spot_whale_flow')}".strip()
         )
     oif = dash.get("oi_funding") or {}
     if oif.get("funding_rate_8h_pct") is not None:
         parts.append(
-            f"OPEN INTEREST & FUNDING: OI {oif.get('open_interest_btc','?')} BTC, 8h funding {oif.get('funding_rate_8h_pct'):+.4f}%, "
+            f"OPEN INTEREST & FUNDING (Binance-perp): OI {oif.get('open_interest_btc','?')} BTC, 8h funding {oif.get('funding_rate_8h_pct'):+.4f}%, "
             f"mark premium vs index {oif.get('mark_premium_vs_index_pct',0):+.4f}%. "
-            f"{oif.get('interpretation','')}".strip()
+            f"{oif.get('interpretation','')}{_src('oi_funding')}".strip()
+        )
+    cza = dash.get("coinalyze_aggregate") or {}
+    if cza.get("agg_oi_usd"):
+        span = cza.get("agg_oi_change_span_min", 0)
+        chg  = cza.get("agg_oi_change_pct")
+        chg_txt = f", {chg:+.3f}% over {span:.0f}min" if chg is not None else ""
+        parts.append(
+            f"AGGREGATE OI ({cza.get('agg_oi_venues_count',0)}-venue, Coinalyze): "
+            f"${cza.get('agg_oi_usd',0):,.0f}{chg_txt}. "
+            f"Liquidations 5m: long ${cza.get('agg_long_liq_usd_5m',0):,.0f} / short ${cza.get('agg_short_liq_usd_5m',0):,.0f}. "
+            f"{cza.get('interpretation','')}{_src('coinalyze_aggregate')}".strip()
         )
     oiv = dash.get("oi_velocity") or {}
     if oiv.get("oi_change_30m_pct") is not None:
         parts.append(
-            f"OI VELOCITY: 30-minute OI change {oiv.get('oi_change_30m_pct'):+.3f}%, 1-bar {oiv.get('oi_change_1bar_pct',0):+.3f}%. "
-            f"{oiv.get('interpretation','')}".strip()
+            f"OI VELOCITY (Binance-perp): 30-minute OI change {oiv.get('oi_change_30m_pct'):+.3f}%, 1-bar {oiv.get('oi_change_1bar_pct',0):+.3f}%. "
+            f"{oiv.get('interpretation','')}{_src('oi_velocity')}".strip()
         )
     cz = dash.get("coinalyze") or {}
     if cz.get("funding_rate_pct") is not None:
         parts.append(
-            f"CROSS-EXCHANGE AGGREGATE FUNDING: {cz.get('funding_rate_pct'):+.4f}% (Coinalyze). {cz.get('interpretation','')}".strip()
+            f"CROSS-EXCHANGE FUNDING (Coinalyze aggregate): {cz.get('funding_rate_pct'):+.4f}%. {cz.get('interpretation','')}{_src('coinalyze')}".strip()
         )
+    dst = dash.get("deribit_skew_term") or {}
+    if dst.get("data_available") and (dst.get("rr_25d_30d_pct") is not None or dst.get("iv_30d_atm_pct") is not None):
+        parts.append(f"DERIBIT OPTIONS SKEW/TERM: {dst.get('interpretation','')}{_src('deribit_skew_term')}".strip())
+
+    # ── MACRO CONTEXT (daily / multi-hour cadence — NOT bar-level triggers) ─
+    macro_parts = []
     fg = dash.get("fear_greed") or {}
-    if fg.get("index") is not None:
-        parts.append(f"FEAR & GREED: {fg.get('index')}/100 ({fg.get('classification','?')}). {fg.get('interpretation','')}".strip())
+    if fg.get("index") is not None or fg.get("value") is not None:
+        fg_val = fg.get("index", fg.get("value"))
+        macro_parts.append(
+            f"Fear & Greed {fg_val}/100 ({fg.get('classification', fg.get('label','?'))}, daily). "
+            f"{fg.get('interpretation','')}".strip()
+        )
+    oc = dash.get("btc_onchain") or {}
+    if oc.get("sopr") is not None:
+        macro_parts.append(
+            f"SOPR {oc.get('sopr'):.4f} (daily, {oc.get('sopr_date','?')}), "
+            f"MVRV Z-Score {oc.get('mvrv_zscore','?')} (daily, {oc.get('mvrv_date','?')}). "
+            f"{oc.get('sopr_interpretation','')}".strip()
+        )
+    dom = dash.get("btc_dominance") or {}
+    if dom.get("btc_dominance_pct") is not None:
+        macro_parts.append(
+            f"BTC dominance {dom.get('btc_dominance_pct')}% (CoinGecko, hourly). "
+            f"24h market cap change {dom.get('market_change_24h_pct',0):+.2f}%."
+        )
+    if macro_parts:
+        parts.append(
+            "MACRO CONTEXT (slow-moving regime signals; do NOT treat these as "
+            "5-minute triggers — they barely move bar-to-bar): "
+            + " ".join(macro_parts)
+        )
 
     # ── Strategies, specialists, ensemble (prose summary) ─────────────────
     votes = current_strategy_votes or {}
@@ -2463,14 +2550,33 @@ def _build_binance_expert_block(ds: Optional[Dict]) -> str:
     if not ds:
         return "  (no Binance data available this bar)"
 
+    def _src_line(key: str) -> Optional[str]:
+        blk = ds.get(key)
+        if not isinstance(blk, dict): return None
+        src = blk.get("source")
+        if not src: return None
+        return f"  source: {src.get('api','')}   chart: {src.get('chart','')}"
+
     lines = []
 
     ob = ds.get("order_book") or {}
     if ob.get("data_available") is False or ob.get("signal") == "UNAVAILABLE":
-        lines += [f"[ORDER BOOK — Binance spot, top-20 levels] unavailable — {ob.get('interpretation','fetch failed')}", ""]
-    elif ob:
+        lines += [f"[ORDER BOOK DEPTH — multi-venue %-band] unavailable — {ob.get('interpretation','fetch failed')}", ""]
+    elif ob and ob.get("bid_depth_05pct_btc") is not None:
+        venues = ob.get("venues_included") or []
         lines += [
-            "[ORDER BOOK — Binance spot, top-20 levels]",
+            f"[ORDER BOOK DEPTH — aggregated across {len(venues)} venues: {', '.join(venues)}, around mid ${ob.get('mid_usd',0):,.0f}]",
+            f"  Within 0.25%: {ob.get('bid_depth_025pct_btc',0):.1f} bids / {ob.get('ask_depth_025pct_btc',0):.1f} asks BTC",
+            f"  Within 0.5%:  {ob.get('bid_depth_05pct_btc',0):.1f} bids / {ob.get('ask_depth_05pct_btc',0):.1f} asks BTC (imbalance {ob.get('imbalance_05pct_pct',0):+.2f}%)",
+            f"  Within 1.0%:  {ob.get('bid_depth_1pct_btc',0):.1f} bids / {ob.get('ask_depth_1pct_btc',0):.1f} asks BTC (imbalance {ob.get('imbalance_1pct_pct',0):+.2f}%)",
+            f"  Signal: {ob.get('signal', 'NEUTRAL')} — {ob.get('interpretation', '')}",
+            _src_line("order_book") or "",
+            "",
+        ]
+    elif ob:
+        # Back-compat for older payloads
+        lines += [
+            "[ORDER BOOK — legacy single-venue top-N]",
             f"  Bid vol: {ob.get('bid_vol_btc', 0):.1f} BTC  Ask vol: {ob.get('ask_vol_btc', 0):.1f} BTC  Imbalance: {ob.get('imbalance_pct', 0):+.2f}%",
             f"  Signal: {ob.get('signal', 'NEUTRAL')} — {ob.get('interpretation', '')}",
             "",
@@ -2481,11 +2587,12 @@ def _build_binance_expert_block(ds: Optional[Dict]) -> str:
         lines += [f"[LONG/SHORT RATIO — Binance Futures 5m] unavailable — {ls.get('interpretation','fetch failed')}", ""]
     elif ls:
         lines += [
-            "[LONG/SHORT RATIO — Binance Futures 5m]",
-            f"  Retail L/S: {ls.get('retail_lsr', 1):.3f}  Long {ls.get('retail_long_pct', 50):.1f}% / Short {ls.get('retail_short_pct', 50):.1f}%  Contrarian: {ls.get('retail_signal_contrarian', 'NEUTRAL')}",
-            f"  Smart money: Long {ls.get('smart_money_long_pct', 50):.1f}% / Short {ls.get('smart_money_short_pct', 50):.1f}%  Signal: {ls.get('smart_money_signal', 'NEUTRAL')}",
-            f"  Smart vs retail divergence: {ls.get('smart_vs_retail_div_pct', 0):+.1f}%",
+            "[LONG/SHORT RATIO — Binance Futures 5m · account-count based, Binance-only]",
+            f"  All accounts L/S: {ls.get('retail_lsr', 1):.3f}  Long {ls.get('retail_long_pct', 50):.1f}% / Short {ls.get('retail_short_pct', 50):.1f}%  Contrarian: {ls.get('retail_signal_contrarian', 'NEUTRAL')}",
+            f"  Top 20% by margin: Long {ls.get('top_accounts_long_pct', ls.get('smart_money_long_pct',50)):.1f}% / Short {ls.get('top_accounts_short_pct', ls.get('smart_money_short_pct',50)):.1f}%  Signal: {ls.get('top_accounts_signal', ls.get('smart_money_signal','NEUTRAL'))}",
+            f"  Top-vs-all divergence: {ls.get('top_vs_all_div_pct', ls.get('smart_vs_retail_div_pct',0)):+.1f}%",
             f"  → {ls.get('interpretation', '')}",
+            _src_line("long_short") or "",
             "",
         ]
 
@@ -2498,6 +2605,7 @@ def _build_binance_expert_block(ds: Optional[Dict]) -> str:
             f"  Buy/sell ratio: {tk.get('buy_sell_ratio', 1):.4f}  Taker buys: {tk.get('taker_buy_vol_btc', 0):.1f} BTC  Taker sells: {tk.get('taker_sell_vol_btc', 0):.1f} BTC",
             f"  Signal: {tk.get('signal', 'NEUTRAL')}  3-bar trend: {tk.get('trend_3bars', 'MIXED')}",
             f"  → {tk.get('interpretation', '')}",
+            _src_line("taker_flow") or "",
             "",
         ]
 
@@ -2509,20 +2617,100 @@ def _build_binance_expert_block(ds: Optional[Dict]) -> str:
             "[OPEN INTEREST + FUNDING — Binance perpetual]",
             f"  OI: {oif.get('open_interest_btc', 0):,.0f} BTC  Funding (8h): {oif.get('funding_rate_8h_pct', 0):+.5f}%  [{oif.get('funding_signal', 'NEUTRAL')}]",
             f"  Mark: ${oif.get('mark_price', 0):,.2f}  Index: ${oif.get('index_price', 0):,.2f}  Premium: {oif.get('mark_premium_vs_index_pct', 0):+.4f}%  [{oif.get('premium_signal', 'NEUTRAL')}]",
+            _src_line("oi_funding") or "",
+            "",
+        ]
+
+    # ── Bar-level signals (new + existing) ──────────────────────────────
+    spb = ds.get("spot_perp_basis") or {}
+    if spb.get("basis_pct") is not None:
+        lines += [
+            "[SPOT-PERP BASIS — Binance spot vs perp mark]",
+            f"  Spot ${spb.get('spot_mid',0):,.2f}  Perp mark ${spb.get('perp_mark',0):,.2f}  "
+            f"Basis {spb.get('basis_usd',0):+.2f} USD ({spb.get('basis_pct',0):+.3f}%)",
+            f"  Signal: {spb.get('signal','NEUTRAL')} — {spb.get('interpretation','')}",
+            _src_line("spot_perp_basis") or "",
+            "",
+        ]
+
+    cvd = ds.get("cvd") or {}
+    if cvd.get("aggregate_cvd_1h_btc") is not None:
+        lines += [
+            "[CVD — 1h Binance spot + perp, 5m bars]",
+            f"  Perp CVD: {cvd.get('perp_cvd_1h_btc',0):+.1f} BTC  Spot CVD: {cvd.get('spot_cvd_1h_btc',0):+.1f} BTC  "
+            f"Aggregate: {cvd.get('aggregate_cvd_1h_btc',0):+.1f} BTC",
+            f"  Spot-perp divergence: {cvd.get('spot_perp_divergence_btc',0):+.1f} BTC  Price move 1h: {cvd.get('price_move_1h_pct',0):+.2f}%",
+            f"  Signal: {cvd.get('signal','NEUTRAL')} — {cvd.get('interpretation','')}",
+            _src_line("cvd") or "",
+            "",
+        ]
+
+    cza = ds.get("coinalyze_aggregate") or {}
+    if cza and cza.get("agg_oi_usd"):
+        lines += [
+            f"[AGGREGATE OI + LIQUIDATIONS — {cza.get('agg_oi_venues_count',0)}-venue, Coinalyze]",
+            f"  Aggregate OI: ${cza.get('agg_oi_usd',0):,.0f}   "
+            + (f"Change: {cza.get('agg_oi_change_pct'):+.3f}% over {cza.get('agg_oi_change_span_min',0):.0f}min"
+               if cza.get('agg_oi_change_pct') is not None else "(no delta — insufficient aligned history)"),
+            f"  Liquidations 5m: long ${cza.get('agg_long_liq_usd_5m',0):,.0f} / short ${cza.get('agg_short_liq_usd_5m',0):,.0f}",
+            f"  Liquidations 15m: long ${cza.get('agg_long_liq_usd_15m',0):,.0f} / short ${cza.get('agg_short_liq_usd_15m',0):,.0f}",
+            f"  Signal: {cza.get('signal','NEUTRAL')} — {cza.get('interpretation','')}",
+            _src_line("coinalyze_aggregate") or "",
+            "",
+        ]
+
+    dst = ds.get("deribit_skew_term") or {}
+    if dst.get("data_available"):
+        lines += [
+            "[DERIBIT OPTIONS SKEW + TERM STRUCTURE + P/C VOLUME]",
+            f"  25Δ risk reversal (30d): " +
+              (f"{dst.get('rr_25d_30d_pct'):+.2f}%" if dst.get('rr_25d_30d_pct') is not None else "n/a"),
+            f"  ATM IV: 7d={dst.get('iv_7d_atm_pct','?')}%  30d={dst.get('iv_30d_atm_pct','?')}%  90d={dst.get('iv_90d_atm_pct','?')}%  "
+            f"(inverted={dst.get('term_inverted')}  contango={dst.get('term_contango')})",
+            f"  P/C volume ratio: {dst.get('put_call_volume_ratio','?')}  ({dst.get('put_volume_btc','?')} put / {dst.get('call_volume_btc','?')} call BTC)",
+            f"  Signal: {dst.get('signal','NEUTRAL')} — {dst.get('interpretation','')}",
+            _src_line("deribit_skew_term") or "",
             "",
         ]
 
     for key, label in [
-        ("top_position_ratio", "[TOP TRADER POSITION RATIO — notional-weighted]"),
-        ("funding_trend",      "[FUNDING RATE TREND — 6-period history]"),
-        ("oi_velocity",        "[OI VELOCITY — 30-min change rate]"),
-        ("spot_whale_flow",    "[SPOT WHALE FLOW — Binance spot aggTrades ≥5 BTC]"),
+        ("top_position_ratio", "[TOP-ACCOUNTS POSITION RATIO — Binance, notional-weighted top 20% by margin]"),
+        ("funding_trend",      "[FUNDING RATE TREND — Binance 6-period history]"),
+        ("oi_velocity",        "[OI VELOCITY — Binance-perp 30-min change rate]"),
+        ("spot_whale_flow",    "[SPOT WHALE FLOW — 3-venue aggTrades ≥0.5 BTC, 5m window]"),
     ]:
         v = ds.get(key)
         if v:
-            lines += [label, f"  Signal: {v.get('signal', 'NEUTRAL')} — {v.get('interpretation', '')}", ""]
+            lines += [label, f"  Signal: {v.get('signal', 'NEUTRAL')} — {v.get('interpretation', '')}", _src_line(key) or "", ""]
         else:
             lines += [f"{label} unavailable", ""]
+
+    # ── MACRO CONTEXT (daily / multi-hour cadence — do NOT treat as bar triggers) ─
+    macro_lines = []
+    fg = ds.get("fear_greed") or {}
+    if fg and (fg.get("value") is not None or fg.get("index") is not None):
+        macro_lines.append(
+            f"  Fear & Greed {fg.get('value', fg.get('index'))}/100 "
+            f"({fg.get('label', fg.get('classification','?'))}, daily) — {fg.get('interpretation','')}"
+        )
+    oc = ds.get("btc_onchain") or {}
+    if oc and oc.get("sopr") is not None:
+        macro_lines.append(
+            f"  SOPR {oc.get('sopr'):.4f} ({oc.get('sopr_date','?')}, daily)  "
+            f"MVRV Z-Score {oc.get('mvrv_zscore','?')} ({oc.get('mvrv_date','?')}, daily)"
+        )
+    dom = ds.get("btc_dominance") or {}
+    if dom and dom.get("btc_dominance_pct") is not None:
+        macro_lines.append(
+            f"  BTC dominance {dom.get('btc_dominance_pct')}% (CoinGecko, hourly)  "
+            f"24h market cap change {dom.get('market_change_24h_pct',0):+.2f}%"
+        )
+    if macro_lines:
+        lines += [
+            "[MACRO CONTEXT — slow-moving regime signals, NOT 5-minute triggers]",
+            *macro_lines,
+            "",
+        ]
 
     return "\n".join(lines).rstrip()
 

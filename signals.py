@@ -24,6 +24,159 @@ logger = logging.getLogger(__name__)
 _TIMEOUT = aiohttp.ClientTimeout(total=9)
 
 
+# ─────────────────────────────────────────────────────────────
+# Source attribution per dashboard signal.
+#   - `api`:     the raw API endpoint that produced each number
+#   - `chart`:   a human-viewable chart/page a trader can cross-check
+#   - `scope`:   short descriptor of what the number covers (venue/product/time)
+# This is read by the prompt builder in ai.py to cite sources inline, and
+# returned in fetch_dashboard_signals() so the Vercel frontend can render a
+# source link next to each pill.
+# ─────────────────────────────────────────────────────────────
+SIGNAL_SOURCES: Dict[str, Dict[str, str]] = {
+    "order_book": {
+        "api":    "Binance /api/v3/depth + Binance futures /fapi/v1/depth + Bybit /v5/market/orderbook + Coinbase /products/BTC-USD/book + Kraken /0/public/Depth",
+        "chart":  "https://www.tradingview.com/symbols/BTCUSD/",
+        "scope":  "Aggregate BTC resting liquidity within 0.25% / 0.5% / 1.0% of mid across up to 5 venues",
+    },
+    "long_short": {
+        "api":    "https://fapi.binance.com/futures/data/globalLongShortAccountRatio + topLongShortAccountRatio",
+        "chart":  "https://www.coinglass.com/LongShortRatio",
+        "scope":  "Binance USD-M futures, account-count based — 'top' = top 20% by margin. Binance-only, retail-only.",
+    },
+    "taker_flow": {
+        "api":    "https://fapi.binance.com/futures/data/takerlongshortRatio",
+        "chart":  "https://www.coinglass.com/BitcoinTakerBuySellVolume",
+        "scope":  "Binance USD-M perp BTCUSDT, 5-minute aggressor volume (BTC).",
+    },
+    "oi_funding": {
+        "api":    "https://fapi.binance.com/fapi/v1/openInterest + premiumIndex",
+        "chart":  "https://www.coinglass.com/BitcoinOpenInterest",
+        "scope":  "Binance USD-M perp only (~25% of global BTC futures OI).",
+    },
+    "oi_velocity": {
+        "api":    "https://fapi.binance.com/futures/data/openInterestHist",
+        "chart":  "https://www.coinglass.com/BitcoinOpenInterest",
+        "scope":  "Binance OI change rate over 30m (6 × 5-min bars).",
+    },
+    "coinalyze": {
+        "api":    "https://api.coinalyze.net/v1/funding-rate",
+        "chart":  "https://coinalyze.net/bitcoin/funding-rate/",
+        "scope":  "Cross-exchange aggregate funding rate (Coinalyze-derived).",
+    },
+    "coinalyze_aggregate": {
+        "api":    "https://api.coinalyze.net/v1/open-interest-history + liquidation-history",
+        "chart":  "https://coinalyze.net/bitcoin/open-interest/",
+        "scope":  "Aggregated OI + liquidations across 7 major BTC perpetual venues (Coinalyze).",
+    },
+    "liquidations": {
+        "api":    "https://www.okx.com/api/v5/public/liquidation-orders (mgnMode=cross, BTC-USDT-SWAP)",
+        "chart":  "https://www.coinglass.com/LiquidationData",
+        "scope":  "OKX cross-margin perp, last 5 min. USD = sz × ctVal (0.01) × bkPx.",
+    },
+    "bybit_liquidations": {
+        "api":    "https://www.okx.com/api/v5/public/liquidation-orders (mgnMode=isolated, BTC-USDT-SWAP)",
+        "chart":  "https://www.coinglass.com/LiquidationData",
+        "scope":  "OKX isolated-margin perp, last 15 min.",
+    },
+    "coinglass_liquidations": {
+        "api":    "https://open-api.coinglass.com/api/futures/liquidation/aggregated-history",
+        "chart":  "https://www.coinglass.com/LiquidationData",
+        "scope":  "CoinGlass cross-exchange aggregated liquidations, 5-min bars.",
+    },
+    "fear_greed": {
+        "api":    "https://api.alternative.me/fng/",
+        "chart":  "https://alternative.me/crypto/fear-and-greed-index/",
+        "scope":  "DAILY macro sentiment (volatility 25% + volume 25% + social 15% + dominance 10% + google 10%).",
+    },
+    "mempool": {
+        "api":    "https://mempool.space/api/v1/fees/recommended + /api/mempool",
+        "chart":  "https://mempool.space/",
+        "scope":  "Bitcoin network fee urgency + pending tx count.",
+    },
+    "coingecko": {
+        "api":    "https://api.coingecko.com/api/v3/simple/price",
+        "chart":  "https://www.coingecko.com/en/coins/bitcoin",
+        "scope":  "24h change + market cap + volume (daily/hourly macro).",
+    },
+    "kraken_premium": {
+        "api":    "https://api.kraken.com/0/public/Ticker vs https://www.okx.com/api/v5/market/ticker",
+        "chart":  "https://www.tradingview.com/symbols/BTCUSD/?exchange=KRAKEN",
+        "scope":  "Kraken spot vs OKX spot mid-price spread %.",
+    },
+    "spot_whale_flow": {
+        "api":    "https://api.binance.com/api/v3/aggTrades + https://api.exchange.coinbase.com/products/BTC-USD/trades + https://api-pub.bitfinex.com/v2/trades/tBTCUSD/hist",
+        "chart":  "https://www.coinglass.com/WhaleAlert",
+        "scope":  "3-venue spot aggTrades ≥0.5 BTC, fixed 5-min window.",
+    },
+    "bybit_funding": {
+        "api":    "https://api.bybit.com/v5/market/tickers",
+        "chart":  "https://www.coinglass.com/FundingRate",
+        "scope":  "Bybit USD-M perp funding rate.",
+    },
+    "okx_funding": {
+        "api":    "https://www.okx.com/api/v5/public/funding-rate",
+        "chart":  "https://www.coinglass.com/FundingRate",
+        "scope":  "OKX USD-M perp funding rate.",
+    },
+    "btc_dominance": {
+        "api":    "https://api.coingecko.com/api/v3/global",
+        "chart":  "https://www.coingecko.com/en/global-charts",
+        "scope":  "BTC market cap % of total crypto (hourly macro).",
+    },
+    "top_position_ratio": {
+        "api":    "https://fapi.binance.com/futures/data/topLongShortPositionRatio",
+        "chart":  "https://www.binance.com/en/futures/funding-history/perpetual/trading-data",
+        "scope":  "Binance-only. Top 20% of accounts by margin, position-notional-weighted.",
+    },
+    "funding_trend": {
+        "api":    "https://fapi.binance.com/fapi/v1/fundingRate",
+        "chart":  "https://www.coinglass.com/FundingRate",
+        "scope":  "Binance funding history, 6-period moving average + trend.",
+    },
+    "deribit_dvol": {
+        "api":    "https://www.deribit.com/api/v2/public/get_index_price?index_name=btcdvol_usdc",
+        "chart":  "https://www.deribit.com/statistics/BTC/volatility-index/",
+        "scope":  "Deribit DVOL: 30-day forward annualized implied volatility %.",
+    },
+    "deribit_options": {
+        "api":    "https://www.deribit.com/api/v2/public/get_book_summary_by_currency?currency=BTC&kind=option",
+        "chart":  "https://www.deribit.com/options/BTC/",
+        "scope":  "Deribit BTC options: P/C OI ratio + max pain across all expiries.",
+    },
+    "deribit_skew_term": {
+        "api":    "https://www.deribit.com/api/v2/public/get_book_summary_by_currency?currency=BTC&kind=option",
+        "chart":  "https://www.deribit.com/options/BTC/",
+        "scope":  "Deribit BTC: 25Δ risk reversal (30d) + ATM IV term structure (7d/30d/90d) + P/C VOLUME (today).",
+    },
+    "spot_perp_basis": {
+        "api":    "https://api.binance.com/api/v3/ticker/bookTicker + https://fapi.binance.com/fapi/v1/premiumIndex",
+        "chart":  "https://www.coinglass.com/Basis",
+        "scope":  "Binance perp mark minus Binance spot mid, as % of spot.",
+    },
+    "cvd": {
+        "api":    "https://fapi.binance.com/fapi/v1/klines + https://api.binance.com/api/v3/klines (5m, 12 bars, takerBuyBaseAssetVolume)",
+        "chart":  "https://www.tradingview.com/script/i6V0bC8v-Volume-Delta-CVD/",
+        "scope":  "Cumulative (taker-buy − taker-sell) over last 12 5m bars, split by spot vs perp.",
+    },
+    "btc_onchain": {
+        "api":    "https://api.bitcoin-data.com/v1/sopr + mvrv-zscore",
+        "chart":  "https://bitcoin-data.com/",
+        "scope":  "DAILY on-chain macro: SOPR (profit/loss spending) + MVRV Z-Score (over/undervaluation).",
+    },
+}
+
+
+def _attach_source(payload: Optional[Dict], key: str) -> Optional[Dict]:
+    """Attach SIGNAL_SOURCES[key] to a fetcher's output dict (no-op if None)."""
+    if not isinstance(payload, dict):
+        return payload
+    src = SIGNAL_SOURCES.get(key)
+    if src:
+        payload["source"] = src
+    return payload
+
+
 async def _get(url: str, headers: Optional[Dict] = None) -> Any:
     connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
     async with aiohttp.ClientSession(connector=connector, timeout=_TIMEOUT) as session:
@@ -33,35 +186,136 @@ async def _get(url: str, headers: Optional[Dict] = None) -> Any:
             return await resp.json(content_type=None)
 
 
-async def _fetch_order_book() -> Dict:
+def _band_depth(bids: list, asks: list, mid: float, pct: float) -> tuple:
+    """Return (bid_btc, ask_btc) resting within ±pct of mid."""
+    lo = mid * (1 - pct / 100.0)
+    hi = mid * (1 + pct / 100.0)
+    bid_btc = sum(float(b[1]) for b in bids if float(b[0]) >= lo)
+    ask_btc = sum(float(a[1]) for a in asks if float(a[0]) <= hi)
+    return bid_btc, ask_btc
+
+
+async def _fetch_venue_book(venue: str) -> Optional[Dict]:
+    """Pull a single venue's full book, return bids/asks/mid or None on failure."""
     try:
-        data = await _get("https://api.kraken.com/0/public/Depth?pair=XBTUSD&count=20")
-        book = (data.get("result") or {}).get("XXBTZUSD", {})
-        bv = sum(float(b[1]) for b in book.get("bids", []))
-        av = sum(float(a[1]) for a in book.get("asks", []))
-    except Exception as _e:
-        logger.debug("Kraken order book failed, using Binance fallback: %s", _e)
-        data = await _get("https://api.binance.com/api/v3/depth?symbol=BTCUSDT&limit=20")
-        bv = sum(float(b[1]) for b in data.get("bids", []))
-        av = sum(float(a[1]) for a in data.get("asks", []))
-    imb = ((bv - av) / (bv + av)) * 100 if (bv + av) > 0 else 0.0
-    sig = "BULLISH" if imb > 5 else "BEARISH" if imb < -5 else "NEUTRAL"
+        if venue == "binance_spot":
+            d = await _get("https://api.binance.com/api/v3/depth?symbol=BTCUSDT&limit=5000")
+            bids = [(float(b[0]), float(b[1])) for b in d.get("bids", [])]
+            asks = [(float(a[0]), float(a[1])) for a in d.get("asks", [])]
+        elif venue == "binance_perp":
+            d = await _get("https://fapi.binance.com/fapi/v1/depth?symbol=BTCUSDT&limit=1000")
+            bids = [(float(b[0]), float(b[1])) for b in d.get("bids", [])]
+            asks = [(float(a[0]), float(a[1])) for a in d.get("asks", [])]
+        elif venue == "bybit_spot":
+            d = await _get("https://api.bybit.com/v5/market/orderbook?category=spot&symbol=BTCUSDT&limit=200")
+            result = d.get("result") or {}
+            bids = [(float(b[0]), float(b[1])) for b in result.get("b", [])]
+            asks = [(float(a[0]), float(a[1])) for a in result.get("a", [])]
+        elif venue == "coinbase":
+            d = await _get("https://api.exchange.coinbase.com/products/BTC-USD/book?level=2")
+            bids = [(float(b[0]), float(b[1])) for b in d.get("bids", [])]
+            asks = [(float(a[0]), float(a[1])) for a in d.get("asks", [])]
+        elif venue == "kraken":
+            d = await _get("https://api.kraken.com/0/public/Depth?pair=XBTUSD&count=500")
+            book = (d.get("result") or {}).get("XXBTZUSD", {})
+            bids = [(float(b[0]), float(b[1])) for b in book.get("bids", [])]
+            asks = [(float(a[0]), float(a[1])) for a in book.get("asks", [])]
+        else:
+            return None
+        if not bids or not asks:
+            return None
+        mid = (bids[0][0] + asks[0][0]) / 2.0
+        return {"venue": venue, "bids": bids, "asks": asks, "mid": mid}
+    except Exception as e:
+        logger.debug("Depth fetch failed for %s: %s", venue, e)
+        return None
+
+
+async def _fetch_order_book() -> Dict:
+    """
+    Aggregate bid/ask depth within %-bands of mid across 5 venues.
+
+    Replaces the prior "top-20-levels on Kraken" approach, which produced
+    sub-10-BTC "bid walls" over ~$10 price spans — not a bid wall by any
+    trading definition. The band-based calc is venue-agnostic and matches
+    how traders think about resting liquidity.
+    """
+    venues = ["binance_spot", "binance_perp", "bybit_spot", "coinbase", "kraken"]
+    books  = await asyncio.gather(*(_fetch_venue_book(v) for v in venues))
+    books  = [b for b in books if b is not None]
+
+    if not books:
+        return {
+            "signal":         "UNAVAILABLE",
+            "data_available": False,
+            "interpretation": "Order book depth unavailable — all venue fetches failed.",
+        }
+
+    # Cross-venue mid = weighted average of top-of-book mids
+    agg_mid = sum(b["mid"] for b in books) / len(books)
+
+    # Per-venue band depth at 0.25%, 0.5%, 1.0%
+    per_venue: Dict[str, Dict] = {}
+    tot_bid_025 = tot_ask_025 = 0.0
+    tot_bid_05  = tot_ask_05  = 0.0
+    tot_bid_1   = tot_ask_1   = 0.0
+    for b in books:
+        mid = b["mid"]
+        bb025, aa025 = _band_depth(b["bids"], b["asks"], mid, 0.25)
+        bb05,  aa05  = _band_depth(b["bids"], b["asks"], mid, 0.5)
+        bb1,   aa1   = _band_depth(b["bids"], b["asks"], mid, 1.0)
+        per_venue[b["venue"]] = {
+            "mid":          round(mid, 2),
+            "bid_025_btc":  round(bb025, 2), "ask_025_btc": round(aa025, 2),
+            "bid_05_btc":   round(bb05,  2), "ask_05_btc":  round(aa05,  2),
+            "bid_1_btc":    round(bb1,   2), "ask_1_btc":   round(aa1,   2),
+        }
+        tot_bid_025 += bb025; tot_ask_025 += aa025
+        tot_bid_05  += bb05;  tot_ask_05  += aa05
+        tot_bid_1   += bb1;   tot_ask_1   += aa1
+
+    imb_05 = ((tot_bid_05 - tot_ask_05) / (tot_bid_05 + tot_ask_05)) * 100 if (tot_bid_05 + tot_ask_05) > 0 else 0.0
+    imb_1  = ((tot_bid_1  - tot_ask_1)  / (tot_bid_1  + tot_ask_1))  * 100 if (tot_bid_1  + tot_ask_1)  > 0 else 0.0
+
+    # Signal based on 0.5% band (the conventional "immediate defense" zone).
+    # Threshold ±8% imbalance — tighter than the old ±5% because a 5-venue
+    # aggregate is MUCH less noisy than a 20-level single-venue snapshot.
+    sig = "BULLISH" if imb_05 > 8 else "BEARISH" if imb_05 < -8 else "NEUTRAL"
+    venue_str = f"across {len(books)} venues ({', '.join(b['venue'] for b in books)})"
     interp = (
-        f"Strong bid wall — buyers defending at market. {imb:+.1f}% bid-heavy. "
-        "Immediate upward price support from passive bids."
-        if imb > 5 else
-        f"Ask-heavy book — sellers in control. {imb:+.1f}% ask dominant. "
-        "Sell-side wall capping immediate rallies."
-        if imb < -5 else
-        f"Balanced order book ({imb:+.1f}%). Neither side defending aggressively; "
-        "defer to taker flow for directional edge."
+        f"Aggregate bid-heavy book {venue_str}: {tot_bid_05:.1f} BTC bids vs {tot_ask_05:.1f} BTC asks "
+        f"within 0.5% of ${agg_mid:,.0f} ({imb_05:+.1f}%). "
+        "Real resting demand — passive buyers defending this zone."
+        if imb_05 > 8 else
+        f"Aggregate ask-heavy book {venue_str}: {tot_bid_05:.1f} BTC bids vs {tot_ask_05:.1f} BTC asks "
+        f"within 0.5% of ${agg_mid:,.0f} ({imb_05:+.1f}%). "
+        "Real resting supply capping immediate rallies."
+        if imb_05 < -8 else
+        f"Balanced aggregate book ({tot_bid_05:.1f} bid / {tot_ask_05:.1f} ask BTC within 0.5% "
+        f"of ${agg_mid:,.0f}, {imb_05:+.1f}%). No clear resting-liquidity edge — defer to taker flow."
     )
+
     return {
-        "bid_vol_btc":    round(bv, 2),
-        "ask_vol_btc":    round(av, 2),
-        "imbalance_pct":  round(imb, 2),
-        "signal":         sig,
-        "interpretation": interp,
+        # ── Primary aggregated fields (the numbers traders actually want) ──
+        "mid_usd":               round(agg_mid, 2),
+        "bid_depth_025pct_btc":  round(tot_bid_025, 2),
+        "ask_depth_025pct_btc":  round(tot_ask_025, 2),
+        "bid_depth_05pct_btc":   round(tot_bid_05,  2),
+        "ask_depth_05pct_btc":   round(tot_ask_05,  2),
+        "bid_depth_1pct_btc":    round(tot_bid_1,   2),
+        "ask_depth_1pct_btc":    round(tot_ask_1,   2),
+        "imbalance_05pct_pct":   round(imb_05, 2),
+        "imbalance_1pct_pct":    round(imb_1,  2),
+        "venues_included":       [b["venue"] for b in books],
+        "per_venue":             per_venue,
+        # ── Back-compat aliases: repoint to aggregated 0.5%-band numbers so
+        #     downstream code (prompt builder, frontend) works unchanged ──
+        "bid_vol_btc":           round(tot_bid_05, 2),
+        "ask_vol_btc":           round(tot_ask_05, 2),
+        "imbalance_pct":         round(imb_05, 2),
+        "signal":                sig,
+        "data_available":        True,
+        "interpretation":        interp,
     }
 
 
@@ -93,6 +347,10 @@ async def _fetch_long_short() -> Dict:
         tlp  = lp
         tsp  = sp
     div  = lp - tlp
+    # Binance's "global" vs "top" long/short ratios are BOTH account-based and
+    # BOTH reflect retail users on Binance — not smart money, institutions, or
+    # whales. "Top" = top 20% of accounts by margin balance on this symbol, i.e.
+    # the largest retail accounts, still Binance-only, still unweighted by size.
     r_sig = (
         "BEARISH_CONTRARIAN" if lsr > 1.35 else
         "BULLISH_CONTRARIAN" if lsr < 0.75 else
@@ -101,25 +359,32 @@ async def _fetch_long_short() -> Dict:
     s_sig = "BULLISH" if tlp > 60 else "BEARISH" if tlp < 40 else "NEUTRAL"
     if abs(div) > 10:
         interp = (
-            f"Smart money {tlp:.0f}% long vs retail {lp:.0f}% — "
-            f"{'FOLLOW SMART MONEY LONG' if tlp > lp else 'FOLLOW SMART MONEY SHORT'} "
-            f"({abs(div):.1f}% divergence). Retail is likely on the wrong side."
+            f"Binance top-account traders {tlp:.0f}% long vs all-account {lp:.0f}% long "
+            f"({abs(div):.1f}% divergence). Top-20%-by-margin accounts diverge from the broad "
+            f"account base — note this is Binance-only retail stratification, not institutional flow."
         )
     else:
         interp = (
-            f"Smart money and retail aligned ({abs(div):.1f}% diff). "
-            f"Both {tlp:.0f}%/{lp:.0f}% long — high-conviction bias, harder to fade."
+            f"Binance account tiers aligned ({abs(div):.1f}% diff). "
+            f"Top accounts {tlp:.0f}% long / all accounts {lp:.0f}% long — "
+            f"no stratification signal within Binance retail."
         )
     return {
-        "retail_lsr":                  round(lsr, 4),
-        "retail_long_pct":             round(lp,  1),
-        "retail_short_pct":            round(sp,  1),
-        "smart_money_long_pct":        round(tlp, 1),
-        "smart_money_short_pct":       round(tsp, 1),
-        "retail_signal_contrarian":    r_sig,
-        "smart_money_signal":          s_sig,
-        "smart_vs_retail_div_pct":     round(div, 1),
-        "interpretation":              interp,
+        "retail_lsr":                    round(lsr, 4),
+        "retail_long_pct":               round(lp,  1),
+        "retail_short_pct":              round(sp,  1),
+        "top_accounts_long_pct":         round(tlp, 1),
+        "top_accounts_short_pct":        round(tsp, 1),
+        "retail_signal_contrarian":      r_sig,
+        "top_accounts_signal":           s_sig,
+        "top_vs_all_div_pct":            round(div, 1),
+        # Backwards-compat keys (prompt builder / frontend still read these).
+        # TODO Phase 7: drop aliases after frontend label audit.
+        "smart_money_long_pct":          round(tlp, 1),
+        "smart_money_short_pct":         round(tsp, 1),
+        "smart_money_signal":            s_sig,
+        "smart_vs_retail_div_pct":       round(div, 1),
+        "interpretation":                interp,
     }
 
 
@@ -280,10 +545,13 @@ async def _fetch_liquidations() -> Dict:
     window = recent if recent else rows
     # OKX: posSide="long" + side="sell" → forced long liquidation (bearish)
     #       posSide="short" + side="buy" → forced short liquidation (bullish squeeze)
+    # BTC-USDT-SWAP ctVal=0.01 BTC per contract (sz is in CONTRACTS, not BTC).
+    # USD notional = sz * ctVal * bkPx.
+    OKX_CT_VAL_BTC = 0.01
     longs  = [r for r in window if r.get("posSide", "").lower() == "long"]
     shorts = [r for r in window if r.get("posSide", "").lower() == "short"]
-    lvol   = sum(float(r.get("sz", 0)) * float(r.get("bkPx", 0)) for r in longs)
-    svol   = sum(float(r.get("sz", 0)) * float(r.get("bkPx", 0)) for r in shorts)
+    lvol   = sum(float(r.get("sz", 0)) * OKX_CT_VAL_BTC * float(r.get("bkPx", 0)) for r in longs)
+    svol   = sum(float(r.get("sz", 0)) * OKX_CT_VAL_BTC * float(r.get("bkPx", 0)) for r in shorts)
     if recent and len(recent) >= 2:
         times    = sorted(float(r.get("ts", 0)) for r in recent if r.get("ts"))
         span_min = max((times[-1] - times[0]) / 60_000, 0.1)
@@ -333,15 +601,18 @@ async def _fetch_fear_greed() -> Dict:
     pv    = int(prev.get("value", v))
     delta = v - pv
     sig   = "BULLISH_CONTRARIAN" if v < 30 else "BEARISH_CONTRARIAN" if v > 75 else "NEUTRAL"
+    # Fear & Greed is a DAILY index built from 30/90-day volatility, volume,
+    # social, dominance, Google-trends inputs — it barely moves bar-to-bar and
+    # is macro context, not a 5-min signal. Do not phrase it as actionable.
     interp = (
-        f"Extreme Fear ({v}). Historically precedes sharp bounces. "
-        "Retail capitulation = smart money accumulation zone. Contrarian LONG signal."
+        f"Extreme Fear ({v}, daily macro). Historically precedes multi-day bounces; "
+        "weak directional edge at 5-min horizon. Use as regime context."
         if v < 30 else
-        f"Extreme Greed ({v}). Elevated reversal risk — smart money fades retail euphoria. "
-        "Contrarian SHORT lean; watch for distribution signals."
+        f"Extreme Greed ({v}, daily macro). Elevated reversal risk over days — "
+        "not a 5-min trigger. Use as regime context."
         if v > 75 else
-        f"Neutral sentiment ({v} — {label}). No extreme contrarian edge. "
-        "Weight technical and flow signals more heavily."
+        f"Neutral sentiment ({v} — {label}, daily macro). "
+        "Weight bar-level flow and depth signals more heavily."
     )
     return {
         "value":          v,
@@ -450,6 +721,159 @@ async def _fetch_kraken_premium() -> Dict:
     }
 
 
+async def _fetch_spot_perp_basis() -> Dict:
+    """
+    Instantaneous spot-perp basis — (perp mark - spot mid) / spot, in %.
+
+    Directly measures leverage demand. Funding rate is the fee that *closes*
+    basis over 8h; basis is the current mispricing the leverage demand creates.
+    Positive basis = leveraged longs paying up for exposure (bullish momentum
+    but fragile); negative = leveraged shorts / spot premium (bearish or
+    discount opportunity).
+    """
+    try:
+        spot_r, perp_r = await asyncio.gather(
+            _get("https://api.binance.com/api/v3/ticker/bookTicker?symbol=BTCUSDT"),
+            _get("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT"),
+        )
+        spot_mid = (float(spot_r["bidPrice"]) + float(spot_r["askPrice"])) / 2.0
+        perp_mark = float(perp_r["markPrice"])
+    except Exception as e:
+        logger.warning("Spot-perp basis fetch failed: %s", e)
+        return {
+            "signal":         "UNAVAILABLE",
+            "data_available": False,
+            "interpretation": "Spot-perp basis unavailable — Binance fetch failed.",
+        }
+    basis_usd = perp_mark - spot_mid
+    basis_pct = (basis_usd / spot_mid) * 100 if spot_mid else 0.0
+    # Thresholds: ±0.03% = typical noise; ±0.08% = meaningful leverage demand
+    sig = "BULLISH" if basis_pct > 0.08 else "BEARISH" if basis_pct < -0.08 else "NEUTRAL"
+    interp = (
+        f"Perp trades {basis_usd:+.2f} over spot ({basis_pct:+.3f}%) — leveraged longs paying up. "
+        "Leverage-driven momentum; watch for funding to cool it off."
+        if basis_pct > 0.08 else
+        f"Perp trades {basis_usd:+.2f} vs spot ({basis_pct:+.3f}%) — spot premium / perp discount. "
+        "Either spot accumulation ahead of perp, or leverage unwind."
+        if basis_pct < -0.08 else
+        f"Perp ≈ spot ({basis_pct:+.3f}%, {basis_usd:+.2f} USD). "
+        "No leverage-demand edge; funding and taker flow matter more."
+    )
+    return {
+        "spot_mid":       round(spot_mid, 2),
+        "perp_mark":      round(perp_mark, 2),
+        "basis_usd":      round(basis_usd, 2),
+        "basis_pct":      round(basis_pct, 4),
+        "signal":         sig,
+        "data_available": True,
+        "interpretation": interp,
+    }
+
+
+async def _fetch_cvd() -> Dict:
+    """
+    Cumulative Volume Delta over the last 12 5-min bars, for both spot and
+    perp. CVD = Σ(taker_buy_vol - taker_sell_vol). Divergences between price
+    and CVD are classic reversal tells; divergences between spot and perp
+    CVD isolate institutional spot buys vs leveraged perp pressure.
+
+    Uses the `takerBuyBaseAssetVolume` field from Binance klines (unambiguously
+    in BTC — cross-verified against takerlongshortRatio buyVol).
+    """
+    try:
+        perp_k, spot_k = await asyncio.gather(
+            _get("https://fapi.binance.com/fapi/v1/klines?symbol=BTCUSDT&interval=5m&limit=12"),
+            _get("https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=5m&limit=12"),
+        )
+    except Exception as e:
+        logger.warning("CVD fetch failed: %s", e)
+        return {
+            "signal":         "UNAVAILABLE",
+            "data_available": False,
+            "interpretation": "CVD unavailable — Binance klines fetch failed.",
+        }
+
+    def _cvd_sum(klines: list) -> Dict:
+        # Kline fields: [openTime, open, high, low, close, volume, closeTime,
+        #                quoteVol, trades, takerBuyBaseVol, takerBuyQuoteVol, _]
+        per_bar = []
+        cumulative = 0.0
+        for k in klines:
+            vol       = float(k[5])
+            taker_buy = float(k[9])
+            taker_sell = vol - taker_buy
+            delta     = taker_buy - taker_sell
+            cumulative += delta
+            per_bar.append(delta)
+        return {
+            "cvd_total_btc":   cumulative,
+            "last_bar_btc":    per_bar[-1] if per_bar else 0.0,
+            "last_3bars_btc":  sum(per_bar[-3:]) if per_bar else 0.0,
+            "last_12bars_btc": cumulative,
+        }
+
+    perp_cvd = _cvd_sum(perp_k)
+    spot_cvd = _cvd_sum(spot_k)
+    divergence_btc = spot_cvd["cvd_total_btc"] - perp_cvd["cvd_total_btc"]
+
+    # Price move over window for context
+    try:
+        p_open  = float(perp_k[0][1]) if perp_k else 0.0
+        p_close = float(perp_k[-1][4]) if perp_k else 0.0
+        move_pct = ((p_close - p_open) / p_open) * 100 if p_open else 0.0
+    except Exception:
+        move_pct = 0.0
+
+    # Signal: bullish if aggregate CVD strongly positive, bearish if strongly negative.
+    # Thresholds calibrated against typical 1h BTC flow (~500-2000 BTC of delta).
+    total = perp_cvd["cvd_total_btc"] + spot_cvd["cvd_total_btc"]
+    sig = "BULLISH" if total > 400 else "BEARISH" if total < -400 else "NEUTRAL"
+
+    # Divergence flags — the classic "institutional spot buy while perp sells" setup
+    div_note = ""
+    if abs(divergence_btc) > 150:
+        if divergence_btc > 0 and perp_cvd["cvd_total_btc"] < 0:
+            div_note = (
+                f" DIVERGENCE: spot CVD +{spot_cvd['cvd_total_btc']:.0f} BTC while "
+                f"perp CVD {perp_cvd['cvd_total_btc']:+.0f} BTC — spot accumulation "
+                "under leveraged-short pressure (classic bullish divergence setup)."
+            )
+        elif divergence_btc < 0 and perp_cvd["cvd_total_btc"] > 0:
+            div_note = (
+                f" DIVERGENCE: spot CVD {spot_cvd['cvd_total_btc']:+.0f} BTC while "
+                f"perp CVD +{perp_cvd['cvd_total_btc']:.0f} BTC — spot distribution "
+                "under leveraged-long pressure (classic bearish divergence setup)."
+            )
+
+    interp = (
+        f"Aggregate 1h CVD +{total:.0f} BTC (spot +{spot_cvd['cvd_total_btc']:.0f}, "
+        f"perp +{perp_cvd['cvd_total_btc']:.0f}) with price {move_pct:+.2f}%. "
+        "Persistent buying pressure — directional conviction confirmed by actual execution."
+        if total > 400 else
+        f"Aggregate 1h CVD {total:.0f} BTC (spot {spot_cvd['cvd_total_btc']:+.0f}, "
+        f"perp {perp_cvd['cvd_total_btc']:+.0f}) with price {move_pct:+.2f}%. "
+        "Persistent selling pressure — sellers stepping through the bid."
+        if total < -400 else
+        f"Balanced 1h CVD ({total:+.0f} BTC) with price {move_pct:+.2f}%. "
+        "No persistent directional flow."
+    ) + div_note
+
+    return {
+        "perp_cvd_1h_btc":        round(perp_cvd["cvd_total_btc"],  1),
+        "spot_cvd_1h_btc":        round(spot_cvd["cvd_total_btc"],  1),
+        "perp_cvd_last_bar_btc":  round(perp_cvd["last_bar_btc"],   1),
+        "spot_cvd_last_bar_btc":  round(spot_cvd["last_bar_btc"],   1),
+        "perp_cvd_last_3bars_btc":round(perp_cvd["last_3bars_btc"], 1),
+        "spot_cvd_last_3bars_btc":round(spot_cvd["last_3bars_btc"], 1),
+        "aggregate_cvd_1h_btc":   round(total, 1),
+        "spot_perp_divergence_btc": round(divergence_btc, 1),
+        "price_move_1h_pct":      round(move_pct, 3),
+        "signal":                 sig,
+        "data_available":         True,
+        "interpretation":         interp,
+    }
+
+
 async def _fetch_oi_velocity() -> Dict:
     try:
         data = await _get(
@@ -496,59 +920,140 @@ async def _fetch_oi_velocity() -> Dict:
 
 
 async def _fetch_spot_whale_flow() -> Dict:
-    threshold_btc = 2.0
-    buy_vol = sell_vol = 0.0
-    source = "Kraken"
-    try:
-        data = await _get("https://api.kraken.com/0/public/Trades?pair=XBTUSD")
-        trades = (data.get("result") or {}).get("XXBTZUSD", [])
-        if not trades:
-            raise ValueError("Empty Kraken trades response")
-        for t in trades:
-            # Format: [price, volume, time, buy/sell("b"/"s"), market/limit, misc, trade_id]
-            vol = float(t[1])
-            if vol < threshold_btc:
-                continue
-            if t[3] == "b":
-                buy_vol += vol
+    """
+    Spot whale flow across Binance spot + Coinbase + Bitfinex over a fixed
+    5-min window. Threshold 0.5 BTC per trade — the prior 2 BTC threshold
+    produced empty samples on Kraken (confirmed by live test).
+
+    Uses `aggTrades` on Binance for proper 5-min coverage and per-venue trade
+    feeds on Coinbase/Bitfinex. Each venue is independently fallback-tolerant.
+    """
+    threshold_btc = 0.5
+    now_ms   = int(time.time() * 1000)
+    start_ms = now_ms - 5 * 60 * 1000
+
+    async def _binance_spot() -> tuple:
+        try:
+            data = await _get(
+                "https://api.binance.com/api/v3/aggTrades"
+                f"?symbol=BTCUSDT&startTime={start_ms}&endTime={now_ms}&limit=1000"
+            )
+        except Exception as e:
+            logger.debug("Binance aggTrades failed: %s", e)
+            return 0.0, 0.0, 0
+        bv = sv = 0.0; n = 0
+        for t in (data or []):
+            qty = float(t.get("q", 0))
+            if qty < threshold_btc: continue
+            # isBuyerMaker True -> buyer was maker -> the aggressor was a seller.
+            if t.get("m", False):
+                sv += qty
             else:
-                sell_vol += vol
-    except Exception as _e:
-        logger.debug("Kraken spot whale failed, using Binance fallback: %s", _e)
-        source = "Binance"
-        data = await _get("https://api.binance.com/api/v3/trades?symbol=BTCUSDT&limit=500")
-        for t in data:
-            vol = float(t["qty"])
-            if vol < threshold_btc:
+                bv += qty
+            n += 1
+        return bv, sv, n
+
+    async def _coinbase() -> tuple:
+        try:
+            data = await _get("https://api.exchange.coinbase.com/products/BTC-USD/trades?limit=1000")
+        except Exception as e:
+            logger.debug("Coinbase trades failed: %s", e)
+            return 0.0, 0.0, 0
+        bv = sv = 0.0; n = 0
+        from datetime import datetime, timezone
+        cutoff_s = start_ms / 1000
+        for t in (data or []):
+            try:
+                qty = float(t.get("size", 0))
+                ts = datetime.fromisoformat(t["time"].replace("Z", "+00:00")).replace(tzinfo=timezone.utc).timestamp()
+            except Exception:
                 continue
-            if not t["isBuyerMaker"]:
-                buy_vol += vol
+            if ts < cutoff_s: continue
+            if qty < threshold_btc: continue
+            # Coinbase "side" is the taker side
+            if t.get("side") == "buy":
+                bv += qty
             else:
-                sell_vol += vol
-    total   = buy_vol + sell_vol
-    buy_pct = buy_vol / total * 100 if total > 0 else 50.0
+                sv += qty
+            n += 1
+        return bv, sv, n
+
+    async def _bitfinex() -> tuple:
+        try:
+            data = await _get(
+                f"https://api-pub.bitfinex.com/v2/trades/tBTCUSD/hist?limit=1000&start={start_ms}&end={now_ms}"
+            )
+        except Exception as e:
+            logger.debug("Bitfinex trades failed: %s", e)
+            return 0.0, 0.0, 0
+        bv = sv = 0.0; n = 0
+        # Format: [ID, MTS, AMOUNT, PRICE]  positive amount = buy, negative = sell
+        for t in (data or []):
+            try:
+                amount = float(t[2])
+            except Exception:
+                continue
+            qty = abs(amount)
+            if qty < threshold_btc: continue
+            if amount > 0:
+                bv += qty
+            else:
+                sv += qty
+            n += 1
+        return bv, sv, n
+
+    (b_bv, b_sv, b_n), (c_bv, c_sv, c_n), (x_bv, x_sv, x_n) = await asyncio.gather(
+        _binance_spot(), _coinbase(), _bitfinex()
+    )
+    buy_vol  = b_bv + c_bv + x_bv
+    sell_vol = b_sv + c_sv + x_sv
+    n_trades = b_n + c_n + x_n
+    total    = buy_vol + sell_vol
+    venues_ok = [name for name, n in
+                 (("Binance", b_n), ("Coinbase", c_n), ("Bitfinex", x_n)) if n > 0]
+
+    if total == 0:
+        return {
+            "signal":         "NEUTRAL",
+            "data_available": True,
+            "whale_buy_btc":  0, "whale_sell_btc": 0, "whale_buy_pct": 50,
+            "large_trade_btc": 0, "whale_trade_count": 0,
+            "venues_with_data": venues_ok,
+            "interpretation":
+                f"No spot trades ≥{threshold_btc} BTC in last 5m across "
+                f"{','.join(venues_ok) or 'any venue'}. Thin spot-whale activity.",
+        }
+    buy_pct = buy_vol / total * 100
     sig = "BULLISH" if buy_pct > 60 else "BEARISH" if buy_pct < 40 else "NEUTRAL"
     interp = (
-        f"{source} spot whale buyers dominate: {buy_pct:.1f}% ({buy_vol:.1f} BTC) of large "
-        f"spot trades are buys. Genuine spot accumulation — no leverage involved."
+        f"Spot whale buyers dominate across {','.join(venues_ok)}: {buy_pct:.1f}% of "
+        f"{n_trades} large trades ({buy_vol:.1f} BTC buys / {sell_vol:.1f} BTC sells) in last 5m. "
+        "Genuine multi-venue spot accumulation — no leverage involved."
         if buy_pct > 60 else
-        f"{source} spot whale sellers dominate: only {buy_pct:.1f}% buys ({sell_vol:.1f} BTC "
-        "sold). Spot distribution — real holders exiting."
+        f"Spot whale sellers dominate across {','.join(venues_ok)}: only {buy_pct:.1f}% buys "
+        f"({buy_vol:.1f} BTC buys / {sell_vol:.1f} BTC sells across {n_trades} trades in 5m). "
+        "Multi-venue spot distribution — real holders exiting."
         if buy_pct < 40 else
-        f"{source} spot whales balanced ({buy_pct:.1f}% buys, {total:.1f} BTC in large trades). "
-        "No clear direction from block orders."
+        f"Spot whales balanced across {','.join(venues_ok)}: {buy_pct:.1f}% buys, "
+        f"{total:.1f} BTC in {n_trades} large trades last 5m. No clear direction."
     )
     return {
-        "whale_buy_btc":   round(buy_vol, 2),
-        "whale_sell_btc":  round(sell_vol, 2),
-        "whale_buy_pct":   round(buy_pct, 1),
-        "large_trade_btc": round(total, 2),
-        "signal":          sig,
-        "interpretation":  interp,
+        "whale_buy_btc":     round(buy_vol, 2),
+        "whale_sell_btc":    round(sell_vol, 2),
+        "whale_buy_pct":     round(buy_pct, 1),
+        "large_trade_btc":   round(total, 2),
+        "whale_trade_count": n_trades,
+        "venues_with_data":  venues_ok,
+        "signal":            sig,
+        "data_available":    True,
+        "interpretation":    interp,
     }
 
 
-async def _fetch_bybit_liquidations() -> Dict:
+# NOTE: the dashboard key remains "bybit_liquidations" for schema continuity
+# (storage, prompt builder, frontend mapping). The function and data it returns
+# are OKX isolated-margin BTC-USDT-SWAP — the original naming was wrong.
+async def _fetch_okx_isolated_liquidations() -> Dict:
     try:
         data = await _get(
             "https://www.okx.com/api/v5/public/liquidation-orders"
@@ -570,20 +1075,22 @@ async def _fetch_bybit_liquidations() -> Dict:
     now_ms = time.time() * 1000
     cutoff = now_ms - 900_000  # 15-min window for isolated margin
     recent = [r for r in rows if float(r.get("ts", now_ms)) >= cutoff] or rows
+    # Same BTC-USDT-SWAP contract-value correction as _fetch_liquidations.
+    OKX_CT_VAL_BTC = 0.01
     longs  = [r for r in recent if r.get("posSide", "").lower() == "long"]
     shorts = [r for r in recent if r.get("posSide", "").lower() == "short"]
-    l_usd  = sum(float(r.get("sz", 0)) * float(r.get("bkPx", 0)) for r in longs)
-    s_usd  = sum(float(r.get("sz", 0)) * float(r.get("bkPx", 0)) for r in shorts)
+    l_usd  = sum(float(r.get("sz", 0)) * OKX_CT_VAL_BTC * float(r.get("bkPx", 0)) for r in longs)
+    s_usd  = sum(float(r.get("sz", 0)) * OKX_CT_VAL_BTC * float(r.get("bkPx", 0)) for r in shorts)
     sig    = "BEARISH" if l_usd > s_usd * 1.5 else "BULLISH" if s_usd > l_usd * 1.5 else "NEUTRAL"
     interp = (
-        f"Isolated-margin long cascade: ${l_usd:,.0f} longs liquidated vs ${s_usd:,.0f} shorts. "
-        "Cross-margin confirmation of downward cascade."
+        f"OKX isolated-margin long cascade: ${l_usd:,.0f} longs liquidated vs ${s_usd:,.0f} shorts. "
+        "Independent confirmation vs cross-margin book — longs being unwound on OKX."
         if l_usd > s_usd * 1.5 else
-        f"Isolated-margin short squeeze: ${s_usd:,.0f} shorts force-covered vs ${l_usd:,.0f} longs. "
-        "Cross-margin squeeze confirmation — forced buying pressure."
+        f"OKX isolated-margin short squeeze: ${s_usd:,.0f} shorts force-covered vs ${l_usd:,.0f} longs. "
+        "Independent confirmation of forced short covering on OKX."
         if s_usd > l_usd * 1.5 else
-        f"Isolated-margin mixed liqs: ${l_usd:,.0f} long / ${s_usd:,.0f} short. "
-        "No directional cascade in isolated margin book."
+        f"OKX isolated-margin mixed liqs: ${l_usd:,.0f} long / ${s_usd:,.0f} short. "
+        "No directional cascade in isolated book."
     )
     return {
         "total":          len(recent),
@@ -617,6 +1124,172 @@ async def _fetch_okx_funding() -> Dict:
         "signal":           sig,
         "interpretation":   interp,
     }
+
+
+# Aggregated BTC perp symbols across major venues. Codes from Coinalyze
+# /future-markets discovery. Order matters only for logging clarity; the
+# endpoint returns one row per symbol regardless.
+_COINALYZE_BTC_PERPS = [
+    "BTCUSDT_PERP.A",  # Binance USDT-M
+    "BTCUSDT.6",       # Bybit USDT
+    "BTCUSDT_PERP.3",  # OKX USDT
+    "BTC-PERPETUAL.2", # Deribit inverse (USD)
+    "BTCUSDT_PERP.4",  # Bitget USDT
+    "BTCUSDT_PERP.F",  # Bitmart USDT (light)
+    "BTCUSDT_PERP.0",  # additional venue for breadth
+]
+
+
+async def _coinalyze_get(api_key: str, path: str, **params) -> Any:
+    qs = "&".join(f"{k}={v}" for k, v in params.items() if v is not None)
+    sep = "&" if qs else ""
+    return await _get(f"https://api.coinalyze.net/v1/{path}?{qs}{sep}api_key={api_key}")
+
+
+async def _fetch_coinalyze_aggregate(api_key: str) -> Dict:
+    """
+    Aggregated BTC-perp OI, liquidations, and taker flow across ~7 venues.
+
+    This is the "real" aggregate that replaces Binance-only OI and single-venue
+    liquidation numbers. Using Coinalyze avoids having to hit each exchange's
+    endpoint individually (the user already has a free-tier key; rate limit is
+    40 req/min and we use ~3 per bar).
+    """
+    symbols = ",".join(_COINALYZE_BTC_PERPS)
+    now = int(time.time())
+    # 35 min window so we can compute a 30m velocity like the per-venue OI code
+    frm = now - 35 * 60
+
+    async def _oi() -> Optional[Dict]:
+        try:
+            return await _coinalyze_get(
+                api_key, "open-interest-history",
+                symbols=symbols, interval="5min", **{"from": frm, "to": now},
+                convert_to_usd="true",
+            )
+        except Exception as e:
+            logger.warning("Coinalyze OI-history failed: %s", e)
+            return None
+
+    async def _liq() -> Optional[Dict]:
+        try:
+            return await _coinalyze_get(
+                api_key, "liquidation-history",
+                symbols=symbols, interval="5min", **{"from": frm, "to": now},
+                convert_to_usd="true",
+            )
+        except Exception as e:
+            logger.warning("Coinalyze liq-history failed: %s", e)
+            return None
+
+    oi_rows, liq_rows = await asyncio.gather(_oi(), _liq())
+    result: Dict[str, Any] = {"data_available": True}
+
+    # ── Aggregate OI (USD) — current + 30m change ─────────────────────────
+    # CRITICAL: venues report at different cadences and some symbols may be
+    # missing bars. Summing per-timestamp naively produces nonsense deltas
+    # (e.g. if venue A only has t0 and venue B only has t1, A+B at t0 vs A+B
+    # at t1 is not a real change). Only use timestamps where ALL present
+    # venues have a value.
+    if oi_rows:
+        # rows = [{symbol, history: [{t, o, h, l, c}]}, ...]
+        per_venue_series: Dict[str, Dict[int, float]] = {}
+        for r in oi_rows:
+            sym = r.get("symbol", "?")
+            per_venue_series[sym] = {
+                int(pt["t"]): float(pt.get("c", 0) or 0)
+                for pt in (r.get("history") or [])
+                if pt.get("c") is not None
+            }
+        # Keep only venues that actually reported data
+        per_venue_series = {s: d for s, d in per_venue_series.items() if d}
+        if per_venue_series:
+            common_ts = set.intersection(*(set(d.keys()) for d in per_venue_series.values()))
+            if len(common_ts) >= 2:
+                sorted_ts = sorted(common_ts)
+                oi_now  = sum(d[sorted_ts[-1]] for d in per_venue_series.values())
+                oi_prev = sum(d[sorted_ts[0]]  for d in per_venue_series.values())
+                chg_pct = (oi_now - oi_prev) / oi_prev * 100 if oi_prev else 0.0
+                span_min = (sorted_ts[-1] - sorted_ts[0]) / 60.0
+                result["agg_oi_usd"]            = round(oi_now, 0)
+                result["agg_oi_change_pct"]     = round(chg_pct, 4)
+                result["agg_oi_change_span_min"] = round(span_min, 1)
+                result["agg_oi_venues_count"]   = len(per_venue_series)
+            elif len(common_ts) == 1:
+                # Only one aligned snapshot — report current, no delta
+                ts = next(iter(common_ts))
+                result["agg_oi_usd"] = round(sum(d[ts] for d in per_venue_series.values()), 0)
+                result["agg_oi_venues_count"] = len(per_venue_series)
+            else:
+                result["agg_oi_usd"] = None
+        else:
+            result["agg_oi_usd"] = None
+    else:
+        result["agg_oi_usd"] = None
+
+    # ── Aggregate liquidations (USD) — last 5m bar ────────────────────────
+    if liq_rows:
+        # rows = [{symbol, history: [{t, l, s}]}]  where l=long-liq USD, s=short-liq USD
+        liq_long_latest = 0.0
+        liq_short_latest = 0.0
+        liq_long_15m = 0.0
+        liq_short_15m = 0.0
+        max_t = 0
+        for r in liq_rows:
+            for pt in (r.get("history") or []):
+                max_t = max(max_t, int(pt["t"]))
+        cutoff_15 = max_t - 15 * 60
+        for r in liq_rows:
+            for pt in (r.get("history") or []):
+                t = int(pt["t"])
+                l = float(pt.get("l", 0) or 0)
+                s = float(pt.get("s", 0) or 0)
+                if t == max_t:
+                    liq_long_latest  += l
+                    liq_short_latest += s
+                if t >= cutoff_15:
+                    liq_long_15m  += l
+                    liq_short_15m += s
+        result["agg_long_liq_usd_5m"]  = round(liq_long_latest,  0)
+        result["agg_short_liq_usd_5m"] = round(liq_short_latest, 0)
+        result["agg_long_liq_usd_15m"] = round(liq_long_15m,     0)
+        result["agg_short_liq_usd_15m"]= round(liq_short_15m,    0)
+    else:
+        result["agg_long_liq_usd_5m"] = None
+
+    # ── Narrative signal based on liquidations (more actionable than OI) ──
+    ll = result.get("agg_long_liq_usd_5m")
+    ss = result.get("agg_short_liq_usd_5m")
+    if ll is not None and ss is not None:
+        if ll > ss * 1.5 and ll > 500_000:
+            sig = "BEARISH"
+            interp = (
+                f"Aggregate long cascade across {len(liq_rows)} venues: "
+                f"${ll:,.0f} longs liquidated vs ${ss:,.0f} shorts in last 5m "
+                f"(15m: ${result['agg_long_liq_usd_15m']:,.0f}L / ${result['agg_short_liq_usd_15m']:,.0f}S). "
+                "Real cross-venue forced selling."
+            )
+        elif ss > ll * 1.5 and ss > 500_000:
+            sig = "BULLISH"
+            interp = (
+                f"Aggregate short squeeze across {len(liq_rows)} venues: "
+                f"${ss:,.0f} shorts force-covered vs ${ll:,.0f} longs in last 5m "
+                f"(15m: ${result['agg_long_liq_usd_15m']:,.0f}L / ${result['agg_short_liq_usd_15m']:,.0f}S). "
+                "Real cross-venue forced buying."
+            )
+        else:
+            sig = "NEUTRAL"
+            interp = (
+                f"Aggregate liquidations balanced across {len(liq_rows) if liq_rows else 0} venues: "
+                f"${ll:,.0f} long / ${ss:,.0f} short (5m). No dominant cascade."
+            )
+    else:
+        sig = "UNAVAILABLE"
+        interp = "Aggregate liquidation data unavailable."
+
+    result["signal"] = sig
+    result["interpretation"] = interp
+    return result
 
 
 async def _fetch_btc_dominance() -> Dict:
@@ -667,15 +1340,18 @@ async def _fetch_top_position_ratio() -> Dict:
         _approx = True
     sig  = "BULLISH" if lsr > 1.3 else "BEARISH" if lsr < 0.77 else "NEUTRAL"
     _src = " (Bybit approx)" if _approx else ""
+    # "Top positions" on Binance = positions held by the top 20% of accounts by
+    # margin balance on this symbol. This is notional-weighted across those
+    # accounts but still Binance-retail — not institutional flow.
     interp = (
-        f"Top traders {lp:.0f}% long by position notional (ratio {lsr:.3f}){_src}. "
-        "Smart-money heavily positioned long — high-conviction directional bias."
+        f"Binance top-position accounts {lp:.0f}% long by notional (ratio {lsr:.3f}){_src}. "
+        "Top-20%-by-margin retail accounts heavily net-long — directional bias among larger retail."
         if lsr > 1.3 else
-        f"Top traders only {lp:.0f}% long by position notional (ratio {lsr:.3f}){_src}. "
-        "Smart-money short-positioned — bearish notional bias."
+        f"Binance top-position accounts only {lp:.0f}% long by notional (ratio {lsr:.3f}){_src}. "
+        "Top-20%-by-margin retail accounts net-short — bearish notional bias among larger retail."
         if lsr < 0.77 else
-        f"Top traders {lp:.0f}% long by notional (ratio {lsr:.3f}){_src}. "
-        "No extreme positioning by large accounts."
+        f"Binance top-position accounts {lp:.0f}% long by notional (ratio {lsr:.3f}){_src}. "
+        "No extreme positioning among top-20%-by-margin retail accounts."
     )
     return {
         "long_short_ratio":   round(lsr, 4),
@@ -860,6 +1536,208 @@ async def _fetch_deribit_options() -> Dict:
     }
 
 
+async def _fetch_deribit_skew_term() -> Dict:
+    """
+    Deribit options enrichment: 25-delta risk reversal (skew), IV term
+    structure, and P/C VOLUME ratio (different from OI ratio).
+
+    25-delta risk reversal = IV(25Δ call) − IV(25Δ put), per expiry.
+      Positive → calls bid (bullish skew).
+      Negative → puts bid (bearish skew, tail hedging).
+
+    Term structure = ATM IV at roughly 7d, 30d, 90d.
+      Inverted (short > long) signals short-dated fear — classic pre-selloff.
+
+    P/C volume = today's flow; P/C OI (separate fetcher) = accumulated positioning.
+    """
+    try:
+        summaries_r, idx_r = await asyncio.gather(
+            _get("https://www.deribit.com/api/v2/public/get_book_summary_by_currency"
+                 "?currency=BTC&kind=option"),
+            _get("https://www.deribit.com/api/v2/public/get_index_price?index_name=btc_usd"),
+        )
+    except Exception as e:
+        logger.warning("Deribit skew/term fetch failed: %s", e)
+        return {
+            "signal":         "UNAVAILABLE",
+            "data_available": False,
+            "interpretation": "Deribit skew/term unavailable — fetch failed.",
+        }
+    rows = summaries_r.get("result") or []
+    spot = float((idx_r.get("result") or {}).get("index_price", 0))
+    if not rows or spot <= 0:
+        return {
+            "signal":         "UNAVAILABLE",
+            "data_available": False,
+            "interpretation": "Deribit skew/term unavailable — empty response.",
+        }
+
+    # Parse name like "BTC-28MAR26-80000-C" → expiry, strike, type
+    from datetime import datetime, timezone
+    now_ts = time.time()
+    # Bucket by expiry
+    per_expiry: Dict[str, Dict] = {}
+    call_volume_btc = put_volume_btc = 0.0
+    for s in rows:
+        name = s.get("instrument_name", "")
+        parts = name.split("-")
+        if len(parts) < 4:
+            continue
+        expiry_str, strike_str, opt_type = parts[1], parts[2], parts[3]
+        try:
+            strike = float(strike_str)
+            expiry_dt = datetime.strptime(expiry_str, "%d%b%y").replace(tzinfo=timezone.utc)
+            days_to_exp = (expiry_dt.timestamp() - now_ts) / 86400
+        except Exception:
+            continue
+        if days_to_exp < 0 or days_to_exp > 365:
+            continue
+        mark_iv = float(s.get("mark_iv") or 0)
+        delta   = s.get("greeks", {}).get("delta") if isinstance(s.get("greeks"), dict) else s.get("delta")
+        try:
+            delta = float(delta) if delta is not None else None
+        except (TypeError, ValueError):
+            delta = None
+        vol_btc = float(s.get("volume") or 0)
+
+        # Accumulate P/C volume across all expiries
+        if opt_type == "C":
+            call_volume_btc += vol_btc
+        elif opt_type == "P":
+            put_volume_btc += vol_btc
+
+        bucket = per_expiry.setdefault(expiry_str, {
+            "days": days_to_exp, "calls": [], "puts": [],
+        })
+        entry = {"strike": strike, "iv": mark_iv, "delta": delta, "volume": vol_btc}
+        if opt_type == "C":
+            bucket["calls"].append(entry)
+        elif opt_type == "P":
+            bucket["puts"].append(entry)
+
+    # ── IV term structure: pick expiries closest to 7d, 30d, 90d; use ATM IV ──
+    def _atm_iv(bucket: Dict) -> Optional[float]:
+        """Nearest-to-spot strike's IV, averaged across call+put sides."""
+        all_opts = bucket["calls"] + bucket["puts"]
+        if not all_opts:
+            return None
+        nearest = min(all_opts, key=lambda o: abs(o["strike"] - spot))
+        # Use IVs from both sides at that same strike if available
+        target_strike = nearest["strike"]
+        ivs = [o["iv"] for o in all_opts if o["strike"] == target_strike and o["iv"] > 0]
+        if not ivs:
+            return None
+        return sum(ivs) / len(ivs)
+
+    def _nearest_expiry(days_target: float) -> Optional[Dict]:
+        if not per_expiry:
+            return None
+        candidates = [(abs(b["days"] - days_target), b) for b in per_expiry.values()]
+        return min(candidates, key=lambda x: x[0])[1] if candidates else None
+
+    iv_7d   = _nearest_expiry(7)
+    iv_30d  = _nearest_expiry(30)
+    iv_90d  = _nearest_expiry(90)
+    iv_7d_val  = _atm_iv(iv_7d)  if iv_7d  else None
+    iv_30d_val = _atm_iv(iv_30d) if iv_30d else None
+    iv_90d_val = _atm_iv(iv_90d) if iv_90d else None
+    term_inverted = (
+        iv_7d_val is not None and iv_30d_val is not None and iv_7d_val > iv_30d_val + 3
+    )
+    term_contango = (
+        iv_7d_val is not None and iv_90d_val is not None and iv_90d_val > iv_7d_val + 3
+    )
+
+    # ── 25-delta risk reversal on the 30d expiry (conventional) ──────────
+    rr_25d_pct: Optional[float] = None
+    if iv_30d:
+        # Find option with delta nearest ±0.25 on each side
+        calls_with_delta = [c for c in iv_30d["calls"] if c["delta"] is not None and c["iv"] > 0]
+        puts_with_delta  = [p for p in iv_30d["puts"]  if p["delta"] is not None and p["iv"] > 0]
+        if calls_with_delta and puts_with_delta:
+            c25 = min(calls_with_delta, key=lambda o: abs(o["delta"] - 0.25))
+            p25 = min(puts_with_delta,  key=lambda o: abs(o["delta"] + 0.25))
+            rr_25d_pct = c25["iv"] - p25["iv"]
+
+    skew_sig = "NEUTRAL"
+    if rr_25d_pct is not None:
+        if rr_25d_pct > 1.5:
+            skew_sig = "BULLISH"
+        elif rr_25d_pct < -1.5:
+            skew_sig = "BEARISH"
+
+    total_volume_btc = call_volume_btc + put_volume_btc
+    pcv = put_volume_btc / call_volume_btc if call_volume_btc > 0 else 1.0
+    pcv_sig = (
+        "BEARISH_CONTRARIAN" if pcv > 1.2 else
+        "BULLISH_CONTRARIAN" if pcv < 0.65 else
+        "NEUTRAL"
+    )
+
+    # Build interpretation combining the three angles
+    parts = []
+    if rr_25d_pct is not None:
+        if rr_25d_pct > 1.5:
+            parts.append(
+                f"30d 25Δ risk reversal +{rr_25d_pct:.1f}% — calls bid over puts, "
+                "bullish skew (traders paying for upside)."
+            )
+        elif rr_25d_pct < -1.5:
+            parts.append(
+                f"30d 25Δ risk reversal {rr_25d_pct:.1f}% — puts bid over calls, "
+                "bearish skew (tail-hedging dominant)."
+            )
+        else:
+            parts.append(f"30d 25Δ risk reversal {rr_25d_pct:+.1f}% — symmetric skew, no directional bias.")
+    if iv_7d_val and iv_30d_val:
+        if term_inverted:
+            parts.append(
+                f"Term structure inverted: 7d IV {iv_7d_val:.1f}% > 30d IV {iv_30d_val:.1f}% — "
+                "short-dated stress, classic pre-move signal."
+            )
+        elif term_contango and iv_90d_val:
+            parts.append(
+                f"Term in contango: 7d {iv_7d_val:.1f}% < 30d {iv_30d_val:.1f}% < 90d {iv_90d_val:.1f}% — "
+                "normal regime, no short-dated fear premium."
+            )
+        else:
+            parts.append(
+                f"Term structure flat: 7d {iv_7d_val:.1f}% / 30d {iv_30d_val:.1f}%"
+                + (f" / 90d {iv_90d_val:.1f}%" if iv_90d_val else "")
+                + " — no regime signal from IV curve."
+            )
+    if call_volume_btc > 0:
+        parts.append(
+            f"P/C volume ratio {pcv:.2f} "
+            f"({put_volume_btc:.1f} put / {call_volume_btc:.1f} call BTC traded today)."
+        )
+
+    # Primary signal: skew (directional), fall back to term-inversion
+    if skew_sig != "NEUTRAL":
+        sig = skew_sig
+    elif term_inverted:
+        sig = "BEARISH"
+    else:
+        sig = "NEUTRAL"
+
+    return {
+        "rr_25d_30d_pct":        round(rr_25d_pct, 2) if rr_25d_pct is not None else None,
+        "iv_7d_atm_pct":         round(iv_7d_val, 2)  if iv_7d_val  is not None else None,
+        "iv_30d_atm_pct":        round(iv_30d_val, 2) if iv_30d_val is not None else None,
+        "iv_90d_atm_pct":        round(iv_90d_val, 2) if iv_90d_val is not None else None,
+        "term_inverted":         term_inverted,
+        "term_contango":         term_contango,
+        "put_volume_btc":        round(put_volume_btc, 1),
+        "call_volume_btc":       round(call_volume_btc, 1),
+        "put_call_volume_ratio": round(pcv, 4),
+        "pc_volume_signal":      pcv_sig,
+        "skew_signal":           skew_sig,
+        "signal":                sig,
+        "data_available":        True,
+        "interpretation":        " ".join(parts) if parts else "Deribit options enrichment unavailable.",
+    }
+
+
 _btc_onchain_cache: Dict = {}
 _btc_onchain_cache_ts: float = 0.0
 _BTC_ONCHAIN_TTL = 3600.0  # 1 hour — bitcoin-data.com rate-limits aggressively
@@ -992,6 +1870,10 @@ def extract_signal_directions(ds: Dict[str, Any]) -> Dict[str, str]:
         ("top_position_ratio",      lambda d: _map(d.get("signal", ""))),
         ("funding_trend",           lambda d: _map(d.get("signal", ""))),
         ("deribit_options",         lambda d: _map(d.get("signal", ""))),
+        ("deribit_skew_term",       lambda d: _map(d.get("signal", ""))),
+        ("spot_perp_basis",         lambda d: _map(d.get("signal", ""))),
+        ("cvd",                     lambda d: _map(d.get("signal", ""))),
+        ("coinalyze_aggregate",     lambda d: _map(d.get("signal", ""))),
         ("btc_onchain",             lambda d: _map(d.get("sopr_signal", ""))),
         ("coinglass_liquidations",  lambda d: _map(d.get("signal", ""))),
     ]
@@ -1021,17 +1903,21 @@ async def fetch_dashboard_signals(
         "kraken_premium":     _fetch_kraken_premium(),
         "oi_velocity":        _fetch_oi_velocity(),
         "spot_whale_flow":    _fetch_spot_whale_flow(),
-        "bybit_liquidations": _fetch_bybit_liquidations(),
+        "bybit_liquidations": _fetch_okx_isolated_liquidations(),
         "okx_funding":        _fetch_okx_funding(),
         "btc_dominance":      _fetch_btc_dominance(),
         "top_position_ratio": _fetch_top_position_ratio(),
         "funding_trend":      _fetch_funding_trend(),
         "deribit_dvol":       _fetch_deribit_dvol(),
         "deribit_options":    _fetch_deribit_options(),
+        "deribit_skew_term":  _fetch_deribit_skew_term(),
+        "spot_perp_basis":    _fetch_spot_perp_basis(),
+        "cvd":                _fetch_cvd(),
         "btc_onchain":        _fetch_btc_onchain(),
     }
     if coinalyze_key:
         tasks["coinalyze"] = _fetch_coinalyze(coinalyze_key)
+        tasks["coinalyze_aggregate"] = _fetch_coinalyze_aggregate(coinalyze_key)
     if coinglass_key:
         tasks["coinglass_liquidations"] = _fetch_coinglass_liquidations(coinglass_key)
 
@@ -1045,7 +1931,7 @@ async def fetch_dashboard_signals(
             logger.warning("Dashboard signal '%s' failed: %s", key, val)
             result[key] = None
         else:
-            result[key] = val
+            result[key] = _attach_source(val, key)
 
     result["fetched_at"] = time.time()
     n_ok = sum(1 for v in result.values() if v is not None and not isinstance(v, float))
