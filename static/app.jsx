@@ -3235,19 +3235,22 @@ function App() {
                           {conditions.map((c, i) => <ConditionPill key={i} cond={c} />)}
                         </div>
                       )}
-                      {/* "This means" — always visible when Venice emits it. Tone-colored
-                          + emphatic when fired, muted when pending so the trader sees the
-                          edge preview regardless of current state. */}
+                      {/* "What this means" — always visible when Venice emits it. The
+                          prefix is BLACK + LARGER so the trader scans it instantly; the
+                          consequence itself is tone-colored. */}
                       {if_met && (
-                        <div style={{ marginLeft:28, marginTop:3,
-                          fontSize:fired?14:11, fontWeight:fired?800:600, lineHeight:1.4,
-                          color: fired ? msgColor : C.textSec,
-                          fontStyle: fired ? "normal" : "italic",
-                          letterSpacing:fired?0.2:0 }}>
-                          <span style={{ opacity:fired?0.7:0.55, fontWeight:600, marginRight:4 }}>
-                            {fired ? "→ this means:" : "→ if conditions fire:"}
+                        <div style={{ marginLeft:28, marginTop:3, lineHeight:1.4,
+                          display:"flex", flexWrap:"wrap", alignItems:"baseline", gap:6 }}>
+                          <span style={{ fontSize:15, fontWeight:900, color:C.text, letterSpacing:0.3 }}>
+                            {fired ? "→ what this means:" : "→ if conditions fire:"}
                           </span>
-                          {if_met}
+                          <span style={{
+                            fontSize: fired ? 14 : 12,
+                            fontWeight: fired ? 800 : 600,
+                            color: fired ? msgColor : C.textSec,
+                            fontStyle: fired ? "normal" : "italic" }}>
+                            {if_met}
+                          </span>
                         </div>
                       )}
                     </div>
