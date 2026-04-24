@@ -2530,6 +2530,29 @@ function App() {
         if (d.service_unavailable !== undefined)      setServiceUnavailable(!!d.service_unavailable);
         if (d.service_unavailable_reason !== undefined) setServiceUnavailReason(d.service_unavailable_reason || "");
         if (d.bar_binance_expert && d.bar_binance_expert.signal) setBinanceExpert(d.bar_binance_expert);
+        // Live dashboard_signals from the WS tick — every user (admin OR
+        // anon) gets the current order_book / whale_flow / funding / OI /
+        // liquidations / basis / skew values the metric() lookup reads.
+        // Previously only /backend (admin-only) populated backendSnap, so
+        // non-admin viewers saw "source unavailable" on every pill whose
+        // metric lived under dashboard_signals.
+        if (d.dashboard_signals !== undefined) {
+          setBackendSnap(prev => {
+            const prevDash = prev?.snapshot?.dashboard_signals;
+            // Skip setState if content hasn't changed — avoids forcing a
+            // re-render on every 1s tick when dashboard values are stable.
+            if (prevDash && JSON.stringify(prevDash) === JSON.stringify(d.dashboard_signals)) {
+              return prev;
+            }
+            return {
+              ...(prev || {}),
+              snapshot: {
+                ...((prev && prev.snapshot) || {}),
+                dashboard_signals: d.dashboard_signals,
+              },
+            };
+          });
+        }
       };
     }
     connect();

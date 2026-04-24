@@ -775,6 +775,15 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             if current_state["price"] is not None:
                 try:
+                    # Extract dashboard_signals from the backend_snapshot. This is
+                    # the live metric source the frontend's metric() lookup reads
+                    # for rendering condition-pill "now" values (bid/ask depth,
+                    # whale flows, funding, OI, liquidations, basis, CVD, skew).
+                    # Previously only exposed via /backend (admin-only) so non-admin
+                    # users got backendSnap=null and every non-price/non-strategy
+                    # pill rendered "source unavailable" — bullets never fired.
+                    _bs = current_state.get("backend_snapshot") or {}
+                    _dash = _bs.get("dashboard_signals") if isinstance(_bs, dict) else None
                     payload = _json_safe({
                         "type":                        "tick",
                         "price":                       current_state["price"],
@@ -794,6 +803,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "trader_summary":              current_state.get("trader_summary"),
                         "service_unavailable":         current_state.get("service_unavailable", False),
                         "service_unavailable_reason":  current_state.get("service_unavailable_reason", ""),
+                        "dashboard_signals":           _dash,
                     })
                     await websocket.send_json(payload)
                 except Exception as ws_exc:
