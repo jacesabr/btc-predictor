@@ -1,7 +1,7 @@
 /* @jsxRuntime classic */
 // Simple Analysis — integrated dashboard + microstructure
 
-const { useState, useEffect, useRef, useCallback } = React;
+const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
 // Strategy colors
 const STRATEGY_META = [
@@ -2815,7 +2815,14 @@ function App() {
         return String(d.getUTCHours()).padStart(2,"0") + ":" + String(d.getUTCMinutes()).padStart(2,"0") + " UTC";
       })()
     : "--:-- UTC";
-  const activeDeepseekPred = (pendingDeepseekReady && pendingDeepseekPred) ? pendingDeepseekPred : deepseekPred;
+  // useMemo stabilizes the reference across 500ms timer re-renders — without this,
+  // every tick creates a new activeDeepseekPred even when the underlying data is
+  // unchanged, which caused the DeepSeek card content to flash (React saw the
+  // conditional branches as unstable and remounted SignalRow).
+  const activeDeepseekPred = useMemo(
+    () => (pendingDeepseekReady && pendingDeepseekPred) ? pendingDeepseekPred : deepseekPred,
+    [pendingDeepseekReady, pendingDeepseekPred, deepseekPred]
+  );
   const strats = STRATEGY_META.filter(m=>strategies[m.key]).map(m=>({...m,...strategies[m.key]}));
 
   // Cross-exchange divergence (for microstructure display)
