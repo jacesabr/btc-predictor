@@ -535,8 +535,13 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
     else:
         lines += ["  [LONG/SHORT RATIO] unavailable", ""]
 
-    tk = ds.get("taker_flow")
-    if tk:
+    tk = ds.get("taker_flow") or {}
+    if tk.get("data_available") is False or tk.get("signal") == "UNAVAILABLE":
+        # CRITICAL: do NOT print the numeric line with .get(...,1/0) defaults —
+        # the model reads those as literal measured "BSR=1.000, 0 BTC" and the
+        # whole pipeline hallucinates a "zero-taker-flow regime".
+        lines += [f"  [TAKER FLOW] unavailable — {tk.get('interpretation','fetch failed')}", ""]
+    elif tk:
         lines += [
             "  [TAKER AGGRESSOR FLOW — Binance Futures 5m, last 3 bars]",
             f"  Buy/Sell ratio : {tk.get('buy_sell_ratio',1):.4f}   Taker buys: {tk.get('taker_buy_vol_btc',0):.1f} BTC  "
@@ -2470,8 +2475,10 @@ def _build_binance_expert_block(ds: Optional[Dict]) -> str:
             "",
         ]
 
-    tk = ds.get("taker_flow")
-    if tk:
+    tk = ds.get("taker_flow") or {}
+    if tk.get("data_available") is False or tk.get("signal") == "UNAVAILABLE":
+        lines += [f"[TAKER FLOW] unavailable — {tk.get('interpretation','fetch failed')}", ""]
+    elif tk:
         lines += [
             "[TAKER AGGRESSOR FLOW — Binance Futures 5m, last 3 bars]",
             f"  Buy/sell ratio: {tk.get('buy_sell_ratio', 1):.4f}  Taker buys: {tk.get('taker_buy_vol_btc', 0):.1f} BTC  Taker sells: {tk.get('taker_sell_vol_btc', 0):.1f} BTC",
