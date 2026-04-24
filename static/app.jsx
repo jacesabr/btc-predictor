@@ -2445,11 +2445,20 @@ function App() {
   // Collapsed by default — users said "waiting" section was too much scroll.
   // Keep one dense summary visible with expand toggle for the full list.
   const [waitingOpen,           setWaitingOpen]           = useState(false);
-  const [infoOpen,              setInfoOpen]              = useState(false);
+  // INFO defaults VISIBLE — these are the current-state expert observations
+  // (whale flow, taker flow narrative, book shape, funding regime) that
+  // explain the chart story. They pair with the edge sentence to form the
+  // full "here's what's happening right now" read. Only WAITING (future
+  // conditional triggers) stays collapsed.
+  const [infoOpen,              setInfoOpen]              = useState(true);
   const [serviceUnavailable,    setServiceUnavailable]    = useState(false);
   const [serviceUnavailReason,  setServiceUnavailReason]  = useState("");
   const [binanceExpert,         setBinanceExpert]         = useState(null);
-  const [tab,                   setTab]                   = useState("live");
+  const [tab,                   setTab]                   = useState(
+    // If the URL arrives with #sources (from a briefing pill), land the
+    // user on the public SOURCES tab — no admin login required.
+    (typeof window !== "undefined" && window.location.hash === "#sources") ? "sources" : "live"
+  );
   const [isAdmin,               setIsAdmin]               = useState(false);
   const [adminChecked,          setAdminChecked]          = useState(false);
   const [adminLoginError,       setAdminLoginError]       = useState("");
@@ -2963,57 +2972,57 @@ function App() {
     const opCheck = { ">": (a,b)=>a>b, ">=": (a,b)=>a>=b, "<": (a,b)=>a<b, "<=": (a,b)=>a<=b, "==": (a,b)=>Math.abs(a-b)<1e-9 };
     const METRIC_META = {
       price:             { label: "price",      layman: "Current BTC/USDT spot price.",
-                           source: { label: "Binance spot", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+                           source: { label: "Binance spot", url: "/#sources" } },
       price_change_pct:  { label: "Δ price",    layman: "% change from this bar's open — positive = up move so far, negative = down.",
-                           source: { label: "Binance spot", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+                           source: { label: "Binance spot", url: "/#sources" } },
       taker_buy_volume:  { label: "taker buy",  layman: "BTC bought by traders crossing the ask in the last 5 min (aggressive buyers).",
-                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                           source: { label: "Coinglass", url: "/#sources" } },
       taker_sell_volume: { label: "taker sell", layman: "BTC sold by traders hitting the bid in the last 5 min (aggressive sellers).",
-                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                           source: { label: "Coinglass", url: "/#sources" } },
       taker_volume:      { label: "taker vol",  layman: "Total aggressor volume (buys + sells) in the last 5 min — pure noise when near zero.",
-                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                           source: { label: "Coinglass", url: "/#sources" } },
       taker_ratio:       { label: "BSR",        layman: "Buy-to-sell aggressor ratio. >1 = buyers dominating, <1 = sellers dominating.",
-                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                           source: { label: "Coinglass", url: "/#sources" } },
       bsr:               { label: "BSR",        layman: "Buy-to-sell aggressor ratio. >1 = buyers dominating, <1 = sellers dominating.",
-                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                           source: { label: "Coinglass", url: "/#sources" } },
       bid_imbalance:     { label: "bid imb",    layman: "Positive = more bids than asks in the top 20 book levels. Shows buyer support depth.",
-                           source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+                           source: { label: "Binance depth", url: "/#sources" } },
       ask_imbalance:     { label: "ask imb",    layman: "Positive = more asks than bids in the top 20 book levels. Shows seller supply overhead.",
-                           source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+                           source: { label: "Binance depth", url: "/#sources" } },
       funding_rate:      { label: "funding",    layman: "% longs pay shorts every 8h. Positive = bullish crowd (longs paying to stay long).",
-                           source: { label: "Coinglass", url: "https://www.coinglass.com/FundingRate" } },
+                           source: { label: "Coinglass", url: "/#sources" } },
       open_interest:     { label: "OI",         layman: "Total open BTC perpetual futures contracts on Binance — proxy for speculative engagement.",
-                           source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinOpenInterest" } },
+                           source: { label: "Coinglass", url: "/#sources" } },
       rsi:               { label: "RSI",        layman: "Momentum oscillator (5m window). >70 overbought (pullback risk), <30 oversold (bounce risk).",
-                           source: { label: "TradingView", url: "https://www.tradingview.com/chart/?symbol=BINANCE%3ABTCUSDT&interval=5" } },
+                           source: { label: "TradingView", url: "/#sources" } },
       long_short_ratio:  { label: "L/S",        layman: "Retail longs vs shorts on Binance futures. Often a contrarian indicator at extremes.",
-                           source: { label: "Coinglass", url: "https://www.coinglass.com/LongShortRatio" } },
+                           source: { label: "Coinglass", url: "/#sources" } },
       basis_pct:             { label: "basis",           layman: "Spot-perp premium. Positive = perp trades above spot (bullish speculation).",
-                               source: { label: "Coinglass", url: "https://www.coinglass.com/Basis" } },
+                               source: { label: "Coinglass", url: "/#sources" } },
       perp_cvd_1h:           { label: "perp CVD 1h",     layman: "Cumulative volume delta on perp over last hour — net aggressor pressure.",
-                               source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                               source: { label: "Coinglass", url: "/#sources" } },
       spot_cvd_1h:           { label: "spot CVD 1h",     layman: "Spot cumulative volume delta 1h — net buying vs selling at market.",
-                               source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                               source: { label: "Coinglass", url: "/#sources" } },
       aggregate_cvd_1h:      { label: "aggregate CVD 1h",layman: "Cross-venue cumulative volume delta — net aggressor pressure across exchanges.",
-                               source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                               source: { label: "Coinglass", url: "/#sources" } },
       bid_depth_05pct:       { label: "bid depth ±0.5%", layman: "BTC liquidity on the bid side within 0.5% of mid — buyer support wall.",
-                               source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+                               source: { label: "Binance depth", url: "/#sources" } },
       ask_depth_05pct:       { label: "ask depth ±0.5%", layman: "BTC liquidity on the ask side within 0.5% of mid — seller supply overhead.",
-                               source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+                               source: { label: "Binance depth", url: "/#sources" } },
       rr_25d_30d:            { label: "RR 25d/30d",      layman: "Risk reversal — difference in 25-delta call vs put IV. Positive = bullish skew.",
-                               source: { label: "Deribit", url: "https://metrics.deribit.com" } },
+                               source: { label: "Deribit", url: "/#sources" } },
       iv_30d_atm:            { label: "IV 30d ATM",      layman: "30-day at-the-money implied volatility — market's expected move range.",
-                               source: { label: "Deribit", url: "https://metrics.deribit.com" } },
+                               source: { label: "Deribit", url: "/#sources" } },
       spot_whale_buy_btc:    { label: "whale buy",       layman: "BTC bought in single trades ≥5 BTC on spot — institutional accumulation proxy.",
-                               source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinWhaleIndex" } },
+                               source: { label: "Coinglass", url: "/#sources" } },
       spot_whale_sell_btc:   { label: "whale sell",      layman: "BTC sold in single trades ≥5 BTC on spot — institutional distribution proxy.",
-                               source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinWhaleIndex" } },
+                               source: { label: "Coinglass", url: "/#sources" } },
       aggregate_funding_rate:{ label: "agg funding",     layman: "Cross-exchange aggregated funding rate — avoids single-venue bias.",
-                               source: { label: "Coinglass", url: "https://www.coinglass.com/FundingRate" } },
+                               source: { label: "Coinglass", url: "/#sources" } },
       aggregate_liquidations_usd:{label:"agg liqs",      layman: "Cross-exchange liquidation cascade in USD — forced-close pressure.",
-                               source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinLiquidations" } },
+                               source: { label: "Coinglass", url: "/#sources" } },
       oi_velocity_pct:       { label: "OI velocity",     layman: "% change in open interest over 30 min — new positioning entering or exiting.",
-                               source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinOpenInterest" } },
+                               source: { label: "Coinglass", url: "/#sources" } },
     };
     // Text → signal-family map (mirrors server-side _TEXT_SIGNAL_FAMILIES in
     // trader_summary.py). When a bullet has conditions:[] but its text names
@@ -3642,11 +3651,12 @@ function App() {
                           <span style={{ fontSize:10, color:C.muted, letterSpacing:1.2, textTransform:"uppercase", fontWeight:700 }}>bar closes</span>
                         </div>
                         <div style={{ display:"flex" }}>
-                          {[["live","LIVE"],["admin","ADMIN"]].map(([t,label])=>{
+                          {[["live","LIVE"],["sources","SOURCES"],["admin","ADMIN"]].map(([t,label])=>{
                             const active = t==="admin" ? (tab==="admin" || !!expandedAdminSection) : tab===t;
                             return (
                               <button key={t} onClick={()=>{
                                 if (t === "admin") { setTab("admin"); setExpandedAdminSection(""); }
+                                else if (t === "sources") { setTab("sources"); setExpandedAdminSection(""); }
                                 else { setTab("live"); setExpandedAdminSection(""); }
                               }} style={{
                                 background:"none", border:"none",
@@ -3686,6 +3696,45 @@ function App() {
               {/* Strategy indicators + microstructure moved to ENSEMBLE tab. LIVE is DeepSeek-only. */}
             </div>
           </div>
+        )}
+
+        {/* ══ SOURCES TAB (public — no admin required) ══
+             Lives alongside LIVE/ADMIN in the top-right tab strip. Shows the
+             same EnsembleTab content that admins can see under ADMIN > SOURCES,
+             but without the auth gate so briefing pills can link here via
+             /#sources and any trader can verify the raw live metric
+             readings behind each condition. */}
+        {tab==="sources" && (
+          <ErrorBoundary key="sources-tab">
+            <div style={{ padding:"12px 14px" }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+                marginBottom:10, paddingBottom:8, borderBottom:`1px solid ${C.borderSoft}` }}>
+                <div>
+                  <div style={{ fontSize:14, fontWeight:900, color:C.text, letterSpacing:1.5, textTransform:"uppercase" }}>Sources</div>
+                  <div style={{ fontSize:11, color:C.muted, marginTop:3 }}>
+                    Live microstructure signals — the raw data behind every briefing pill.
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setTab("live"); }}
+                  style={{ background:"none", border:`1px solid ${C.border}`, borderRadius:5,
+                    padding:"4px 12px", cursor:"pointer",
+                    fontSize:11, fontFamily:"inherit", letterSpacing:1.5, fontWeight:700,
+                    color:C.muted, textTransform:"uppercase" }}>
+                  ← Back to live
+                </button>
+              </div>
+              <EnsembleTab
+                weights={weights}
+                ob={ob} ls={ls} tk={tk} oif={oif} lq={lq}
+                fg={fg} mp={mp} cz={cz} cg={cg}
+                dots={dots} price={price}
+                allAccuracy={allAccuracy}
+                allAccuracyErr={allAccuracyErr}
+                onRefreshAccuracy={fetchAllAccuracy}
+              />
+            </div>
+          </ErrorBoundary>
         )}
 
         {/* ══ ADMIN TAB ══ */}
@@ -3776,7 +3825,7 @@ function App() {
 
                 {[
                   ["history",     "HISTORY",      "Bar-by-bar prediction outcomes + per-signal accuracy"],
-                  ["ensemble",    "ENSEMBLE",     "Strategy weights + live microstructure"],
+                  ["ensemble",    "SOURCES",      "Live microstructure signals + strategy weights — the data behind every briefing pill"],
                   ["timing",      "TIMING",       "Per-bar pipeline stage latencies"],
                   ["embed_audit", "EMBED AUDIT",  "Embedding coverage + last DeepSeek prompts"],
                   ["errors",      "ERRORS",       "Persisted error/flag/suggestion log"],
