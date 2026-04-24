@@ -416,16 +416,35 @@ async def _fetch_taker_flow() -> Dict:
                 for r in reversed(rows)
             ]
         except Exception as _e2:
-            # Both Binance and OKX failed — don't fabricate "balanced flow" from the
-            # bsr=1.0 default. Return UNAVAILABLE so downstream (prompt builder,
-            # dashboard accuracy tally) can distinguish "measured neutral" from
-            # "data gap" and omit the section rather than mislead the model.
-            logger.warning("Taker flow fetch failed on both Binance and OKX: %s", _e2)
-            return {
-                "signal":            "UNAVAILABLE",
-                "data_available":    False,
-                "interpretation":    "Taker flow data unavailable — both Binance and OKX fetches failed.",
-            }
+            # Binance + OKX failed — try Kraken's public Trades endpoint as a last
+            # resort. Kraken spot is reachable from Render (where Binance/OKX are
+            # geo-blocked). We aggregate taker buy/sell volume from the last 5 min
+            # of trades (side flag "b"=buy taker, "s"=sell taker).
+            logger.debug("Binance+OKX taker flow failed, trying Kraken: %s", _e2)
+            try:
+                import time as _time
+                since_ns = int((_time.time() - 360) * 1e9)   # last ~6 min, safety window
+                raw = await _get(f"https://api.kraken.com/0/public/Trades?pair=XBTUSD&since={since_ns}")
+                result = raw.get("result") or {}
+                trades = result.get("XXBTZUSD") or result.get("XBTUSD") or []
+                if not trades:
+                    raise ValueError("empty Kraken trades response")
+                cutoff = _time.time() - 300   # strict 5-min window for aggregation
+                bv = sum(float(t[1]) for t in trades if float(t[2]) >= cutoff and t[3] == "b")
+                sv = sum(float(t[1]) for t in trades if float(t[2]) >= cutoff and t[3] == "s")
+                if bv + sv < 0.01:
+                    raise ValueError("Kraken trades volume too small to be meaningful")
+                bsr = bv / sv if sv > 0 else 1.0
+                # No 3-bar trend from single Trades call — flag as SINGLE_BAR
+                _data_for_trend = []
+                logger.info("Taker flow from Kraken fallback: BSR=%.3f buy=%.1f sell=%.1f BTC", bsr, bv, sv)
+            except Exception as _e3:
+                logger.warning("Taker flow fetch failed on Binance, OKX, and Kraken: %s", _e3)
+                return {
+                    "signal":            "UNAVAILABLE",
+                    "data_available":    False,
+                    "interpretation":    "Taker flow data unavailable — Binance, OKX, and Kraken fetches all failed.",
+                }
     sig = "BULLISH" if bsr > 1.12 else "BEARISH" if bsr < 0.90 else "NEUTRAL"
     if len(_data_for_trend) >= 3:
         ratios  = [float(d.get("buySellRatio", 1)) for d in _data_for_trend]
