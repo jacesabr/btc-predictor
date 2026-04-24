@@ -2445,6 +2445,7 @@ function App() {
   // Collapsed by default — users said "waiting" section was too much scroll.
   // Keep one dense summary visible with expand toggle for the full list.
   const [waitingOpen,           setWaitingOpen]           = useState(false);
+  const [infoOpen,              setInfoOpen]              = useState(false);
   const [serviceUnavailable,    setServiceUnavailable]    = useState(false);
   const [serviceUnavailReason,  setServiceUnavailReason]  = useState("");
   const [binanceExpert,         setBinanceExpert]         = useState(null);
@@ -3051,51 +3052,75 @@ function App() {
       const meta    = METRIC_META[cond.metric] || {};
       const labelText = meta.label || cond.metric.replace(/_/g," ");
       const borderStyle = (heuristic && !infoOnly) ? "dashed" : "solid";
+      // Detect degenerate conditions against live value: ">X" when live is
+      // already 1.5x past X, or "<X" when live is already 0.67x below — the
+      // condition is trivially true forever so the pill is misleading. We
+      // still render it, but visually de-emphasise and annotate the tooltip
+      // so the trader instantly sees "this threshold is meaningless".
+      const degenerateLive = (() => {
+        if (!live || infoOnly || heuristic) return false;
+        const v = cond.value;
+        if (!Number.isFinite(v) || v === 0) return false;
+        if (cond.op === ">" || cond.op === ">=") {
+          return live.v >= v * 1.5 && live.v > v;
+        }
+        if (cond.op === "<" || cond.op === "<=") {
+          return live.v <= v * 0.67 && live.v < v;
+        }
+        return false;
+      })();
+      const pillTitle = [
+        meta.layman || null,
+        degenerateLive ? "⚠ Live value is already far past this threshold — the trigger is trivially true and tells you nothing about future moves." : null,
+        heuristic ? "Rule-of-thumb threshold from DeepSeek — not live-anchored." : null,
+      ].filter(Boolean).join("\n\n");
       return (
-        <span style={{ display:"inline-flex", flexDirection:"column", gap:2 }}>
-          <span style={{ display:"inline-flex", alignItems:"center", gap:7,
+        <span title={pillTitle}
+              style={{ display:"inline-flex", alignItems:"center", gap:7,
             fontSize:13, fontWeight:700, padding:"4px 10px", borderRadius:5,
-            background: bgC, color: fgC, border:`1px ${borderStyle} ${borderC}` }}>
-            <span style={{ fontSize:15, fontWeight:900 }}>{icon}</span>
-            {infoOnly ? (
-              <span>{labelText} · live reading</span>
-            ) : (
-              <span>{labelText} {cond.op}{" "}
-                <strong style={{ fontSize:17, color:C.text }}>{thresholdStr}</strong>
-                {heuristic && (
-                  <span title="Rule-of-thumb threshold from DeepSeek — not a live-anchored level"
-                        style={{ marginLeft:5, fontSize:9, fontWeight:900, letterSpacing:0.6,
-                          color:C.muted, background:"#FFFFFF",
-                          border:`1px dashed ${C.borderSoft}`, borderRadius:3,
-                          padding:"0 4px", textTransform:"uppercase" }}>
-                    rule of thumb
-                  </span>
-                )}
-              </span>
-            )}
-            {live ? (
-              <span style={{ color:C.muted, fontWeight:600 }}>{infoOnly ? "" : "· "}now{" "}
-                <strong style={{ color:C.text, fontWeight:900, fontSize:17 }}>{live.f(live.v)}</strong>
-              </span>
-            ) : (
-              <span style={{ color:C.muted, fontWeight:600, fontStyle:"italic" }}>· source unavailable</span>
-            )}
-            {meta.source && (
-              <a href={meta.source.url} target="_blank" rel="noopener noreferrer"
-                 title={`Verify at ${meta.source.label}`}
-                 style={{ color:C.muted, textDecoration:"underline",
-                   textDecorationColor:C.borderSoft, textUnderlineOffset:2,
-                   fontSize:10, fontWeight:700, marginLeft:4, letterSpacing:0.3 }}
-                 onClick={(e)=>e.stopPropagation()}>↗ {meta.source.label}</a>
-            )}
-          </span>
-          {meta.layman && (
-            <span style={{ fontSize:12, color:"#475569",
-              marginLeft:10, lineHeight:1.4, maxWidth:520 }}>
-              <span style={{ color:C.muted, fontWeight:700, marginRight:5,
-                fontSize:11, letterSpacing:0.3 }}>ℹ this measures</span>
-              <span style={{ fontStyle:"italic" }}>{meta.layman}</span>
+            background: bgC, color: fgC,
+            border:`1px ${degenerateLive ? "dashed" : borderStyle} ${degenerateLive ? C.muted : borderC}`,
+            opacity: degenerateLive ? 0.7 : 1 }}>
+          <span style={{ fontSize:15, fontWeight:900 }}>{icon}</span>
+          {infoOnly ? (
+            <span>{labelText} · live reading</span>
+          ) : (
+            <span>{labelText} {cond.op}{" "}
+              <strong style={{ fontSize:17, color:C.text }}>{thresholdStr}</strong>
+              {heuristic && (
+                <span title="Rule-of-thumb threshold from DeepSeek — not a live-anchored level"
+                      style={{ marginLeft:5, fontSize:9, fontWeight:900, letterSpacing:0.6,
+                        color:C.muted, background:"#FFFFFF",
+                        border:`1px dashed ${C.borderSoft}`, borderRadius:3,
+                        padding:"0 4px", textTransform:"uppercase" }}>
+                  rule of thumb
+                </span>
+              )}
+              {degenerateLive && (
+                <span title="Live value already far past this threshold — trigger is trivially met"
+                      style={{ marginLeft:5, fontSize:9, fontWeight:900, letterSpacing:0.6,
+                        color:C.muted, background:"#FFFFFF",
+                        border:`1px dashed ${C.muted}`, borderRadius:3,
+                        padding:"0 4px", textTransform:"uppercase" }}>
+                  already past
+                </span>
+              )}
             </span>
+          )}
+          {live ? (
+            <span style={{ color:C.muted, fontWeight:600 }}>{infoOnly ? "" : "· "}now{" "}
+              <strong style={{ color:C.text, fontWeight:900, fontSize:17 }}>{live.f(live.v)}</strong>
+            </span>
+          ) : (
+            <span style={{ color:C.muted, fontWeight:600, fontStyle:"italic" }}>· source unavailable</span>
+          )}
+          {meta.source && (
+            <a href={meta.source.url} target="_blank" rel="noopener noreferrer"
+               title={`Verify at ${meta.source.label}`}
+               style={{ color:C.muted, textDecoration:"underline",
+                 textDecorationColor:C.borderSoft, textUnderlineOffset:2,
+                 fontSize:10, fontWeight:700, marginLeft:4, letterSpacing:0.3 }}
+               onClick={(e)=>e.stopPropagation()}>↗ {meta.source.label}</a>
           )}
         </span>
       );
@@ -3196,16 +3221,38 @@ function App() {
               <BullBearText text={text} size={12} baseColor={C.text} />
             </span>
             {(() => {
+              // 1) Prefer the source of any condition metric — most specific.
               const conds = conditions || [];
-              const sourced = conds.map(c => METRIC_META[c.metric]).find(m => m && m.source);
+              let sourced = conds.map(c => METRIC_META[c.metric]).find(m => m && m.source);
+              let inferredSrc = false;
+              // 2) Fallback: narrative-only bullet (empty conditions) that
+              // names a recognized signal family in prose. Use the family's
+              // registered source so the trader still gets a ↗ SOURCE link.
+              // This was the "? UNKNOWN" case that dominated narrative bullets
+              // for BSR / bid-depth / funding / RSI which DO have sources.
+              if (!sourced) {
+                for (const { rx, metrics } of TEXT_FAMILY_RULES) {
+                  if (rx.test(text || "")) {
+                    for (const m of metrics) {
+                      const meta = METRIC_META[m];
+                      if (meta && meta.source) { sourced = meta; inferredSrc = true; break; }
+                    }
+                    if (sourced) break;
+                  }
+                }
+              }
               if (sourced) {
+                const title = inferredSrc
+                  ? `Inferred source: ${sourced.source.label} (bullet prose names this family)`
+                  : `Verify at ${sourced.source.label}`;
                 return (
                   <a href={sourced.source.url} target="_blank" rel="noopener noreferrer"
-                     title={`Verify at ${sourced.source.label}`}
+                     title={title}
                      onClick={(e)=>e.stopPropagation()}
                      style={{ color:"#B91C1C", textDecoration:"none",
                        fontSize:9, fontWeight:800, letterSpacing:1,
-                       padding:"2px 7px", border:"1px solid #DC2626",
+                       padding:"2px 7px",
+                       border: inferredSrc ? "1px dashed #DC2626" : "1px solid #DC2626",
                        borderRadius:3, background:"#FFFFFF",
                        flexShrink:0, lineHeight:1.3, whiteSpace:"nowrap" }}>
                     ↗ SOURCE
@@ -3240,21 +3287,31 @@ function App() {
               ))}
             </div>
           )}
-          {if_met && (
-            <div style={{ marginLeft:28, marginTop:3, lineHeight:1.4,
-              display:"flex", flexWrap:"wrap", alignItems:"baseline", gap:6 }}>
-              <span style={{ fontSize:15, fontWeight:900, color:C.text, letterSpacing:0.3 }}>
-                {fired ? "→ what this means:" : narrative ? "→ context:" : "→ if conditions fire:"}
-              </span>
-              <span style={{
-                fontSize: fired ? 14 : 12,
-                fontWeight: fired ? 800 : 600,
-                color: fired ? msgColor : C.textSec,
-                fontStyle: fired ? "normal" : "italic" }}>
-                {if_met}
-              </span>
-            </div>
-          )}
+          {if_met && (() => {
+            // Hide the "→ what this means" line when bullet text already
+            // explains the implication. Proxy: text already has an arrow
+            // or em-dash (meaning the writer used the fact→implication
+            // pattern) AND text is long enough (≥ 60 chars) to have said
+            // it. Otherwise show a compact one-liner.
+            const textHasArrow = /→|—/.test(text || "");
+            const textLongEnough = (text || "").length >= 60;
+            if (fired && textHasArrow && textLongEnough) return null;
+            return (
+              <div style={{ marginLeft:28, marginTop:2, lineHeight:1.35,
+                display:"flex", flexWrap:"wrap", alignItems:"baseline", gap:5 }}>
+                <span style={{ fontSize:12, fontWeight:800, color:C.muted, letterSpacing:0.2 }}>
+                  {fired ? "→" : narrative ? "context:" : "if fires:"}
+                </span>
+                <span style={{
+                  fontSize: fired ? 13 : 12,
+                  fontWeight: fired ? 700 : 500,
+                  color: fired ? msgColor : C.textSec,
+                  fontStyle: fired ? "normal" : "italic" }}>
+                  {if_met}
+                </span>
+              </div>
+            );
+          })()}
         </div>
       );
     };
@@ -3299,13 +3356,24 @@ function App() {
                 )}
                 {info.length > 0 && (
                   <div style={{ marginTop:12 }}>
-                    <div style={{ fontSize:11, fontWeight:800, color:"#57534E", letterSpacing:1.2,
-                      textTransform:"uppercase", marginBottom:6 }}>
-                      Info · live context · {info.length}
-                    </div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                      {info.map((b, i) => <Bullet key={`info${b.__src}${i}`} {...b} />)}
-                    </div>
+                    <button onClick={() => setInfoOpen(v => !v)}
+                      style={{ width:"100%", display:"flex", alignItems:"center",
+                        justifyContent:"space-between", gap:8,
+                        background:"none", border:"none", padding:"4px 0",
+                        cursor:"pointer", fontFamily:"inherit" }}>
+                      <span style={{ fontSize:11, fontWeight:700, color:C.muted,
+                        letterSpacing:1.2, textTransform:"uppercase" }}>
+                        {infoOpen ? "▾" : "▸"} Info · live context · {info.length}
+                      </span>
+                      <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>
+                        {infoOpen ? "hide" : "show"}
+                      </span>
+                    </button>
+                    {infoOpen && (
+                      <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:6 }}>
+                        {info.map((b, i) => <Bullet key={`info${b.__src}${i}`} {...b} />)}
+                      </div>
+                    )}
                   </div>
                 )}
                 {waiting.length > 0 && (

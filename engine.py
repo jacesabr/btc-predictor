@@ -372,6 +372,20 @@ async def _build_trader_summary_bg(window_start_time: float) -> None:
         # a fresher bar's state with a stale summary.
         if summary and current_state.get("window_start_time") == window_start_time:
             current_state["trader_summary"] = summary
+        # Persist for audit trail. Fire-and-forget — any DB failure here must
+        # NOT impact the live path (the in-memory `current_state` is already
+        # set above). Saved rows are only read by /audit/trader-summary.
+        if summary:
+            try:
+                import json as _json
+                storage.save_trader_summary(
+                    window_start_time, _json.dumps(_json_safe(summary))
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "trader_summary audit-save failed for bar %s: %s",
+                    window_start_time, exc,
+                )
     except Exception as exc:
         logger.warning("trader_summary bg task FAILED for bar %s: %s", window_start_time, exc)
 
@@ -985,11 +999,11 @@ async def _run_full_prediction(prices, is_force=False):
             )
         )
 
-    return pred, strategy_preds, pm_odds_open, pm_ev_open, window_start_time, window_start_price
+    return pred, strategy_preds, window_start_time, window_start_price
 
 
 async def _resolve_window(
-    window_start_time, window_start_price, pred, strategy_preds, pm_odds_open, pm_ev_open
+    window_start_time, window_start_price, pred, strategy_preds,
 ):
     """Persist and resolve a closed window. Runs as a background task."""
     bar_ts = time.strftime("%H:%M:%S UTC", time.gmtime(window_start_time))
@@ -1023,7 +1037,7 @@ async def _resolve_window(
             window_end=window_start_time + config.window_duration_seconds,
             start_price=window_start_price, signal=pred["signal"],
             confidence=pred["confidence"], strategy_votes=strategy_preds,
-            market_odds=pm_odds_open, ev=pm_ev_open,
+            market_odds=None, ev=None,
         )
         await _safe_storage_async(storage.resolve_prediction, window_start_time, end_price)
 
@@ -1427,7 +1441,7 @@ async def run_prediction_loop():
                 continue
 
             last_processed_window = current_window
-            pred, strategy_preds, pm_odds_open, pm_ev_open, window_start_time, window_start_price = \
+            pred, strategy_preds, window_start_time, window_start_price = \
                 await _run_full_prediction(prices)
 
             bar_close  = window_start_time + config.window_duration_seconds
@@ -1438,7 +1452,7 @@ async def run_prediction_loop():
 
             asyncio.create_task(_resolve_window(
                 window_start_time, window_start_price,
-                pred, strategy_preds, pm_odds_open, pm_ev_open,
+                pred, strategy_preds,
             ))
             await asyncio.sleep(0)
 

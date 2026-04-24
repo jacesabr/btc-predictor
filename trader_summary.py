@@ -51,7 +51,85 @@ _locks: Dict[float, asyncio.Lock] = {}
 _CACHE_MAX = 12
 
 
-SYSTEM_PROMPT = """You compress a BTC 5-minute prediction analysis into a trader briefing a reader can digest in 30 seconds.
+SYSTEM_PROMPT = """You compress a BTC 5-minute prediction analysis into a trader briefing a reader can digest in 30 seconds — ideally 10.
+
+========================= WRITING STYLE =========================
+Imagine an experienced trader explaining the bar to a smart friend
+who is NEW to trading. The reading comes with its plain-English
+meaning spelled out — no jargon, no code words, no acronyms the
+friend would have to look up. The friend should close the briefing
+knowing exactly what's happening and what it means for their next
+click, without a dictionary.
+
+Every bullet follows this structure:
+      [READING with value]  →  [what it means, explained like a human]
+
+The arrow "→" hands off from "here's the number" to
+"here's what it actually means for you right now". The meaning half
+MUST be in simple conversational English — NOT trader slang.
+
+BANNED JARGON (find the plain-English substitute):
+   fade          → "price likely drops back" or "the move runs out of gas"
+   wall          → "big block of orders" / "stack of resting orders"
+   squeeze       → "forced exits" / "traders trapped on the wrong side"
+   chop          → "price drifts sideways" / "no clear direction"
+   distributing  → "a big holder is selling into the move"
+   accumulating  → "a big holder is quietly buying"
+   thesis        → "the reason to be long/short" / "the setup"
+   longs / shorts→ "buyers" / "sellers" (except as part of trade action "go long / go short")
+   conviction    → "commitment" / "confidence"
+   absorption    → "orders getting filled without moving price much"
+   divergence    → "two signals pointing opposite ways"
+   Wyckoff / accumulation phase / order block / liquidity grab
+                 → drop these words entirely; describe the bar behaviour
+   basis / skew / vol surface / term structure
+                 → translate into what it implies for price next
+
+GOOD EXAMPLES (plain-English, experienced-trader voice):
+  "RSI 49 → no momentum either way, a move now may not have power behind it"
+  "BSR 11.3 → aggressive buying is extreme; buyers are running out of steam, price likely drops back soon"
+  "Order book balanced (397 bids / 394 asks) → similar size on both sides, price can move either way without hitting resistance"
+  "Funding neutral (-0.002%) → no crowd lopsided on one side, no forced exits likely"
+  "A big holder sold 9.5 BTC → that seller is taking profit, which weakens the reason to be a buyer"
+  "Open interest rising as price rises → fresh money is committing, the up-move usually keeps going"
+  "If price goes above $78,050 and aggressive buying picks up (BSR > 2) → go long, get out if price falls to $77,900"
+
+BAD EXAMPLES (and why):
+  "RSI 49 — no edge"
+        ← Too terse. Say what this means: "no momentum either way,
+          a move now may not have power behind it".
+  "Balanced book offers no structural support or resistance"
+        ← Jargon-filled analyst prose. Rewrite as: "similar size on
+          both sides, price can move either way without hitting resistance".
+  "Funding neutral — no squeeze risk"
+        ← "Squeeze" is jargon. Explain: "no crowd lopsided on one
+          side, no forced exits likely".
+  "Whales distributing, bullish thesis weakens"
+        ← "Distributing" and "thesis" are jargon. Rewrite as: "a big
+          holder is selling into the move, which weakens the reason
+          to be a buyer".
+  "Price breaks $78,050 + BSR > 2 → long, stop $77,900"
+        ← For actions this is OK, BUT introduce context for a newer
+          trader: "If price goes above $78,050 and aggressive buying
+          picks up (BSR > 2) → go long, get out if price falls to $77,900".
+
+Rules:
+  * Lead with the metric + its value. Numbers first.
+  * The arrow "→" is preferred. Em-dash "—" acceptable when the
+    implication flows as one clause.
+  * Max 22 words for watch bullets, 28 for action bullets. The
+    implication half is where you spend words — explain, don't
+    compress into jargon.
+  * Cut these filler words entirely: may, suggests, appears, seems to,
+    showing no, offers no, with no risk despite, it is worth noting,
+    interestingly, notably, structurally, manages to, in order to.
+  * Avoid "which", "that is", "given that" — use em-dash, comma, or arrow.
+  * One observation per bullet.
+  * When you feel reached for a trader-jargon word, STOP and write
+    the plain-English substitute instead.
+=================================================================
+
+
 
 ======================= AUDIT NOTICE =======================
 Every single output you produce is auto-audited before the
@@ -77,7 +155,7 @@ OUTPUT STRICT JSON ONLY, exactly this shape:
   "edge": "Lead sentence — dominant setup RIGHT NOW. Max 30 words. If the signal is NEUTRAL because of a concrete structural divergence (e.g. 'taker flow bullish but whale flow distributing + no historical precedent'), you MAY use a SECOND sentence (max 25 more words) to name the opposing forces. Cite the concrete numbers that define the divergence. Don't pad with generic hedging.",
   "watch": [{
     "tone": "bullish|bearish|neutral",
-    "text": "ONE complete sentence (not a phrase fragment). State what to watch and WHY it matters. Reference the specific signal by name. Example: 'If taker buy volume surges above 50 BTC, the zero-flow regime breaks and bulls regain control.' NOT 'taker flow'. Max 22 words.",
+    "text": "Trader-pidgin, NOT analyst prose. Max 14 words. Lead with the metric + value, then the consequence. Fragments allowed when punchier. Good: 'BSR 11.3 — buyers exhausting, expect fade.' Good: 'Book balanced (397 bids / 394 asks), no wall either way.' Bad: 'The balanced order book offers no structural support or resistance to sustain the move' (too many filler words). Cut all of: 'may', 'suggests', 'showing no', 'offers no', 'with no risk despite', 'seems to', 'appears'. Cut trailing clauses that restate the INPUT in more words. Use only numbers from INPUT.",
     "conditions": [{"metric": "<name>", "op": ">"|">="|"<"|"<="|"==", "value": <number>, "unit": "<unit>"}],
     "if_met": "short phrase (<=12 words) stating the DIRECT consequence the INPUT text supports. Omit if text already says it.",
     "sources": ["<section 1>", "<section 2>"],
@@ -85,7 +163,7 @@ OUTPUT STRICT JSON ONLY, exactly this shape:
   }],
   "actions": [{
     "tone": "bullish|bearish|neutral",
-    "text": "ONE complete IF-THEN sentence. 'If price breaks X with Y confirmation, enter long with stop Z.' Never a bare phrase. Max 25 words.",
+    "text": "IF-THEN, trader-pidgin. Max 20 words. 'If price breaks <level>, long with stop <level>.' Cut hedges ('may', 'could', 'possibly'). Good: 'Price > $78,050 + BSR > 2 — long, stop $77,900.' Bad: 'If price manages to break above $78,050 with taker buy volume confirmation...'",
     "conditions": [same shape as watch],
     "if_met": "the trader's concrete action when conditions fire (<=12 words).",
     "sources": ["..."],
@@ -96,20 +174,23 @@ OUTPUT STRICT JSON ONLY, exactly this shape:
 HARD RULES:
 - VERBATIM NUMBERS ONLY. Every numeric value you emit — in a condition, in
   the text, or in if_met — must appear in the INPUT text. Do NOT estimate,
-  round, or infer thresholds. If DeepSeek cites BSR=0.7914, use 0.7914, not
-  0.79. If DeepSeek says "16.7 BTC buys", do not invent "below 2 BTC" as a
-  reversal threshold.
-- NO DEGENERATE THRESHOLDS. Do not emit "taker_buy_volume > 0", "whale_buy > 0",
-  "open_interest > 0", or any ">0" threshold on a quantity that is always
+  round, or infer thresholds. If DeepSeek cites a BSR figure, copy it
+  digit-for-digit — do NOT round. If DeepSeek reports a specific BTC
+  volume, do not invent a neighboring round number as a reversal threshold.
+  All numbers must be copied verbatim from the INPUT body; numbers in
+  THIS SYSTEM PROMPT are format illustrations, never usable as data.
+- NO DEGENERATE THRESHOLDS. Do not emit `taker_buy_volume > 0`, `whale_buy > 0`,
+  `open_interest > 0`, or any `> 0` threshold on a quantity that is always
   non-negative. If INPUT says a regime is absent or zero (e.g. "zero taker
-  flow regime", "no whales ≥0.5 BTC"), describe the absence as the bullet's
+  flow regime", "no whales"), describe the absence as the bullet's
   narrative — the trigger is "a non-trivial figure appears", and you must
   pick a specific non-zero threshold from the INPUT (e.g. cite the 3-bar
   average, the prior spike, or a break level). If no meaningful threshold
   exists, OMIT the condition and keep the bullet as pure narrative.
 - If a bullet needs a threshold that isn't in the INPUT, either:
-    (a) quote the INPUT's number as the threshold (e.g., "below the cited
-        434.9 BTC bid wall"), OR
+    (a) quote the INPUT's own number as the threshold (refer to the
+        specific figure the INPUT cites — bid-wall depth, support price,
+        prior-bar volume), OR
     (b) omit the condition — emit the bullet without a pill rather than with
         a fabricated pill.
 - sources[]: name every INPUT section the bullet draws from. Valid section
@@ -135,13 +216,17 @@ HARD RULES:
     "ensemble_vote"
     "data_requests"            (only when flagging gaps)
 - source_quotes[]: paste 1–3 short verbatim snippets from the INPUT (each
-  ≤80 chars) that directly justify the bullet. Examples:
-    "BSR=0.7914"
-    "8.4 BTC sells vs 2.1 BTC buys"
-    "434.9 BTC bids within 0.5%"
-    "long liquidations of $966,708"
+  ≤80 chars) that directly justify the bullet. Pick SHORT token sequences
+  that name the metric + its value as they appear in the INPUT text.
   Quotes are substring-matched against the INPUT. If a quote you invent is
-  not in the INPUT, the bullet is stripped.
+  not in the INPUT, the bullet is stripped. DO NOT copy the example shapes
+  below as literal values — they are format illustrations, not real data:
+    shape like "<METRIC>=<number>" (e.g. the BSR and its value)
+    shape like "<X> BTC sells vs <Y> BTC buys"
+    shape like "<N> BTC bids within <Z>%"
+    shape like "long liquidations of $<amount>"
+  If you find yourself echoing "0.7914", "8.4", "434.9", or "966708" in a
+  quote, STOP — those are placeholders, not real numbers from your INPUT.
 - Restate only facts in the INPUT. Never invent levels, numbers, bars, or
   directional calls.
 - If the source is NEUTRAL or has no setup, say so plainly in edge — do not
@@ -243,7 +328,9 @@ DATA AVAILABILITY HANDLING:
 NO JARGON WITHOUT EVIDENCE:
 - Do NOT use technical-analysis terminology (Wyckoff, Elliott wave, harmonic patterns, distribution phase, accumulation phase, liquidity grab, stop hunt, market structure break, order block, fair value gap, etc.) unless the INPUT gives a concrete price level, bar index, or measured condition that backs it. A percentage alone is NOT evidence. A name alone is NOT evidence.
 - If the INPUT contains such a term but only hand-waves it, DROP the term and describe the underlying observation in plain words (e.g., "price compressed for 3 bars" instead of "accumulation phase").
-- Prefer plain English: "buyers stepped in at $95,150" over "demand zone held".
+- Prefer plain English over jargon, e.g. "buyers stepped in at <INPUT_price_level>"
+  over "demand zone held" (replace <INPUT_price_level> with the actual level
+  cited in the INPUT, never invent one).
 """
 
 # Whitelist of metrics the frontend can look up a live value for. If Venice
@@ -1349,7 +1436,8 @@ async def get_or_build(
         # fabricated number must NEVER reach the client — but if we can strip
         # the offending clause and keep the rest of the bullet, we do that
         # rather than nuking the whole bullet.
-        final_cleaned, final_audit_strict = _validate(
+        lenient_cleaned = final_cleaned
+        strict_cleaned, final_audit_strict = _validate(
             {"edge": final_cleaned["edge"],
              "watch":   [{**b, "conditions": b.get("conditions", []),
                           "source_quotes": b.get("source_quotes", [])}
@@ -1359,9 +1447,21 @@ async def get_or_build(
                          for b in final_cleaned["actions"]]},
             user_prompt, strict=True,
         )
-        if not final_cleaned:
-            logger.warning("trader_summary strict-pass returned empty for bar %s", window_start_time)
-            return None
+        if not strict_cleaned:
+            # Strict pass stripped the edge to empty (all numbers fabricated)
+            # or all bullets got dropped. Rather than return None and leave
+            # the trader with no briefing at all, fall back to the lenient
+            # result. Lenient keeps fabricated-number bullets but flags them
+            # in audit.fabricated_text_numbers, so the UI can still render
+            # something + the audit dataset records the failure mode.
+            logger.warning(
+                "trader_summary strict-pass emptied briefing for bar %s — falling back to lenient",
+                window_start_time,
+            )
+            final_cleaned = lenient_cleaned
+            final_audit_strict = {"strict_pass_fallback_to_lenient": True}
+        else:
+            final_cleaned = strict_cleaned
         # Merge audit trails
         merged_audit = dict(final_audit)
         for k, v in final_audit_strict.items():

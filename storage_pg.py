@@ -174,6 +174,10 @@ def migrate_deepseek_columns():
         ("postmortem",                 "TEXT"),
         ("polymarket_url",             "TEXT"),
         ("embedding",                  "TEXT"),
+        # Venice trader-summary output + audit. Persisted for weekly/random
+        # audit only (retrieved via /audit/trader-summary). Not read by
+        # the live predictor or UI — pure sidecar record.
+        ("trader_summary_json",        "TEXT"),
     ]
     conn = _conn()
     try:
@@ -565,6 +569,65 @@ class StoragePG:
             conn.commit()
         finally:
             _put(conn)
+
+    def save_trader_summary(self, window_start: float, summary_json: str) -> None:
+        """Persist the Venice trader-summary payload for a bar alongside the
+        main DeepSeek record. Used only for the post-hoc audit endpoint —
+        neither the live predictor nor the UI reads it back. Silently no-ops
+        if the row for this bar doesn't exist yet (pre-insert race)."""
+        if window_start is None or not summary_json:
+            return
+        conn = _conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE deepseek_predictions SET trader_summary_json=%s "
+                    "WHERE window_start=%s",
+                    (summary_json, window_start),
+                )
+            conn.commit()
+        finally:
+            _put(conn)
+
+    def get_trader_summary_audit(self, n: int = 100) -> List[Dict]:
+        """Rolling last-N audit view joining DeepSeek prompt + output + Venice
+        translation. For weekly/random audit of the translation quality —
+        not a live path. Orders by window_start DESC, most recent first."""
+        conn = _conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT window_start, signal, confidence, full_prompt, "
+                    "raw_response, trader_summary_json, created_at, actual_direction, correct "
+                    "FROM deepseek_predictions "
+                    "WHERE trader_summary_json IS NOT NULL "
+                    "ORDER BY window_start DESC LIMIT %s",
+                    (int(n),),
+                )
+                rows = cur.fetchall()
+        finally:
+            _put(conn)
+        out: List[Dict] = []
+        for r in rows:
+            ws, sig, conf, fp, rr, ts_json, ca, actual, correct = r
+            entry = {
+                "window_start":        ws,
+                "signal":              sig,
+                "confidence":          conf,
+                "actual_direction":    actual,
+                "correct":             correct,
+                "created_at":          ca,
+                "deepseek_full_prompt": fp or "",
+                "deepseek_raw_response": rr or "",
+            }
+            # Parse the summary back so the client gets structured JSON
+            try:
+                entry["trader_summary"] = json.loads(ts_json) if ts_json else None
+            except Exception:  # noqa: BLE001
+                entry["trader_summary"] = None
+                entry["trader_summary_parse_error"] = True
+            out.append(entry)
+        return out
 
     def get_deepseek_accuracy(self) -> Dict:
         cutoff = get_reset_at()

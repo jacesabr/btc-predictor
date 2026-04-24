@@ -300,6 +300,18 @@ async def get_deepseek_prediction_detail(window_start: float):
     return {}
 
 
+@app.get("/audit/trader-summary", dependencies=[Depends(require_admin)])
+async def get_trader_summary_audit(n: int = 100):
+    """Rolling last-N audit view for the Venice trader-summary translation
+    layer. Returns, per bar, the DeepSeek full_prompt + raw_response + the
+    Venice output (structured JSON, including its own audit.completeness,
+    retry_reasons, bullets_dropped, etc.). Used for weekly/random audit of
+    translation fidelity — NOT a live path, not read by the predictor or
+    UI. Default n=100 is the rolling window the user specified."""
+    n = max(1, min(int(n or 100), 500))
+    return _safe_storage(storage.get_trader_summary_audit, n, default=[])
+
+
 @app.get("/historical-analysis/{window_start}", dependencies=[Depends(require_admin)])
 async def get_historical_analysis(window_start: float):
     """
