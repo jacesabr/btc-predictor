@@ -2928,6 +2928,11 @@ function App() {
         case "ask_depth_05pct":   return obFull?.ask_depth_05pct_btc != null ? { v: obFull.ask_depth_05pct_btc, f: fmt.btc } : null;
         case "rr_25d_30d":        return skew?.rr_25d_30d_pct != null ? { v: skew.rr_25d_30d_pct, f: fmt.pct } : null;
         case "iv_30d_atm":        return skew?.iv_30d_atm_pct != null ? { v: skew.iv_30d_atm_pct, f: fmt.pct } : null;
+        case "spot_whale_buy_btc":  return ds.spot_whale_flow?.whale_buy_btc  != null ? { v: ds.spot_whale_flow.whale_buy_btc,  f: fmt.btc } : null;
+        case "spot_whale_sell_btc": return ds.spot_whale_flow?.whale_sell_btc != null ? { v: ds.spot_whale_flow.whale_sell_btc, f: fmt.btc } : null;
+        case "aggregate_funding_rate":    return ds.aggregate_funding?.weighted_funding_rate != null ? { v: ds.aggregate_funding.weighted_funding_rate*100, f: fmt.pct } : null;
+        case "aggregate_liquidations_usd":return ds.aggregate_liquidations?.total_usd != null ? { v: ds.aggregate_liquidations.total_usd, f: fmt.usd } : null;
+        case "oi_velocity_pct":   return ds.aggregate_oi?.change_30min_pct != null ? { v: ds.aggregate_oi.change_30min_pct, f: fmt.pct } : (oif?.oi_change_pct != null ? { v: oif.oi_change_pct, f: fmt.pct } : null);
         default: return null;
       }
     };
