@@ -3041,13 +3041,32 @@ function App() {
                   }
                 };
                 const opCheck = { ">": (a,b)=>a>b, ">=": (a,b)=>a>=b, "<": (a,b)=>a<b, "<=": (a,b)=>a<=b, "==": (a,b)=>Math.abs(a-b)<1e-9 };
-                // Human label for each metric
-                const metricLabel = {
-                  price: "price", taker_buy_volume: "taker buy", taker_sell_volume: "taker sell",
-                  taker_volume: "taker vol", taker_ratio: "BSR", bid_imbalance: "bid imb",
-                  ask_imbalance: "ask imb", funding_rate: "funding", open_interest: "OI",
-                  rsi: "RSI", long_short_ratio: "L/S",
+                // Metric metadata: short label, layman one-liner, live-source link.
+                const METRIC_META = {
+                  price:             { label: "price",      layman: "Current BTC/USDT spot price.",
+                                       source: { label: "Binance spot", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+                  taker_buy_volume:  { label: "taker buy",  layman: "BTC bought by traders crossing the ask in the last 5 min (aggressive buyers).",
+                                       source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                  taker_sell_volume: { label: "taker sell", layman: "BTC sold by traders hitting the bid in the last 5 min (aggressive sellers).",
+                                       source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                  taker_volume:      { label: "taker vol",  layman: "Total aggressor volume (buys + sells) in the last 5 min — pure noise when near zero.",
+                                       source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                  taker_ratio:       { label: "BSR",        layman: "Buy-to-sell aggressor ratio. >1 = buyers dominating, <1 = sellers dominating.",
+                                       source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinTakerBuySellVolume" } },
+                  bid_imbalance:     { label: "bid imb",    layman: "Positive = more bids than asks in the top 20 book levels. Shows buyer support depth.",
+                                       source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+                  ask_imbalance:     { label: "ask imb",    layman: "Positive = more asks than bids in the top 20 book levels. Shows seller supply overhead.",
+                                       source: { label: "Binance depth", url: "https://www.binance.com/en/trade/BTC_USDT" } },
+                  funding_rate:      { label: "funding",    layman: "% longs pay shorts every 8h. Positive = bullish crowd (longs paying to stay long).",
+                                       source: { label: "Coinglass", url: "https://www.coinglass.com/FundingRate" } },
+                  open_interest:     { label: "OI",         layman: "Total open BTC perpetual futures contracts on Binance — proxy for speculative engagement.",
+                                       source: { label: "Coinglass", url: "https://www.coinglass.com/BitcoinOpenInterest" } },
+                  rsi:               { label: "RSI",        layman: "Momentum oscillator. >70 overbought (pullback risk), <30 oversold (bounce risk).",
+                                       source: null },
+                  long_short_ratio:  { label: "L/S",        layman: "Retail longs vs shorts on Binance futures. Often a contrarian indicator at extremes.",
+                                       source: { label: "Coinglass", url: "https://www.coinglass.com/LongShortRatio" } },
                 };
+                const metricLabel = Object.fromEntries(Object.entries(METRIC_META).map(([k,v]) => [k, v.label]));
 
                 // Condition pill: shows current live value, threshold, and ✓/✗ whether met.
                 // Neutral grey if live data isn't available (don't lie with ✓).
@@ -3061,14 +3080,36 @@ function App() {
                   const bgC     = ok ? C.greenBg : bad ? C.redBg : C.surface;
                   const fgC     = ok ? "#166534" : bad ? "#991B1B" : C.muted;
                   const icon    = ok ? "✓" : bad ? "✗" : "—";
+                  const meta    = METRIC_META[cond.metric] || {};
                   return (
-                    <span style={{ display:"inline-flex", alignItems:"center", gap:6,
-                      fontSize:13, fontWeight:700, padding:"3px 9px", borderRadius:5,
-                      background: bgC, color: fgC, border:`1px solid ${borderC}` }}>
-                      <span style={{ fontSize:14, fontWeight:900 }}>{icon}</span>
-                      <span>{metricLabel[cond.metric] || cond.metric} {cond.op} <strong style={{ fontSize:14 }}>{thresholdStr}</strong></span>
-                      {live && (
-                        <span style={{ color:C.muted, fontWeight:600 }}>· now <strong style={{ color:C.text, fontWeight:800, fontSize:14 }}>{live.f(live.v)}</strong></span>
+                    <span style={{ display:"inline-flex", flexDirection:"column", gap:2 }}>
+                      {/* Pill — big bold numbers, source ↗ */}
+                      <span style={{ display:"inline-flex", alignItems:"center", gap:7,
+                        fontSize:13, fontWeight:700, padding:"4px 10px", borderRadius:5,
+                        background: bgC, color: fgC, border:`1px solid ${borderC}` }}>
+                        <span style={{ fontSize:15, fontWeight:900 }}>{icon}</span>
+                        <span>{meta.label || cond.metric} {cond.op}{" "}
+                          <strong style={{ fontSize:17, color:C.text }}>{thresholdStr}</strong>
+                        </span>
+                        {live && (
+                          <span style={{ color:C.muted, fontWeight:600 }}>· now{" "}
+                            <strong style={{ color:C.text, fontWeight:900, fontSize:17 }}>{live.f(live.v)}</strong>
+                          </span>
+                        )}
+                        {meta.source && (
+                          <a href={meta.source.url} target="_blank" rel="noopener noreferrer"
+                             title={`Live source: ${meta.source.label}`}
+                             style={{ color:"#2563EB", textDecoration:"none", fontSize:12, fontWeight:700,
+                               padding:"0 3px", marginLeft:2 }}
+                             onClick={(e)=>e.stopPropagation()}>↗</a>
+                        )}
+                      </span>
+                      {/* Layman one-liner */}
+                      {meta.layman && (
+                        <span style={{ fontSize:10, color:C.muted, fontStyle:"italic",
+                          marginLeft:10, lineHeight:1.4, maxWidth:480 }}>
+                          {meta.layman}
+                        </span>
                       )}
                     </span>
                   );
