@@ -3100,150 +3100,39 @@ function App() {
                 );
               })()}
 
-              {/* ② DEEPSEEK ANALYSIS */}
-              <div style={{ ...card, flexShrink:0 }}>
-                {/* Header row: label + timing info */}
-                <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10, flexWrap:"wrap", gap:6 }}>
-                  <span style={label}>DeepSeek Analysis</span>
-                  <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", gap:10, justifyContent:"flex-end" }}>
-                    {pendingDeepseekReady && (
-                      <span style={{ fontSize:12, fontWeight:700, color:"#15803D",
-                        background:"#F0FDF4", border:`1px solid #86EFAC`,
-                        borderRadius:5, padding:"2px 8px" }}>
-                        ● LIVE — current bar
-                      </span>
+              {/* BAR STATUS STRIP — minimal. Renders a briefing-state message + the
+                  bar-close countdown only when the full trader briefing above isn't
+                  showing. The raw DeepSeek reasoning is kept on the backend (fed into
+                  Venice + stored to Postgres) but no longer rendered on the live page —
+                  operators can see the full detail in the History tab. */}
+              {!(traderSummary && pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR") && (
+                <div style={{ ...card, flexShrink:0, padding:"10px 12px",
+                  display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
+                  <span style={{ fontSize:12, lineHeight:1.4 }}>
+                    {pendingDeepseekReady && activeDeepseekPred?.signal==="ERROR" ? (
+                      <span style={{ color:C.red, fontWeight:700 }}>⚠ Analysis error this bar — detail in History tab</span>
+                    ) : pendingDeepseekReady && activeDeepseekPred ? (
+                      <span style={{ color:C.textSec, fontStyle:"italic" }}>⟳ Preparing trader briefing…</span>
+                    ) : (
+                      <span style={{ color:C.amber }}>⟳ Analyzing new bar — briefing in ~30–60s</span>
                     )}
-                    {pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR" && (<>
-                      {activeDeepseekPred.latency_ms && (
-                        <span style={{ fontSize:12, color:C.muted }}>
-                          Calculated in <strong style={{ color:C.textSec }}>{(activeDeepseekPred.latency_ms/1000).toFixed(1)}s</strong>
-                        </span>
-                      )}
-                    </>)}
-                    {barCloseUTC && (
-                      <span style={{ fontSize:14, fontWeight:900,
-                        color:timeLeft<60?C.red:timeLeft<120?C.amber:"#15803D",
-                        background:timeLeft<60?"#FFF1F2":timeLeft<120?C.amberBg:"#F0FDF4",
-                        border:`1px solid ${timeLeft<60?C.redBorder:timeLeft<120?C.amberBorder:"#86EFAC"}`,
-                        borderRadius:5, padding:"2px 10px" }}>
-                        Closes: {barCloseUTC}
-                      </span>
-                    )}
-                  </div>
+                  </span>
+                  {barCloseUTC && (
+                    <span style={{ fontSize:13, fontWeight:800,
+                      color:timeLeft<60?C.red:timeLeft<120?C.amber:"#15803D",
+                      background:timeLeft<60?"#FFF1F2":timeLeft<120?C.amberBg:"#F0FDF4",
+                      border:`1px solid ${timeLeft<60?C.redBorder:timeLeft<120?C.amberBorder:"#86EFAC"}`,
+                      borderRadius:5, padding:"2px 10px" }}>
+                      Closes {barCloseUTC}
+                    </span>
+                  )}
                 </div>
-                {/* Status banner */}
-                {pendingDeepseekReady ? (
-                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12,
-                    padding:"8px 12px", borderRadius:6,
-                    background:"#F0FDF4", border:"2px solid #86EFAC" }}>
-                    <span style={{ fontSize:16, lineHeight:1, flexShrink:0 }}>●</span>
-                    <span style={{ fontSize:13, fontWeight:900, color:"#15803D", letterSpacing:0.3, lineHeight:1.4 }}>
-                      Live analysis — current bar · closes {barCloseUTC}
-                    </span>
-                  </div>
-                ) : (
-                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12,
-                    padding:"8px 12px", borderRadius:6,
-                    background:C.amberBg, border:`1px solid ${C.amberBorder}` }}>
-                    <span style={{ fontSize:16, lineHeight:1, flexShrink:0 }}>⟳</span>
-                    <span style={{ fontSize:13, fontWeight:700, color:C.amber, lineHeight:1.4 }}>
-                      Analyzing new bar — result appears when DeepSeek completes
-                    </span>
-                  </div>
-                )}
-                {/* Analysis content — only shown when a live (pending) result is ready */}
-                {pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR" ? (<>
-                  {(activeDeepseekPred.data_received||(activeDeepseekPred.data_requests&&activeDeepseekPred.data_requests.toUpperCase()!=="NONE")) && (
-                    <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:8 }}>
-                      {activeDeepseekPred.data_received && (
-                        <div style={{ flex:1, minWidth:150, background:C.blueBg, border:`1px solid ${C.blueBorder}`,
-                          borderRadius:4, padding:"3px 7px" }}>
-                          <div style={{ fontSize:8, fontWeight:700, color:C.blue, letterSpacing:1, textTransform:"uppercase", marginBottom:2 }}>Data confirmed</div>
-                          <div style={{ fontSize:10, color:"#1E40AF" }}>{activeDeepseekPred.data_received}</div>
-                        </div>
-                      )}
-                      {activeDeepseekPred.data_requests&&activeDeepseekPred.data_requests.toUpperCase()!=="NONE" && (
-                        <div style={{ flex:1, minWidth:150, background:C.amberBg, border:`1px solid ${C.amberBorder}`,
-                          borderRadius:4, padding:"3px 7px" }}>
-                          <div style={{ fontSize:8, fontWeight:700, color:C.amber, letterSpacing:1, textTransform:"uppercase", marginBottom:2 }}>AI requested</div>
-                          <div style={{ fontSize:10, color:C.amber }}>{activeDeepseekPred.data_requests}</div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {activeDeepseekPred.reasoning
-                    ? activeDeepseekPred.reasoning.split("\n").filter(Boolean).map((line,i,arr)=>(
-                        <div key={i} style={{ display:"flex", gap:10, marginBottom:i<arr.length-1?12:0, alignItems:"flex-start",
-                          padding:"8px 10px", borderRadius:6,
-                          background:i%2===0?C.surface:"#FAFAF9",
-                          border:`1px solid ${C.borderSoft}` }}>
-                          <span style={{ fontSize:13, fontWeight:900, color:C.amber, minWidth:20, paddingTop:1, flexShrink:0, lineHeight:1.6 }}>{i+1}.</span>
-                          <span style={{ fontSize:13, color:C.textSec, lineHeight:1.75 }}>
-                            <BoldAnalysis text={line} color={C.text} />
-                          </span>
-                        </div>
-                      ))
-                    : <div style={{ color:C.amber, fontSize:12 }}>No reasoning — check DeepSeek tab</div>
-                  }
-                  {activeDeepseekPred.narrative && (
-                    <div style={{ background:C.blueBg, border:`1px solid ${C.blueBorder}`,
-                      borderLeft:`3px solid ${C.blue}`, borderRadius:6, padding:"8px 12px", marginTop:12 }}>
-                      <div style={{ fontSize:9, fontWeight:700, color:C.blue, textTransform:"uppercase",
-                        letterSpacing:1, marginBottom:4 }}>Price Narrative</div>
-                      <div style={{ fontSize:13, color:"#1E40AF", lineHeight:1.75, fontStyle:"italic" }}>
-                        {activeDeepseekPred.narrative}
-                      </div>
-                    </div>
-                  )}
-                  {activeDeepseekPred.free_observation && (
-                    <div style={{ background:C.amberBg, border:`1px solid ${C.amberBorder}`,
-                      borderLeft:`3px solid ${C.amber}`, borderRadius:6, padding:"8px 12px", marginTop:8 }}>
-                      <div style={{ fontSize:9, fontWeight:700, color:C.amber, textTransform:"uppercase",
-                        letterSpacing:1, marginBottom:4 }}>AI Free Observation</div>
-                      <div style={{ fontSize:13, color:C.amber, lineHeight:1.75 }}>
-                        {activeDeepseekPred.free_observation}
-                      </div>
-                    </div>
-                  )}
-                </>) : pendingDeepseekReady && activeDeepseekPred?.signal==="ERROR" ? (
-                  <div style={{ color:C.red, fontSize:11, textAlign:"center", padding:"4px 0" }}>
-                    {activeDeepseekPred.reasoning || "API error"}
-                  </div>
-                ) : (
-                  <div style={{ textAlign:"center", padding:"20px 0 12px", color:C.muted }}>
-                    <div style={{ fontSize:11 }}>Previous bar resolved · results in History tab</div>
-                    <div style={{ fontSize:11, marginTop:4, color:C.muted }}>New prediction will appear here once DeepSeek finishes</div>
-                  </div>
-                )}
-              </div>
+              )}
 
-              {/* HISTORICAL LEAN — 1-line summary only */}
-              {historicalAnalysis && (() => {
-               // Strip markdown bold markers before matching
-                const cleanText = historicalAnalysis.replace(/\*\*/g, '');
-                const pos  = cleanText.match(/POSITION:\s*(\w+)/i)?.[1]?.toUpperCase();
-                const conf = cleanText.match(/CONFIDENCE:\s*([\d]+)%/i)?.[1];
-                const lean = cleanText.match(/LEAN:\s*(.+)/i)?.[1]?.trim();
-                if (!lean) return null;
-                const posColor  = pos==="UP" ? C.green : pos==="DOWN" ? C.red : C.amber;
-                const posBg     = pos==="UP" ? C.greenBg : pos==="DOWN" ? C.redBg : C.amberBg;
-                const posBorder = pos==="UP" ? C.greenBorder : pos==="DOWN" ? C.redBorder : C.amberBorder;
-                return (
-                  <div style={{ ...card, flexShrink:0, borderLeft:`3px solid ${posColor}`, padding:"8px 12px",
-                    display:"flex", alignItems:"center", gap:10 }}>
-                    <span style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, textTransform:"uppercase", flexShrink:0 }}>Pattern</span>
-                    {pos && (
-                      <span style={{ fontSize:9, fontWeight:800, padding:"1px 6px", borderRadius:3,
-                        color:posColor, background:posBg, border:`1px solid ${posBorder}`, flexShrink:0 }}>
-                        {pos==="UP"?"▲ UP":pos==="DOWN"?"▼ DOWN":"—"}{conf?` ${conf}%`:""}
-                      </span>
-                    )}
-                    <span style={{ fontSize:11, color:C.textSec, lineHeight:1.5 }}>
-                      <BoldAnalysis text={lean} color={C.text} />
-                    </span>
-                  </div>
-                );
-              })()}
+              {/* Historical Pattern block removed — the raw pattern data is fed into Venice
+                  and surfaces in the trader briefing above as Watch/Actions bullets when relevant.
+                  The full historical_analysis string is still computed, stored in Postgres, and
+                  viewable in the History tab for operators. */}
 
               {/* Strategy indicators + microstructure moved to ENSEMBLE tab. LIVE is DeepSeek-only. */}
             </div>
