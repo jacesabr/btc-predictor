@@ -2924,13 +2924,15 @@ function App() {
                 const colTitle = { fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1.5, textTransform:"uppercase", marginBottom:6 };
                 const metaRow = { height:26, display:"flex", alignItems:"center", gap:6, flexWrap:"nowrap", overflow:"hidden" };
 
+                // While pending_deepseek_ready=false (fresh analysis running after bar close)
+                // we intentionally render nothing — showing the previous bar's signal during
+                // the analysis window can mislead fast traders into trading on a stale call.
                 const dsLive = pendingDeepseekReady && activeDeepseekPred && activeDeepseekPred.signal!=="ERROR";
                 const dsErr  = pendingDeepseekReady && activeDeepseekPred?.signal==="ERROR";
-                const dsPrev = !dsLive && !dsErr && deepseekPred && deepseekPred.signal!=="ERROR";
-                const c2src  = dsLive ? activeDeepseekPred : dsPrev ? deepseekPred : null;
+                const c2src  = dsLive ? activeDeepseekPred : null;
                 const c2sig  = c2src?.signal || null;
                 const c2conf = c2src?.confidence ?? 0;
-                const c2meta = c2src ? { label:`#${c2src.window_count} · ${c2src.latency_ms}ms`, prev:dsPrev, aiReq: c2src.data_requests&&c2src.data_requests.toUpperCase()!=="NONE"&&c2src.data_requests.trim()!=="" } : null;
+                const c2meta = c2src ? { label:`#${c2src.window_count} · ${c2src.latency_ms}ms`, aiReq: c2src.data_requests&&c2src.data_requests.toUpperCase()!=="NONE"&&c2src.data_requests.trim()!=="" } : null;
 
                 return (
                   <div style={{ ...card, flexShrink:0, padding:"8px 12px" }}>
@@ -2969,7 +2971,6 @@ function App() {
                     <div style={metaRow}>
                       {c2meta && (<>
                         <span style={{ fontSize:9, color:C.muted }}>{c2meta.label}</span>
-                        {c2meta.prev && <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>prev bar</span>}
                         {c2meta.aiReq && <span style={{ fontSize:9, fontWeight:700, padding:"1px 5px", borderRadius:3, color:C.amber, background:C.amberBg, border:`1px solid ${C.amberBorder}` }}>⚡ AI req</span>}
                       </>)}
                     </div>
