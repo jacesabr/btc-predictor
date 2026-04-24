@@ -1046,24 +1046,28 @@ function EnsembleTab({ weights, ob, ls, tk, oif, lq, fg, mp, cz, cg, dots, price
 
 // ── Backend Tab ───────────────────────────────────────────────
 const MICRO_SRC_DEFS = [
-  ["order_book",        "Order Book",         "Binance spot · depth-20"],
-  ["long_short",        "Long/Short Ratio",   "Binance Futures · 5m"],
-  ["taker_flow",        "Taker Flow",         "Binance Futures aggressor"],
-  ["oi_funding",        "OI + Funding",       "Binance Futures"],
-  ["liquidations",      "Liquidations",       "OKX · last 5 min"],
-  ["bybit_liquidations","Cross-ex Liqs",      "OKX isolated-margin"],
-  ["fear_greed",        "Fear & Greed",       "Alternative.me · daily"],
-  ["mempool",           "Mempool",            "mempool.space"],
-  ["coingecko",         "CoinGecko",          "24h market data"],
-  ["btc_dominance",     "BTC Dominance",      "CoinGecko global"],
-  ["deribit_dvol",      "DVOL",               "Deribit implied vol"],
-  ["kraken_premium",    "Kraken Premium",     "Kraken vs OKX spread"],
-  ["oi_velocity",       "OI Velocity",        "Binance OI hist · 30m"],
-  ["spot_whale_flow",   "Spot Whale Flow",    "Kraken trades · 5m"],
-  ["okx_funding",       "OKX Funding",        "OKX funding rate"],
-  ["top_position_ratio","Top Trader Ratio",   "Binance top traders"],
-  ["funding_trend",     "Funding Trend",      "Binance 6-period avg"],
-  ["coinalyze",         "Coinalyze",          "Cross-ex funding"],
+  ["order_book",           "Order Book Depth",   "5-venue · 0.5% band"],
+  ["long_short",           "Long/Short Ratio",   "Binance Futures · accounts"],
+  ["taker_flow",           "Taker Flow",         "Binance-perp aggressor · 5m"],
+  ["oi_funding",           "OI + Funding",       "Binance Futures"],
+  ["coinalyze_aggregate",  "Aggregate OI + Liqs","Coinalyze · 7-venue"],
+  ["spot_perp_basis",      "Spot-Perp Basis",    "Binance spot vs perp mark"],
+  ["cvd",                  "CVD (1h)",           "Binance spot+perp delta"],
+  ["liquidations",         "Liquidations",       "OKX cross · last 5m"],
+  ["bybit_liquidations",   "OKX Isolated Liqs",  "OKX isolated-margin"],
+  ["fear_greed",           "Fear & Greed",       "Alternative.me · daily (macro)"],
+  ["mempool",              "Mempool",            "mempool.space"],
+  ["coingecko",            "CoinGecko",          "24h market data (macro)"],
+  ["btc_dominance",        "BTC Dominance",      "CoinGecko global (macro)"],
+  ["deribit_dvol",         "DVOL",               "Deribit 30d implied vol"],
+  ["deribit_skew_term",    "Skew + Term + P/C",  "Deribit 25Δ / 7-30-90d"],
+  ["kraken_premium",       "Kraken Premium",     "Kraken vs OKX spread"],
+  ["oi_velocity",          "OI Velocity",        "Binance OI hist · 30m"],
+  ["spot_whale_flow",      "Spot Whale Flow",    "3-venue aggTrades ≥0.5 BTC · 5m"],
+  ["okx_funding",          "OKX Funding",        "OKX funding rate"],
+  ["top_position_ratio",   "Top-Account Ratio",  "Binance top-20% by margin"],
+  ["funding_trend",        "Funding Trend",      "Binance 6-period avg"],
+  ["coinalyze",            "Coinalyze Funding",  "Cross-ex funding"],
 ];
 
 function microSignalKey(key, d) {
@@ -1075,8 +1079,8 @@ function microSignalKey(key, d) {
 
 function microKV(key, d) {
   if (!d) return [];
-  if (key === "order_book")         return [["Bid",`${d.bid_vol_btc?.toFixed(0)} BTC`],["Imb",`${d.imbalance_pct>=0?"+":""}${d.imbalance_pct?.toFixed(1)}%`],["Ask",`${d.ask_vol_btc?.toFixed(0)} BTC`]];
-  if (key === "long_short")         return [["L/S",d.retail_lsr?.toFixed(3)],["Retail",`${d.retail_long_pct?.toFixed(0)}%L`],["Smart",`${d.smart_money_long_pct?.toFixed(0)}%L`],["Δ",`${(d.smart_vs_retail_div_pct>=0?"+":"")}${d.smart_vs_retail_div_pct?.toFixed(1)}%`]];
+  if (key === "order_book")         return [["Bid 0.5%",`${d.bid_depth_05pct_btc?.toFixed(0) ?? d.bid_vol_btc?.toFixed(0)} BTC`],["Imb",`${(d.imbalance_05pct_pct ?? d.imbalance_pct)>=0?"+":""}${(d.imbalance_05pct_pct ?? d.imbalance_pct)?.toFixed(1)}%`],["Ask 0.5%",`${d.ask_depth_05pct_btc?.toFixed(0) ?? d.ask_vol_btc?.toFixed(0)} BTC`],["Venues",`${d.venues_included?.length ?? 1}`]];
+  if (key === "long_short")         return [["L/S",d.retail_lsr?.toFixed(3)],["All",`${d.retail_long_pct?.toFixed(0)}%L`],["Top 20%",`${(d.top_accounts_long_pct ?? d.smart_money_long_pct)?.toFixed(0)}%L`],["Δ",`${((d.top_vs_all_div_pct ?? d.smart_vs_retail_div_pct)>=0?"+":"")}${(d.top_vs_all_div_pct ?? d.smart_vs_retail_div_pct)?.toFixed(1)}%`]];
   if (key === "taker_flow")         return [["BSR",d.buy_sell_ratio?.toFixed(4)],["Buy",`${d.taker_buy_vol_btc?.toFixed(0)} BTC`],["Sell",`${d.taker_sell_vol_btc?.toFixed(0)} BTC`],["3-bar",d.trend_3bars]];
   if (key === "oi_funding")         return [["OI",`${d.open_interest_btc?.toFixed(0)} BTC`],["FR",`${(d.funding_rate_8h_pct??0).toFixed(4)}%`],["Prem",`${d.mark_premium_vs_index_pct?.toFixed(4)}%`]];
   if (key === "liquidations")       return [["Total",d.total],["Longs",`${d.long_liq_count} ($${(d.long_liq_usd??0).toLocaleString()})`],["Shorts",`${d.short_liq_count} ($${(d.short_liq_usd??0).toLocaleString()})`],["Vel",`${(d.velocity_per_min??0).toFixed(1)}/min`]];
@@ -1093,6 +1097,10 @@ function microKV(key, d) {
   if (key === "top_position_ratio") return [["L/S",d.long_short_ratio?.toFixed(3)],["Long%",`${d.long_position_pct?.toFixed(0)}%`]];
   if (key === "funding_trend")      return [["Latest",`${(d.funding_latest_pct??0).toFixed(4)}%`],["6p avg",`${(d.funding_avg_6p_pct??0).toFixed(4)}%`],["Trend",d.funding_trend]];
   if (key === "coinalyze")          return [["X-ex FR",`${(d.funding_rate_8h_pct??0).toFixed(4)}%`]];
+  if (key === "coinalyze_aggregate")return [["OI",`$${((d.agg_oi_usd??0)/1e9).toFixed(2)}B`],["Long L$",`$${(d.agg_long_liq_usd_5m??0).toLocaleString()}`],["Short L$",`$${(d.agg_short_liq_usd_5m??0).toLocaleString()}`],["Venues",`${d.agg_oi_venues_count??0}`]];
+  if (key === "spot_perp_basis")    return [["Basis",`${(d.basis_pct??0)>=0?"+":""}${(d.basis_pct??0).toFixed(3)}%`],["USD",`${(d.basis_usd??0)>=0?"+":""}${(d.basis_usd??0).toFixed(1)}`]];
+  if (key === "cvd")                return [["Agg CVD",`${(d.aggregate_cvd_1h_btc??0)>=0?"+":""}${(d.aggregate_cvd_1h_btc??0).toFixed(0)} BTC`],["Perp",`${(d.perp_cvd_1h_btc??0)>=0?"+":""}${(d.perp_cvd_1h_btc??0).toFixed(0)}`],["Spot",`${(d.spot_cvd_1h_btc??0)>=0?"+":""}${(d.spot_cvd_1h_btc??0).toFixed(0)}`],["Div",`${(d.spot_perp_divergence_btc??0)>=0?"+":""}${(d.spot_perp_divergence_btc??0).toFixed(0)}`]];
+  if (key === "deribit_skew_term")  return [["25ΔRR",d.rr_25d_30d_pct!=null?`${d.rr_25d_30d_pct>=0?"+":""}${d.rr_25d_30d_pct.toFixed(1)}%`:"n/a"],["IV30d",`${(d.iv_30d_atm_pct??0).toFixed(1)}%`],["Term",d.term_inverted?"INV":d.term_contango?"CON":"flat"],["P/C vol",(d.put_call_volume_ratio??0).toFixed(2)]];
   return [];
 }
 
@@ -2434,6 +2442,9 @@ function App() {
   const [historicalAnalysis,    setHistoricalAnalysis]    = useState("");
   const [historicalContext,     setHistoricalContext]     = useState("");
   const [traderSummary,         setTraderSummary]         = useState(null);
+  // Collapsed by default — users said "waiting" section was too much scroll.
+  // Keep one dense summary visible with expand toggle for the full list.
+  const [waitingOpen,           setWaitingOpen]           = useState(false);
   const [serviceUnavailable,    setServiceUnavailable]    = useState(false);
   const [serviceUnavailReason,  setServiceUnavailReason]  = useState("");
   const [binanceExpert,         setBinanceExpert]         = useState(null);
@@ -2500,7 +2511,15 @@ function App() {
         if (d.pending_deepseek_ready !== undefined)   setPendingDeepseekReady(d.pending_deepseek_ready);
         if (d.bar_historical_analysis !== undefined)  setHistoricalAnalysis(d.bar_historical_analysis || "");
         if (d.bar_historical_context !== undefined)   setHistoricalContext(d.bar_historical_context || "");
-        if (d.trader_summary !== undefined)           setTraderSummary(d.trader_summary);
+        if (d.trader_summary !== undefined) {
+          // Stabilize reference: only setState when content actually changes.
+          // WS delivers the same summary every tick otherwise, and the new
+          // object ref triggers re-renders + text flashing.
+          setTraderSummary(prev => {
+            const a = JSON.stringify(prev), b = JSON.stringify(d.trader_summary);
+            return a === b ? prev : d.trader_summary;
+          });
+        }
         if (d.service_unavailable !== undefined)      setServiceUnavailable(!!d.service_unavailable);
         if (d.service_unavailable_reason !== undefined) setServiceUnavailReason(d.service_unavailable_reason || "");
         if (d.bar_binance_expert && d.bar_binance_expert.signal) setBinanceExpert(d.bar_binance_expert);
@@ -3076,6 +3095,11 @@ function App() {
                   pct:  (v) => `${v.toFixed(2)}%`,
                   num:  (v) => v.toFixed(2),
                 };
+                const ds = data?.microstructure_data || data?.dashboard_signals || {};
+                const spb = ds.spot_perp_basis;
+                const cvdBlk = ds.cvd;
+                const obFull = ds.order_book;
+                const skew = ds.deribit_skew_term;
                 const metric = (m) => {
                   switch (m) {
                     case "price":             return price != null ? { v: price, f: fmt.usd } : null;
@@ -3084,12 +3108,21 @@ function App() {
                     case "taker_sell_volume": return tk?.sv  != null ? { v: tk.sv,  f: fmt.btc } : null;
                     case "taker_volume":      return tk?.bv!=null && tk?.sv!=null ? { v: tk.bv + tk.sv, f: fmt.btc } : null;
                     case "taker_ratio":       return tk?.bsr != null ? { v: tk.bsr, f: fmt.num } : null;
-                    case "bid_imbalance":     return ob?.imb != null ? { v: ob.imb,  f: fmt.pct } : null;
-                    case "ask_imbalance":     return ob?.imb != null ? { v: -ob.imb, f: fmt.pct } : null;
+                    case "bid_imbalance":     return (obFull?.imbalance_05pct_pct != null) ? { v: obFull.imbalance_05pct_pct, f: fmt.pct } : (ob?.imb != null ? { v: ob.imb, f: fmt.pct } : null);
+                    case "ask_imbalance":     return (obFull?.imbalance_05pct_pct != null) ? { v: -obFull.imbalance_05pct_pct, f: fmt.pct } : (ob?.imb != null ? { v: -ob.imb, f: fmt.pct } : null);
                     case "funding_rate":      return oif?.fr != null ? { v: oif.fr*100, f: fmt.pct } : null;
                     case "open_interest":     return oif?.oi != null ? { v: oif.oi, f: fmt.btc } : null;
                     case "rsi":               return strategies?.rsi?.value != null ? { v: parseFloat(strategies.rsi.value), f: fmt.num } : null;
                     case "long_short_ratio":  return ls?.lsr != null ? { v: ls.lsr, f: fmt.num } : null;
+                    // Phase 2.5 / 6.5 additions (bar-level)
+                    case "basis_pct":         return spb?.basis_pct != null ? { v: spb.basis_pct, f: fmt.pct } : null;
+                    case "perp_cvd_1h":       return cvdBlk?.perp_cvd_1h_btc != null ? { v: cvdBlk.perp_cvd_1h_btc, f: fmt.btc } : null;
+                    case "spot_cvd_1h":       return cvdBlk?.spot_cvd_1h_btc != null ? { v: cvdBlk.spot_cvd_1h_btc, f: fmt.btc } : null;
+                    case "aggregate_cvd_1h":  return cvdBlk?.aggregate_cvd_1h_btc != null ? { v: cvdBlk.aggregate_cvd_1h_btc, f: fmt.btc } : null;
+                    case "bid_depth_05pct":   return obFull?.bid_depth_05pct_btc != null ? { v: obFull.bid_depth_05pct_btc, f: fmt.btc } : null;
+                    case "ask_depth_05pct":   return obFull?.ask_depth_05pct_btc != null ? { v: obFull.ask_depth_05pct_btc, f: fmt.btc } : null;
+                    case "rr_25d_30d":        return skew?.rr_25d_30d_pct != null ? { v: skew.rr_25d_30d_pct, f: fmt.pct } : null;
+                    case "iv_30d_atm":        return skew?.iv_30d_atm_pct != null ? { v: skew.iv_30d_atm_pct, f: fmt.pct } : null;
                     default: return null;
                   }
                 };
@@ -3205,7 +3238,8 @@ function App() {
                       padding:"8px 12px", borderRadius:6,
                       background: bg,
                       borderLeft: `4px solid ${leftBar}`,
-                      border: `1px solid ${border}` }}>
+                      border: `1px solid ${border}`,
+                      transition: "background-color 400ms ease, border-color 400ms ease, border-left-color 400ms ease" }}>
                       <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
                         <span style={{ fontSize:16, lineHeight:1.3, flexShrink:0, paddingTop:1 }}>
                           {emoji}
@@ -3284,11 +3318,26 @@ function App() {
                             )}
                             {waiting.length > 0 && (
                               <div style={{ marginTop:12 }}>
-                                <div style={{ fontSize:11, fontWeight:800, color:C.amber, letterSpacing:1.2,
-                                  textTransform:"uppercase", marginBottom:6 }}>Waiting for conditions · {waiting.length}</div>
-                                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                                  {waiting.map((b, i) => <Bullet key={`w${b.__src}${i}`} {...b} />)}
-                                </div>
+                                {/* Collapsible header — click to toggle. Default collapsed
+                                    so the page doesn't drown in pending scenarios. */}
+                                <button onClick={() => setWaitingOpen(v => !v)}
+                                  style={{ width:"100%", display:"flex", alignItems:"center",
+                                    justifyContent:"space-between", gap:8,
+                                    background:"none", border:"none", padding:"4px 0",
+                                    cursor:"pointer", fontFamily:"inherit" }}>
+                                  <span style={{ fontSize:11, fontWeight:700, color:C.muted,
+                                    letterSpacing:1.2, textTransform:"uppercase" }}>
+                                    {waitingOpen ? "▾" : "▸"} Waiting for conditions · {waiting.length}
+                                  </span>
+                                  <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>
+                                    {waitingOpen ? "hide" : "show"}
+                                  </span>
+                                </button>
+                                {waitingOpen && (
+                                  <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:6 }}>
+                                    {waiting.map((b, i) => <Bullet key={`w${b.__src}${i}`} {...b} />)}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </>);
