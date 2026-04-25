@@ -1466,7 +1466,7 @@ LESSON_FALSIFIER: [what observation would invalidate the rule]"""
 
     try:
         t0 = time.time()
-        raw = await _api_call(api_key, prompt, max_tokens=1800, timeout_s=50.0, model=DEEPSEEK_FAST_MODEL)
+        raw = await _api_call(api_key, prompt, max_tokens=3500, timeout_s=70.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = int((time.time() - t0) * 1000)
         logger.info("Postmortem completed for bar %s (%s) in %dms", bar_ts, verdict, elapsed)
         _save(_PM_DIR / f"last_{int(window_start)}.txt", f"=== PROMPT ===\n{prompt}\n\n=== RESPONSE ===\n{raw}")
@@ -1592,7 +1592,7 @@ async def run_specialists(
     _save(_SPEC_PROMPT_OUT, f"# Sent at {ts_str}\n\n{prompt}")
 
     try:
-        raw = await _api_call(api_key, prompt, max_tokens=2200, timeout_s=40.0, model=DEEPSEEK_FAST_MODEL)
+        raw = await _api_call(api_key, prompt, max_tokens=4000, timeout_s=70.0, model=DEEPSEEK_FAST_MODEL)
         _append(_SPEC_RESPONSE, f"\n{'='*60}\n# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n{'='*60}\n\n{raw}")
         strategies, suggestion = _parse_specialist_response(raw)
         if suggestion:
@@ -2564,7 +2564,7 @@ async def run_historical_analyst(
         # 120s cap: enough headroom for Opus 4.7 (slower than deepseek-v4-flash)
         # while still ensuring a hung Venice request can't freeze the prediction
         # loop (root cause of the 2026-04-25 12:00–13:00 outage).
-        raw     = await _api_call(api_key, prompt, max_tokens=2000, timeout_s=120.0, model=DEEPSEEK_FAST_MODEL)
+        raw     = await _api_call(api_key, prompt, max_tokens=4000, timeout_s=120.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = time.time() - t0
         _record("deepseek_call", _t)
         _save(_HIST_RESPONSE, f"# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}  elapsed={elapsed:.1f}s\n\n{raw}")
@@ -2856,7 +2856,7 @@ async def run_binance_expert(
 
     t0 = time.time()
     try:
-        raw = await _api_call(api_key, prompt, max_tokens=2500, timeout_s=70.0, model=DEEPSEEK_FAST_MODEL)
+        raw = await _api_call(api_key, prompt, max_tokens=4000, timeout_s=90.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = time.time() - t0
         ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
         _save(_BNX_RESPONSE,
@@ -2933,7 +2933,7 @@ class DeepSeekPredictor:
         raw_response: Optional[str] = None
         error_msg    = ""
         try:
-            raw_response = await _api_call(self.api_key, prompt, max_tokens=2800, timeout_s=60.0, model=DEEPSEEK_FAST_MODEL)
+            raw_response = await _api_call(self.api_key, prompt, max_tokens=5000, timeout_s=90.0, model=DEEPSEEK_FAST_MODEL)
         except Exception as exc:
             error_msg = repr(exc)
             logger.error("DeepSeek call failed: %r", exc)
