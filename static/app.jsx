@@ -193,6 +193,78 @@ function BoldAnalysis({ text, color }) {
   );
 }
 
+// Parse the strict Historical Similarity Analyst output (see
+// specialists/historical_analyst/PROMPT.md). Returns a structured object;
+// unknown content falls back to `extra` so nothing is silently dropped.
+const HIST_SECTIONS = ["POSITION","CONFIDENCE","LEAN","BASE_RATES",
+  "PRECEDENT_TABLE","AGAINST","ENSEMBLE_RELIABILITY","FOR","DEVIL","EDGE",
+  "SUGGESTION"];
+const HIST_SECT_RE = new RegExp("^(" + HIST_SECTIONS.join("|") + ")\\s*:\\s*(.*)$");
+function parseHistAnalysis(raw) {
+  const out = { position:"", confidence:"", lean:"", baseRates:"",
+    precedents:[], against:"", ensemble:"", forText:"", devil:"", edge:"",
+    suggestion:"", extra:"" };
+  if (!raw) return out;
+  const buckets = {};
+  let cur = null, buf = [];
+  const stash = () => {
+    if (cur == null) {
+      const t = buf.join("\n").trim();
+      if (t) out.extra = (out.extra ? out.extra + "\n" : "") + t;
+    } else {
+      buckets[cur] = buf.join("\n").trim();
+    }
+    buf = [];
+  };
+  for (const line of raw.split("\n")) {
+    const m = line.match(HIST_SECT_RE);
+    if (m) { stash(); cur = m[1]; if (m[2]) buf.push(m[2]); }
+    else buf.push(line);
+  }
+  stash();
+
+  out.position   = (buckets.POSITION   || "").trim();
+  out.confidence = (buckets.CONFIDENCE || "").trim();
+  out.lean       = (buckets.LEAN       || "").trim();
+  out.baseRates  = (buckets.BASE_RATES || "").trim();
+  out.against    = (buckets.AGAINST    || "").trim();
+  out.ensemble   = (buckets.ENSEMBLE_RELIABILITY || "").trim();
+  out.forText    = (buckets.FOR        || "").trim();
+  out.devil      = (buckets.DEVIL      || "").trim();
+  out.edge       = (buckets.EDGE       || "").trim();
+  out.suggestion = (buckets.SUGGESTION || "").trim();
+
+  // Precedent rows: `#NNN | outcome | align: … | diverge: …`
+  const tableRaw = buckets.PRECEDENT_TABLE || "";
+  out.precedents = tableRaw.split("\n")
+    .map(l => l.trim())
+    .filter(l => /^#?\d+\s*\|/.test(l))
+    .map(l => {
+      const parts = l.split("|").map(s => s.trim());
+      const num = (parts[0] || "").replace(/^#/, "");
+      const outcome = (parts[1] || "").toUpperCase();
+      let align = "", diverge = "";
+      for (let i = 2; i < parts.length; i++) {
+        const p = parts[i];
+        if (/^align:/i.test(p))   align   = p.replace(/^align:\s*/i, "");
+        else if (/^diverge:/i.test(p)) diverge = p.replace(/^diverge:\s*/i, "");
+        else if (!align) align = p;
+        else diverge = (diverge ? diverge + " | " : "") + p;
+      }
+      return { num, outcome, align, diverge };
+    });
+
+  return out;
+}
+
+// Map UP/DOWN/NEUTRAL to the same green/red/amber palette used elsewhere.
+function posColors(pos) {
+  const p = (pos || "").toUpperCase();
+  if (p === "UP")   return { color: C.green, bg: C.greenBg, border: C.greenBorder };
+  if (p === "DOWN") return { color: C.red,   bg: C.redBg,   border: C.redBorder };
+  return { color: C.amber, bg: C.amberBg, border: C.amberBorder };
+}
+
 function fmtUtc(ts) {
   if (!ts) return null;
   const d = new Date(ts*1000);
@@ -2973,7 +3045,7 @@ function App() {
 
           {/* TOP — narrative takeaway + detail */}
           {narrative && (
-            <div style={{ marginBottom:14 }}>
+            <div style={{ marginBottom: ds.free_observation ? 10 : 14 }}>
               <div style={{
                 width:"100%", maxWidth:"100%", overflowWrap:"anywhere", wordBreak:"break-word",
                 fontSize:17, color:C.text, lineHeight:1.5, fontWeight:700
@@ -2988,6 +3060,22 @@ function App() {
                   <BoldAnalysis text={detail} color={C.text} />
                 </div>
               )}
+            </div>
+          )}
+
+          {/* FREE OBSERVATION — sits with the narrative at the top */}
+          {ds.free_observation && (
+            <div style={{ marginBottom:14, padding:"8px 10px",
+              background:C.amberBg, border:`1px solid ${C.amberBorder}`,
+              borderRadius:5 }}>
+              <div style={{ fontSize:9, fontWeight:800, color:C.amber,
+                letterSpacing:1, marginBottom:3, textTransform:"uppercase" }}>
+                Free Observation
+              </div>
+              <div style={{ fontSize:12, color:C.amber, lineHeight:1.55,
+                fontStyle:"italic" }}>
+                {ds.free_observation}
+              </div>
             </div>
           )}
 
@@ -3006,23 +3094,138 @@ function App() {
                   </div>
                 </div>
               )}
-              {histSummary && (
-                <div>
-                  <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:3 }}>
-                    Historical Similarity Analyst
+              {histSummary && (() => {
+                const h = parseHistAnalysis(histSummary);
+                const pc = posColors(h.position);
+                const subLabel = { fontSize:9, fontWeight:700, color:C.muted,
+                  letterSpacing:1, textTransform:"uppercase", marginBottom:4 };
+                const kvBlock = (lab, val) => val ? (
+                  <div style={{ marginTop:8 }}>
+                    <div style={subLabel}>{lab}</div>
+                    <div style={{ fontSize:12, color:C.text, lineHeight:1.55 }}>
+                      <BoldAnalysis text={val} color={C.text} />
+                    </div>
                   </div>
-                  <div style={{ fontSize:13, color:C.text, lineHeight:1.6, whiteSpace:"pre-wrap" }}>
-                    <BoldAnalysis text={histSummary} color={C.text} />
+                ) : null;
+                return (
+                  <div>
+                    <div style={{ fontSize:9, fontWeight:700, color:C.muted,
+                      letterSpacing:1, marginBottom:6 }}>
+                      Historical Similarity Analyst
+                    </div>
+
+                    {/* Position pill + confidence */}
+                    {(h.position || h.confidence) && (
+                      <div style={{ display:"flex", alignItems:"center",
+                        gap:8, marginBottom:8, flexWrap:"wrap" }}>
+                        {h.position && (
+                          <span style={{ fontSize:11, fontWeight:900,
+                            color:pc.color, background:pc.bg,
+                            border:`1px solid ${pc.border}`, borderRadius:4,
+                            padding:"2px 8px", letterSpacing:0.5 }}>
+                            {h.position.toUpperCase()}
+                          </span>
+                        )}
+                        {h.confidence && (
+                          <span style={{ fontSize:12, fontWeight:700, color:C.textSec }}>
+                            {h.confidence}
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Lean — the headline takeaway */}
+                    {h.lean && (
+                      <div style={{ fontSize:13, color:C.text, lineHeight:1.6,
+                        fontWeight:600, marginBottom:8 }}>
+                        <BoldAnalysis text={h.lean} color={C.text} />
+                      </div>
+                    )}
+
+                    {/* Base rates — compact stat strip */}
+                    {h.baseRates && (
+                      <div style={{ fontSize:11, color:C.textSec,
+                        background:"#FFFFFF", border:`1px solid ${C.borderSoft}`,
+                        borderRadius:5, padding:"5px 8px", marginBottom:8,
+                        fontVariantNumeric:"tabular-nums" }}>
+                        <BoldAnalysis text={h.baseRates} color={C.textSec} />
+                      </div>
+                    )}
+
+                    {/* Precedents — numbered rows */}
+                    {h.precedents.length > 0 && (
+                      <div style={{ marginBottom:8 }}>
+                        <div style={subLabel}>Precedents (Tier A)</div>
+                        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                          {h.precedents.map((p, i) => {
+                            const opc = posColors(p.outcome);
+                            return (
+                              <div key={i} style={{ display:"flex", gap:8,
+                                alignItems:"flex-start",
+                                background:"#FFFFFF",
+                                border:`1px solid ${C.borderSoft}`,
+                                borderRadius:5, padding:"6px 8px" }}>
+                                <span style={{ fontSize:11, fontWeight:900,
+                                  color:C.muted, minWidth:28,
+                                  fontVariantNumeric:"tabular-nums" }}>
+                                  #{p.num}
+                                </span>
+                                <span style={{ fontSize:10, fontWeight:900,
+                                  color:opc.color, background:opc.bg,
+                                  border:`1px solid ${opc.border}`,
+                                  borderRadius:3, padding:"1px 6px",
+                                  letterSpacing:0.5, alignSelf:"flex-start",
+                                  marginTop:1 }}>
+                                  {p.outcome || "?"}
+                                </span>
+                                <div style={{ flex:1, minWidth:0,
+                                  fontSize:12, color:C.text, lineHeight:1.5 }}>
+                                  {p.align && (
+                                    <div>
+                                      <span style={{ fontSize:9, fontWeight:800,
+                                        color:C.green, letterSpacing:0.8,
+                                        marginRight:4 }}>ALIGN</span>
+                                      <BoldAnalysis text={p.align} color={C.text} />
+                                    </div>
+                                  )}
+                                  {p.diverge && (
+                                    <div style={{ marginTop:p.align ? 2 : 0 }}>
+                                      <span style={{ fontSize:9, fontWeight:800,
+                                        color:C.red, letterSpacing:0.8,
+                                        marginRight:4 }}>DIVERGE</span>
+                                      <BoldAnalysis text={p.diverge} color={C.text} />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {kvBlock("Against", h.against)}
+                    {kvBlock("Ensemble Reliability", h.ensemble)}
+                    {kvBlock("For", h.forText)}
+                    {kvBlock("Devil's Advocate", h.devil)}
+                    {kvBlock("Edge", h.edge)}
+                    {h.suggestion && h.suggestion.toUpperCase() !== "NONE" &&
+                      kvBlock("Suggestion", h.suggestion)}
+                    {h.extra && (
+                      <div style={{ marginTop:8, fontSize:12, color:C.textSec,
+                        lineHeight:1.55, whiteSpace:"pre-wrap" }}>
+                        <BoldAnalysis text={h.extra} color={C.textSec} />
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
           {/* REASONS */}
           {reasonItems.length > 0 && (
-            <div style={{ marginBottom: ds.free_observation ? 12 : 0,
-              paddingTop:12, borderTop:sectionDivider }}>
+            <div style={{ paddingTop:12, borderTop:sectionDivider }}>
               <div style={{ fontSize:11, fontWeight:800, color:C.textSec, letterSpacing:1.2,
                 textTransform:"uppercase", marginBottom:8 }}>Reasoning</div>
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
@@ -3037,18 +3240,6 @@ function App() {
                     </div>
                   </div>
                 ))}
-              </div>
-            </div>
-          )}
-
-          {/* FREE OBSERVATION */}
-          {ds.free_observation && (
-            <div style={{ paddingTop:12, borderTop:sectionDivider }}>
-              <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:3 }}>
-                Free Observation
-              </div>
-              <div style={{ fontSize:12, color:C.amber, lineHeight:1.6, fontStyle:"italic" }}>
-                {ds.free_observation}
               </div>
             </div>
           )}

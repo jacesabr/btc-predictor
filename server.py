@@ -22,12 +22,12 @@ from engine import (
     deepseek, current_state, ws_clients,
     STATIC_DIR, CHARTS_DIR,
     _json_safe, _safe_storage,
-    _pred_for_ws, _run_full_prediction,
+    _pred_for_ws,
     run_collector, run_binance_feed,
     run_indicator_refresh, run_prediction_loop, run_embedding_audit_loop,
     _error_log, load_embedding_audit_log, _trigger_embedding_bootstrap,
 )
-from semantic_store import compute_all_indicator_accuracy, load_all as load_pattern_history
+from semantic_store import compute_all_indicator_accuracy
 
 logger = logging.getLogger(__name__)
 
@@ -297,18 +297,6 @@ async def get_deepseek_prediction_detail(window_start: float):
     return {}
 
 
-@app.post("/admin/backfill-correct", dependencies=[Depends(require_admin)])
-async def backfill_correct(limit: int = 100):
-    """One-shot backfill for bars stuck with correct=NULL (e.g. from the
-    pm_odds_open crash before commit 5dc942f). For each stuck bar, uses the
-    NEXT consecutive bar's start_price as the end_price approximation
-    (5-min tick boundary — inter-bar delta is negligible vs intra-bar move).
-    Idempotent: only updates bars where correct IS NULL AND end_price IS
-    NULL. Returns counts."""
-    limit = max(1, min(int(limit or 100), 500))
-    return _safe_storage(storage.backfill_stuck_correct, limit, default={"error": "storage_unavailable"})
-
-
 @app.get("/historical-analysis/{window_start}", dependencies=[Depends(require_admin)])
 async def get_historical_analysis(window_start: float):
     """
@@ -534,25 +522,6 @@ async def get_all_accuracy(n: int = 100):
     return {"ai": ai, "strategies": strategies, "specialists": specialists, "microstructure": microstructure}
 
 
-@app.get("/best-indicator", dependencies=[Depends(require_admin)])
-async def get_best_indicator(n: int = 0):
-    limit = n if n > 0 else None
-    try:
-        data = compute_all_indicator_accuracy(limit)
-    except Exception as exc:
-        return {"error": str(exc)}
-    best   = data.pop("best_indicator", None)
-    ranked = sorted(
-        [{"name": k, **v} for k, v in data.items()],
-        key=lambda x: (x["accuracy"], x["total"]), reverse=True,
-    )
-    try:
-        pattern_record_count = len(load_pattern_history())
-    except Exception:
-        pattern_record_count = -1
-    return {"best_indicator": best, "ranked": ranked, "total_indicators": len(ranked), "pattern_record_count": pattern_record_count}
-
-
 @app.get("/errors", dependencies=[Depends(require_admin)])
 async def get_errors():
     from datetime import datetime, timezone
@@ -660,39 +629,6 @@ async def get_suggestions(limit: int = 30):
             "unified_analyst":     len(uni_sugg),
         },
     }
-
-
-@app.post("/force-predict", dependencies=[Depends(require_admin)])
-async def force_predict():
-    prices = collector.get_prices(400)
-    if len(prices) < 30:
-        return {"status": "error", "detail": "Not enough price data (need 30, have %d)" % len(prices)}
-
-    saved = {k: current_state.get(k) for k in
-             ("window_start_time","window_start_price","prediction","ensemble_prediction",
-              "deepseek_prediction","strategies","specialist_completed_at")}
-    try:
-        pred, strategy_preds, _, _, window_start_time, window_start_price = \
-            await _run_full_prediction(prices, is_force=True)
-        current_state["window_start_time"]  = saved["window_start_time"]
-        current_state["window_start_price"] = saved["window_start_price"] or window_start_price
-        logger.info("Force predict (dry run) | %s (%.1f%%)", pred["signal"], pred["confidence"] * 100)
-        return {"status": "ok", "signal": pred["signal"], "confidence": pred["confidence"],
-                "dry_run": True, "note": "Preview only — not saved, timer unchanged"}
-    except Exception as exc:
-        for k, v in saved.items():
-            current_state[k] = v
-        logger.error("Force predict failed: %s", exc)
-        return {"status": "error", "detail": str(exc)}
-
-
-@app.post("/admin/reset", dependencies=[Depends(require_admin)])
-async def reset_database():
-    try:
-        counts = storage.reset_all_tables()
-        return {"status": "ok", "deleted": counts}
-    except Exception as exc:
-        return {"status": "error", "detail": str(exc)}
 
 
 @app.post("/admin/embed-missing", dependencies=[Depends(require_admin)])

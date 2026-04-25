@@ -521,7 +521,7 @@ class StoragePG:
                 signal, start_price = row
                 # Guard against zero/null prices: if either end is missing the
                 # bar can't be classified. The next bar's close will backfill
-                # this row via backfill_stuck_correct if possible.
+                # this row if possible.
                 if not start_price or not end_price or start_price <= 0 or end_price <= 0:
                     return
                 if actual is None:
@@ -549,105 +549,6 @@ class StoragePG:
             conn.commit()
         finally:
             _put(conn)
-
-    def backfill_stuck_correct(self, limit: int = 100) -> Dict:
-        """Audit + recompute end_price / actual_direction / correct on the
-        last N bars, regardless of whether they already have values set.
-        Per user: "no need to look for null bars, just audit and fix if we
-        won or lost according to our prediction the last 55 bars".
-
-        For each bar: look up the NEXT consecutive bar's start_price and
-        use it as the end_price approximation (5-min tick boundary —
-        negligible delta vs intra-bar move). Rows already matching the
-        recomputed values are left alone so re-runs are cheap no-ops.
-
-        Returns {scanned, updated, unchanged, skipped_no_next_bar, changes}
-        where `changes` is a list of up to 50 before/after diffs for
-        visibility into what the audit corrected.
-        """
-        conn = _conn()
-        updated = 0
-        unchanged = 0
-        no_next = 0
-        changes: List[Dict] = []
-        try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    WITH recent AS (
-                        SELECT window_start, window_end, start_price, signal,
-                               end_price, actual_direction, correct
-                          FROM deepseek_predictions
-                         WHERE signal IN ('UP','DOWN','NEUTRAL')
-                         ORDER BY window_start DESC
-                         LIMIT %s
-                    )
-                    SELECT r.window_start, r.start_price, r.signal,
-                           r.end_price, r.actual_direction, r.correct,
-                           n.start_price AS next_start_price
-                      FROM recent r
-                      LEFT JOIN deepseek_predictions n
-                        ON n.window_start = r.window_end
-                    """,
-                    (int(limit),),
-                )
-                rows = cur.fetchall()
-                scanned = len(rows)
-                for (ws, sp, sig, ep_old, ad_old, cr_old, next_sp) in rows:
-                    start_price = float(sp or 0)
-                    if next_sp is None or start_price <= 0:
-                        no_next += 1
-                        continue
-                    end_price = float(next_sp)
-                    if end_price <= 0:
-                        no_next += 1
-                        continue
-                    # Flat bars (start == end) aren't directional — leave
-                    # actual/correct NULL so they don't inflate UP stats.
-                    if abs(end_price - start_price) < 1e-6:
-                        actual = None
-                        correct = None
-                    else:
-                        actual = "UP" if end_price > start_price else "DOWN"
-                        correct = None if sig == "NEUTRAL" else (actual == sig)
-                    same_end     = (ep_old is not None) and (abs(float(ep_old) - end_price) < 0.01)
-                    same_actual  = (ad_old == actual)
-                    same_correct = (cr_old == correct) if correct is not None else (cr_old is None)
-                    if same_end and same_actual and same_correct:
-                        unchanged += 1
-                        continue
-                    cur.execute(
-                        "UPDATE deepseek_predictions "
-                        "SET end_price=%s, actual_direction=%s, correct=%s "
-                        "WHERE window_start=%s",
-                        (end_price, actual, correct, ws),
-                    )
-                    updated += 1
-                    if len(changes) < 50:
-                        changes.append({
-                            "window_start": ws,
-                            "signal": sig,
-                            "before": {
-                                "end_price":        float(ep_old) if ep_old is not None else None,
-                                "actual_direction": ad_old,
-                                "correct":          cr_old,
-                            },
-                            "after": {
-                                "end_price":        end_price,
-                                "actual_direction": actual,
-                                "correct":          correct,
-                            },
-                        })
-            conn.commit()
-        finally:
-            _put(conn)
-        return {
-            "scanned":             scanned,
-            "updated":             updated,
-            "unchanged":           unchanged,
-            "skipped_no_next_bar": no_next,
-            "changes":             changes,
-        }
 
     def get_deepseek_accuracy(self) -> Dict:
         cutoff = get_reset_at()
@@ -757,21 +658,6 @@ class StoragePG:
                 return rows
         finally:
             _put(conn)
-
-    def reset_all_tables(self) -> Dict[str, int]:
-        """Delete all rows from ticks, predictions, deepseek_predictions. Returns row counts deleted."""
-        conn = _conn()
-        counts = {}
-        try:
-            with conn.cursor() as cur:
-                for table in ("ticks", "predictions", "deepseek_predictions"):
-                    cur.execute(f"SELECT COUNT(*) FROM {table}")
-                    counts[table] = cur.fetchone()[0]
-                    cur.execute(f"DELETE FROM {table}")
-            conn.commit()
-        finally:
-            _put(conn)
-        return counts
 
     def store_event(self, *, source: str, kind: str, message: str,
                     bar_time: str = "", bar_num: str = "",
