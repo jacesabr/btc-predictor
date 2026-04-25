@@ -168,14 +168,15 @@ DEEPSEEK_FAST_MODEL = "deepseek-chat"     # fast — specialists, analyst, exper
 # a one-line change.
 VENICE_API_URL = "https://api.venice.ai/api/v1/chat/completions"
 VENICE_MODEL_FOR_DEEPSEEK = {
-    # Quality-comparison experiment (~2026-04-25, ~$10 Venice budget = ~1 hour
-    # of all-Opus runtime). Both fast and reasoning paths route to Claude Opus
-    # 4.7 via Venice while DeepSeek's balance is exhausted. To revert: restore
-    # "deepseek-chat" → "deepseek-v4-flash" and "deepseek-reasoner" →
-    # "deepseek-v4-pro". Other Claude options on Venice: claude-opus-4-6,
-    # claude-sonnet-4-6 (40% cheaper).
-    "deepseek-chat":     "claude-opus-4-7",  # was: deepseek-v4-flash
-    "deepseek-reasoner": "claude-opus-4-7",  # was: deepseek-v4-pro
+    # Production fast path uses deepseek-chat (V3.x). Closest Venice analog:
+    "deepseek-chat":     "deepseek-v4-flash",  # alternates: deepseek-v3.2, deepseek-v4-pro
+    # Production reasoning path uses deepseek-reasoner. Closest Venice analog:
+    "deepseek-reasoner": "deepseek-v4-pro",    # alternates: deepseek-v3.2, deepseek-v4-flash
+    # Opus 4.7 experiment (2026-04-25) reverted: Opus's per-call latency
+    # (40-60s) plus extended-thinking on the unified specialist consistently
+    # pushed pipeline serial timing past the 5-min bar window, discarding
+    # ~80% of bars to the overrun safeguard. claude-opus-4-7 still works
+    # for one-off calls — just not at this 5-min cadence.
 }
 # HTTP status codes that signal "DeepSeek itself is unavailable" — fall back to
 # Venice. 4xx codes other than 401/402/429 are NOT retried (bad request will
