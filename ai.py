@@ -1294,6 +1294,11 @@ TREND_RESPECT_GATE:
   T1 (trend stack unanimous: Dow + Alligator + EMA21/55 + Micro 20-bar all same direction): YES/NO + cite each
   T2 (counter-signals MAGNITUDE-material — ANY one of: whale net >2.5 BTC AND ≥70% opposite-trend; taker BSR on >2 BTC opposing; funding/OI delta in last 1–3 bars; trend exhausting (last 4-5 bars <0.05% net move + low volume)): YES/NO + cite numbers
   IF T1=YES AND T2=NO → POSITION must commit in the trend direction at 55–65% (NEUTRAL is not allowed).
+PREMORTEM_GATE (fill BEFORE writing POSITION):
+  P0 premortem trigger sentence: [paste your Step-D premortem reason]
+  P1 (P0 cites ≥2 INDEPENDENT oscillator extremes in CURRENT bar contradicting POSITION — RSI(4)<25 or >75, MFI(4)<20 or >80, BB %B<0 or >1; need 2+ from this list): YES/NO + cite each field + value + threshold
+  P2 (P0 cites a low-volume extreme-flow noise-trap — taker total <2 BTC AND BSR>5 or <0.2 contradicting POSITION — AND spot whale flow does NOT corroborate POSITION): YES/NO + cite taker total + BSR + spot whale signal
+  IF P1=YES OR P2=YES → POSITION must be NEUTRAL OR opposite the draft (CONFIDENCE ≤55% if you flip).
 POSITION: ABOVE | BELOW | NEUTRAL
 CONFIDENCE: XX%
 DATA_RECEIVED: [state which signals were available]
