@@ -26,6 +26,7 @@ Public exports:
 """
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -251,7 +252,18 @@ async def _post_chat(url: str, api_key: str, model: str, prompt: str,
             choice = data["choices"][0]
             if choice.get("finish_reason") == "length":
                 logger.warning("_post_chat: response truncated at token limit (max_tokens=%d)", max_tokens)
-            return choice["message"]["content"]
+            content = choice.get("message", {}).get("content")
+            if not content:
+                # Opus via Venice can return `content: null` on refusal, empty
+                # completion, or tool-use mode. Log finish_reason + model so we
+                # can see WHY in the logs, then return "" so callers don't crash.
+                logger.warning(
+                    "_post_chat: empty content (model=%s finish_reason=%s body=%s)",
+                    model, choice.get("finish_reason"),
+                    json.dumps(choice)[:200],
+                )
+                return ""
+            return content
 
 
 def _is_deepseek_fallback_error(exc: BaseException) -> bool:
@@ -1527,7 +1539,12 @@ def _ohlcv_csv(klines, n=60):
     return "\n".join(rows)
 
 
-def _parse_specialist_response(text: str) -> Tuple[Dict[str, Dict], Optional[str], Optional[str]]:
+def _parse_specialist_response(text: str) -> Tuple[Dict[str, Dict], Optional[str]]:
+    # Opus via Venice occasionally returns `content: null` (refusal, empty
+    # completion, or tool-use mode). Bail with empty strategies rather than
+    # crashing — downstream gracefully handles a missing specialists dict.
+    if not text:
+        return {}, None
     lines = text.strip().splitlines()
     raw: Dict[str, str] = {}
     for line in lines:
