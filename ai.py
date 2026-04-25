@@ -177,6 +177,17 @@ VENICE_MODEL_FOR_DEEPSEEK = {
     "deepseek-chat":     "deepseek-v4-flash",
     "deepseek-reasoner": "deepseek-v4-flash",
 }
+
+# ── OpenRouter primary (replaces direct DeepSeek when OPENROUTER_API_KEY set)
+# DeepSeek's direct API is at $0 balance; OpenRouter routes the same V3 chat
+# model at the same prices. V3.1 is pure chat (no reasoning) — that's the
+# whole reason for routing through it after Venice's deepseek-v4-flash turned
+# out to silently use thinking tokens.
+OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODEL_FOR_DEEPSEEK = {
+    "deepseek-chat":     "deepseek/deepseek-chat-v3.1",  # pure chat, no reasoning
+    "deepseek-reasoner": "deepseek/deepseek-chat-v3.1",  # reasoner removed everywhere
+}
 # HTTP status codes that signal "DeepSeek itself is unavailable" — fall back to
 # Venice. 4xx codes other than 401/402/429 are NOT retried (bad request will
 # fail on Venice too with the same prompt).
@@ -291,18 +302,31 @@ async def _api_call(
     timeout_s: Optional[float] = 90.0,
     model: str = DEEPSEEK_FAST_MODEL,
 ) -> str:
-    """Call DeepSeek's chat completions endpoint. On credits/rate-limit/server
-    errors, auto-retry once via Venice if VENICE_API_KEY is configured. Venice
-    is emergency-only — it isn't tried unless DeepSeek actually fails."""
+    """Primary chat-completions call. Routes through OpenRouter (deepseek/
+    deepseek-chat-v3.1) when OPENROUTER_API_KEY is set; otherwise falls back
+    to DeepSeek direct using the legacy `api_key` argument. On any
+    credit/rate-limit/server error, retries once via Venice."""
+    or_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if or_key:
+        primary_url   = OPENROUTER_API_URL
+        primary_key   = or_key
+        primary_model = OPENROUTER_MODEL_FOR_DEEPSEEK.get(model, "deepseek/deepseek-chat-v3.1")
+        primary_label = "OpenRouter"
+    else:
+        primary_url   = DEEPSEEK_API_URL
+        primary_key   = api_key
+        primary_model = model
+        primary_label = "DeepSeek"
+
     try:
-        return await _post_chat(DEEPSEEK_API_URL, api_key, model, prompt, max_tokens, timeout_s)
+        return await _post_chat(primary_url, primary_key, primary_model, prompt, max_tokens, timeout_s)
     except Exception as exc:
         venice_key = os.environ.get("VENICE_API_KEY", "").strip()
         if not venice_key or not _is_deepseek_fallback_error(exc):
             raise
         venice_model = VENICE_MODEL_FOR_DEEPSEEK.get(model, "deepseek-v4-flash")
-        logger.warning("DeepSeek unavailable (%s) — falling back to Venice model=%s",
-                       _fmt_exc(exc), venice_model)
+        logger.warning("%s unavailable (%s) — falling back to Venice model=%s",
+                       primary_label, _fmt_exc(exc), venice_model)
         return await _post_chat(VENICE_API_URL, venice_key, venice_model, prompt, max_tokens, timeout_s)
 
 
