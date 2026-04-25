@@ -702,30 +702,26 @@ async def _run_full_prediction(prices, is_force=False):
     except Exception:
         pass
 
-    # Step 1 — Unified specialist
-    specialist_results = {}
+    # ── Step 1+2+5a in PARALLEL (2026-04-25 refactor) ───────────────────
+    # Unified specialist runs as a background task while we sequentially
+    # await dashboard → binance expert in this main coroutine. They're
+    # independent — the unified analyst only consumes the OHLCV `klines`,
+    # while the dashboard/binance chain consumes external API signals.
+    # Saves ~50–70s vs the old serial pipeline (specialists were the slowest
+    # single step at ~65–90s on V3.1).
+    #
+    # CORRECTNESS INVARIANT: historical analyst & main DeepSeek MUST never
+    # fire before specialists are joined. The explicit `await specialist_task`
+    # before Step 5b is the only join point — there's no path that skips it.
+    specialist_results: Dict = {}
+    specialist_task = None
+    _spec_t0 = time.time()
     if deepseek and klines and _features_ok:
-        _spec_t0 = time.time()
-        try:
-            spec_raw = await asyncio.wait_for(
-                run_specialists(config.deepseek_api_key, klines), timeout=100.0,
-            )
-            specialist_results = spec_raw or {}
-            if specialist_results:
-                for key, result in specialist_results.items():
-                    if result is not None:
-                        strategy_preds[key] = result
-                current_state["bar_specialist_signals"] = _json_safe(specialist_results)
-            _record_stage("specialists", time.time() - _spec_t0, ok=True)
-        except asyncio.TimeoutError:
-            logger.warning("Unified specialist timed out")
-            _record_stage("specialists", time.time() - _spec_t0, ok=False, error="timeout 100s")
-        except Exception as exc:
-            logger.warning("Unified specialist error: %s", exc)
-            _record_stage("specialists", time.time() - _spec_t0, ok=False, error=f"{type(exc).__name__}: {exc}")
-        current_state["specialist_completed_at"] = time.time()
+        specialist_task = asyncio.create_task(asyncio.wait_for(
+            run_specialists(config.deepseek_api_key, klines), timeout=100.0,
+        ))
 
-    # Step 2 — Dashboard signals
+    # Step 2 — Dashboard signals (already in flight as dashboard_task)
     _dash_t0 = time.time()
     try:
         dashboard_signals = await asyncio.wait_for(dashboard_task, timeout=10.0)
@@ -740,19 +736,12 @@ async def _run_full_prediction(prices, is_force=False):
         logger.warning("Dashboard signals error: %s", exc)
         _record_stage("dashboard_signals", time.time() - _dash_t0, ok=False, error=f"{type(exc).__name__}: {exc}")
 
-    # Step 3 — Inject dashboard into ensemble
+    # Step 3 — Inject dashboard into ensemble (specialists merged in below
+    # after the join point). Dashboard preds are deterministic from the raw
+    # signals, so they're safe to add now.
     if dashboard_signals:
         dash_preds = _dashboard_signals_to_preds(dashboard_signals)
         strategy_preds.update(dash_preds)
-
-    # Step 4 — Ensemble
-    pred                              = _json_safe(ensemble.predict(strategy_preds))
-    strategy_preds                    = _json_safe(strategy_preds)
-    pred["source"]                    = "ensemble"
-    current_state["prediction"]       = pred
-    current_state["ensemble_prediction"] = pred
-    current_state["strategies"]       = strategy_preds
-    current_state["agree_accuracy"]   = _safe_storage(storage.get_agree_accuracy, default={})
 
     # Step 5a — Binance expert runs BEFORE historical analyst so the historical
     # query can include the expert's conclusion. This adds ~8s to the sequential
@@ -783,6 +772,41 @@ async def _run_full_prediction(prices, is_force=False):
             logger.warning("Binance expert error: %s — historical analyst fires without it", bx_exc)
             _record_stage("binance_expert", time.time() - _bx_t0, ok=False,
                           error=f"{type(bx_exc).__name__}: {bx_exc}")
+
+    # ── JOIN POINT — await the parallel unified-specialist task ─────────
+    # By now (after dashboard ~5s + binance ~50s) the specialist task has
+    # usually had ~55s of headstart. If it took ~70s total, we wait ~15s
+    # here. If the join fails (timeout/error), we proceed with empty
+    # specialist_results — historical analyst tolerates that.
+    if specialist_task is not None:
+        try:
+            spec_raw = await specialist_task
+            specialist_results = spec_raw or {}
+            if specialist_results:
+                for key, result in specialist_results.items():
+                    if result is not None:
+                        strategy_preds[key] = result
+                current_state["bar_specialist_signals"] = _json_safe(specialist_results)
+            _record_stage("specialists", time.time() - _spec_t0, ok=True)
+        except asyncio.TimeoutError:
+            logger.warning("Unified specialist timed out")
+            _record_stage("specialists", time.time() - _spec_t0, ok=False, error="timeout 100s")
+        except Exception as exc:
+            logger.warning("Unified specialist error: %s", exc)
+            _record_stage("specialists", time.time() - _spec_t0, ok=False, error=f"{type(exc).__name__}: {exc}")
+        current_state["specialist_completed_at"] = time.time()
+
+    # Step 4 — Ensemble vote (now that specialists, dashboard, and binance
+    # are all merged into strategy_preds; binance expert's signal isn't
+    # added here because it's used as raw text context downstream, not as
+    # a vote — same as before the parallel refactor).
+    pred                                 = _json_safe(ensemble.predict(strategy_preds))
+    strategy_preds                       = _json_safe(strategy_preds)
+    pred["source"]                       = "ensemble"
+    current_state["prediction"]          = pred
+    current_state["ensemble_prediction"] = pred
+    current_state["strategies"]          = strategy_preds
+    current_state["agree_accuracy"]      = _safe_storage(storage.get_agree_accuracy, default={})
 
     # Step 5b — Historical analyst (now sees Binance expert output too)
     historical_analyst_fired = False
