@@ -3291,14 +3291,78 @@ function App() {
       }
       return t.committed;
     };
+    // Auto-extract real (machine-checkable) conditions from bullet prose
+    // when Venice forgot to emit them. Common failure pattern observed:
+    // "If price drops below $77,590 and the ask wall at 421.6 BTC holds"
+    // — Venice ships the bullet with no conditions, so it falls through to
+    // INFO and the trigger (price < $77,590, ask_depth >= 421.6 BTC) goes
+    // untracked. This extractor reads the prose for explicit thresholds and
+    // promotes them to first-class conditions so the bullet behaves like
+    // any other actionable trigger.
+    const extractCondsFromText = (text) => {
+      if (!text) return [];
+      const out = [];
+      // Helper to canonicalize $-prices and BTC volumes
+      const num = (s) => {
+        const v = parseFloat(String(s).replace(/[$,]/g, ""));
+        return Number.isFinite(v) ? v : null;
+      };
+      // PRICE — "If price [drops|breaks|falls] below $X" → price < X
+      const reBelow = /\bprice\b[^.\n]*?\b(?:drops?|breaks?|falls?|moves?)\s+below\s+\$?([\d,]+(?:\.\d+)?)/gi;
+      let m;
+      while ((m = reBelow.exec(text)) !== null) {
+        const v = num(m[1]); if (v !== null) out.push({ metric: "price", op: "<", value: v, unit: "USD" });
+      }
+      // PRICE — "If price [holds|stays] above $X" → price > X
+      const reAbove = /\bprice\b[^.\n]*?\b(?:holds?|stays?|breaks?|moves?|reaches?)\s+above\s+\$?([\d,]+(?:\.\d+)?)/gi;
+      while ((m = reAbove.exec(text)) !== null) {
+        const v = num(m[1]); if (v !== null) out.push({ metric: "price", op: ">", value: v, unit: "USD" });
+      }
+      // PRICE — "price can't break $X" / "price fails to break $X" → price < X
+      const reCantBreak = /\bprice\b[^.\n]*?\b(?:can't|cannot|can\s*not|fails?\s+to)\s+break\s+\$?([\d,]+(?:\.\d+)?)/gi;
+      while ((m = reCantBreak.exec(text)) !== null) {
+        const v = num(m[1]); if (v !== null) out.push({ metric: "price", op: "<", value: v, unit: "USD" });
+      }
+      // ASK WALL — "ask wall at X BTC holds" / "ask wall ... doesn't fill"
+      const reAskWall = /\bask\s+(?:wall|stack|side)[^.\n]*?\bat\s+([\d,]+(?:\.\d+)?)\s*BTC\b/gi;
+      while ((m = reAskWall.exec(text)) !== null) {
+        const v = num(m[1]); if (v !== null) out.push({ metric: "ask_depth_05pct", op: ">=", value: v, unit: "BTC" });
+      }
+      // BID WALL — same shape on the buy side
+      const reBidWall = /\bbid\s+(?:wall|stack|side)[^.\n]*?\bat\s+([\d,]+(?:\.\d+)?)\s*BTC\b/gi;
+      while ((m = reBidWall.exec(text)) !== null) {
+        const v = num(m[1]); if (v !== null) out.push({ metric: "bid_depth_05pct", op: ">=", value: v, unit: "BTC" });
+      }
+      // De-dupe: prefer the first occurrence of each metric+op
+      const seen = new Set(); const dedup = [];
+      for (const c of out) {
+        const k = `${c.metric}|${c.op}`;
+        if (seen.has(k)) continue;
+        seen.add(k); dedup.push(c);
+      }
+      return dedup;
+    };
+
     const evalBullet = (b) => {
       const realConds = Array.isArray(b.conditions) ? b.conditions : [];
-      // If Venice shipped no conditions but the bullet text names a signal
-      // family, synthesize info-only pills so the user always sees live
-      // value + source for every metric the prose references.
-      let effectiveConds = realConds;
+      // If the bullet text contains explicit thresholds (e.g. "price drops
+      // below $X", "ask wall at Y BTC holds") that Venice forgot to emit
+      // as conditions, recover them here. These become FIRST-CLASS
+      // conditions (not info-only) so the bullet's met/unmet evaluation
+      // and ACTIONABLE bucketing both work properly.
+      const textConds = extractCondsFromText(`${b.text || ""} ${b.if_met || ""}`);
+      // Merge: keep Venice's original conditions, add text-extracted ones
+      // that aren't already covered (by metric+op).
+      const haveMetricOp = new Set(realConds.map(c => `${c.metric}|${c.op}`));
+      const recovered = textConds.filter(c => !haveMetricOp.has(`${c.metric}|${c.op}`));
+      const mergedConds = [...realConds, ...recovered.map(c => ({ ...c, __recovered: true }))];
+
+      // If still no real conditions but text names a signal family, fall
+      // through to the existing info-only pill synthesis (live readings
+      // for context).
+      let effectiveConds = mergedConds;
       let inferred = false;
-      if (realConds.length === 0) {
+      if (mergedConds.length === 0) {
         const combined = `${b.text || ""} ${b.if_met || ""}`;
         const inferredMetrics = inferMetricsFromText(combined);
         if (inferredMetrics.length > 0) {
@@ -3316,7 +3380,11 @@ function App() {
         const key  = `${b.text || ""}|${c.metric}|${c.op}|${c.value}`;
         return { raw, stable: stableMet(key, raw) };
       });
-      const hasRealConds = realConds.length > 0;
+      // Real conditions = whatever Venice emitted PLUS anything we
+      // recovered from the prose. A bullet whose only conditions are
+      // text-recovered (e.g. "price drops below $X") still gets full
+      // ACTIONABLE/WAITING bucketing, which is the whole point.
+      const hasRealConds = mergedConds.length > 0;
       const allMet = hasRealConds && results.every(r => r.stable === true);
       // Narrative-only bullets (no machine-checkable threshold) are no longer
       // falsely marked "actionable · live now". They show as info context.
