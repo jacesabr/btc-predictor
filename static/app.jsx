@@ -3063,6 +3063,24 @@ function App() {
         case "aggregate_funding_rate":    return ds.aggregate_funding?.weighted_funding_rate != null ? { v: ds.aggregate_funding.weighted_funding_rate*100, f: fmt.pct } : null;
         case "aggregate_liquidations_usd":return ds.aggregate_liquidations?.total_usd != null ? { v: ds.aggregate_liquidations.total_usd, f: fmt.usd } : null;
         case "oi_velocity_pct":   return ds.aggregate_oi?.change_30min_pct != null ? { v: ds.aggregate_oi.change_30min_pct, f: fmt.pct } : (oif?.oi_change_pct != null ? { v: oif.oi_change_pct, f: fmt.pct } : null);
+        // Technical indicators sourced from strategies[] (live-pushed via WS).
+        // .value is a string (e.g. "9.1", "1.3168", "-0.64"); parseFloat
+        // tolerates a leading "$" so vwap_ref ("$77508.08") parses cleanly.
+        case "stoch_k":           return strategies?.stochastic?.value != null ? { v: parseFloat(strategies.stochastic.value), f: fmt.num } : null;
+        case "macd_histogram":    return strategies?.macd?.value != null ? { v: parseFloat(strategies.macd.value), f: fmt.num } : null;
+        case "adx":               return strategies?.adx?.value != null ? { v: parseFloat(strategies.adx.value), f: fmt.num } : null;
+        case "ema_5_13_diff":     return strategies?.ema_cross?.value != null ? { v: parseFloat(strategies.ema_cross.value), f: fmt.usd } : null;
+        case "vwap_ref":          return strategies?.vwap?.value != null ? { v: parseFloat(String(strategies.vwap.value).replace(/[$,]/g,"")), f: fmt.usd } : null;
+        // Dashboard-signal-sourced metrics (live-pushed to all viewers).
+        case "mark_premium_pct":   return ds?.oi_funding?.mark_premium_vs_index_pct != null ? { v: ds.oi_funding.mark_premium_vs_index_pct, f: fmt.pct } : null;
+        case "dvol_pct":           return ds?.deribit_dvol?.dvol_pct != null ? { v: ds.deribit_dvol.dvol_pct, f: fmt.pct } : null;
+        case "btc_dominance_pct":  return ds?.btc_dominance?.btc_dominance_pct != null ? { v: ds.btc_dominance.btc_dominance_pct, f: fmt.pct } : null;
+        case "fear_greed":         return ds?.fear_greed?.value != null ? { v: ds.fear_greed.value, f: fmt.num } : null;
+        case "mempool_fee":        return ds?.mempool?.fastest_fee_sat_vb != null ? { v: ds.mempool.fastest_fee_sat_vb, f: (v)=>`${v} sat/vB` } : null;
+        case "kraken_premium_pct": return ds?.kraken_premium?.spread_pct != null ? { v: ds.kraken_premium.spread_pct, f: fmt.pct } : null;
+        case "top_long_short_ratio": return ds?.top_position_ratio?.long_short_ratio != null ? { v: ds.top_position_ratio.long_short_ratio, f: fmt.num } : null;
+        case "spot_perp_cvd_div":  return ds?.cvd?.spot_perp_divergence_btc != null ? { v: ds.cvd.spot_perp_divergence_btc, f: fmt.btc } : null;
+        case "put_call_ratio":     return ds?.deribit_skew_term?.put_call_volume_ratio != null ? { v: ds.deribit_skew_term.put_call_volume_ratio, f: fmt.num } : null;
         default: return null;
       }
     };
@@ -3125,6 +3143,34 @@ function App() {
                                source: { label: "Coinglass", url: "/#sources" } },
       oi_velocity_pct:       { label: "OI velocity",     layman: "How fast money is flowing INTO or OUT OF leveraged bets right now. Rising = fresh traders committing new money — trend has real fuel. Falling = traders closing out — the current move might be running on fumes.",
                                source: { label: "Coinglass", url: "/#sources" } },
+      stoch_k:           { label: "Stoch %K",      layman: "A 0-to-100 gauge of where price is sitting in its recent 5-minute range. Above 80 = price is pinned near the top of the range (overbought, breather likely). Below 20 = pinned near the bottom (oversold, bounce likely). It moves faster than RSI so it tags extremes more often.",
+                           source: { label: "TradingView", url: "/#sources" } },
+      macd_histogram:    { label: "MACD hist",     layman: "Shows whether short-term momentum is pulling away from longer-term momentum or coming back together. Positive and rising = momentum building UP. Negative and rising (less negative) = down-momentum fading, possible reversal. Crossing zero = momentum is flipping sides.",
+                           source: { label: "TradingView", url: "/#sources" } },
+      adx:               { label: "ADX",           layman: "How strong the current trend is, regardless of direction. Above 25 = real trend is happening (don't fade it). Below 20 = no trend, price chopping around (range-trade or stand aside). It doesn't tell you UP or DOWN, just whether the move has conviction.",
+                           source: { label: "TradingView", url: "/#sources" } },
+      ema_5_13_diff:     { label: "EMA 5/13 Δ",    layman: "How far the very-short-term average has pulled away from the slightly-longer one. Positive = short-term is above long-term (bullish slope). Negative = the opposite. Big absolute number = strong trend; near zero = no momentum, lines about to cross.",
+                           source: { label: "TradingView", url: "/#sources" } },
+      vwap_ref:          { label: "VWAP",          layman: "The volume-weighted average price for the current session — what the average buyer/seller has paid this session. Price above VWAP = buyers in control on average. Below = sellers. Distance from VWAP shows how stretched the current move is.",
+                           source: { label: "Binance spot", url: "/#sources" } },
+      mark_premium_pct:  { label: "mark prem",     layman: "How much the leveraged perpetual price is above (or below) the spot index price. Positive = perp is paying a premium over spot (bullish lean). Negative = perp is trading at a discount (bearish lean). Tracks short-term futures vs spot tension.",
+                           source: { label: "Coinglass", url: "/#sources" } },
+      dvol_pct:          { label: "DVOL",          layman: "Deribit's option-implied volatility index — what options traders are pricing in for moves over the next 30 days. Higher = options expect bigger swings (fear or anticipation). Lower = options expect calm. Sudden spikes here often precede big price moves.",
+                           source: { label: "Deribit", url: "/#sources" } },
+      btc_dominance_pct: { label: "BTC dom",       layman: "BTC's share of the entire crypto market cap. Rising = money rotating OUT of altcoins INTO BTC (often bullish for BTC, bearish for alts). Falling = money flowing into alts (alt-season). Above ~58% historically signals strong BTC preference.",
+                           source: { label: "CoinGecko", url: "/#sources" } },
+      fear_greed:        { label: "Fear & Greed",  layman: "A 0-100 sentiment gauge. Below 25 = traders are scared (often a contrarian buy signal). Above 75 = traders are greedy (often a contrarian sell signal). Mid-range = balanced. Daily macro indicator, not for 5-minute scalping but useful as background context.",
+                           source: { label: "Alternative.me", url: "/#sources" } },
+      mempool_fee:       { label: "mempool fee",   layman: "How crowded the Bitcoin network is right now (sat/vB to confirm fast). Low (1-5) = quiet network, no on-chain panic. High (50+) = lots of urgent transactions waiting, often coincides with market stress. Background context, not a direct trade signal.",
+                           source: { label: "Mempool.space", url: "/#sources" } },
+      kraken_premium_pct: { label: "Kraken prem",  layman: "How much higher (or lower) Kraken's price is vs OKX. Positive = EU/US regulated buyers paying up over global average (often institutional accumulation). Negative = the opposite. Big spread = regional dislocation, often bullish or bearish depending on direction.",
+                           source: { label: "Kraken", url: "/#sources" } },
+      top_long_short_ratio: { label: "top L/S",    layman: "Among the TOP traders on Binance futures (top 20% by account size), how many are betting UP vs DOWN. Different from retail L/S — these are the bigger, more informed accounts. When top traders heavily lean one way, it's a stronger signal than the crowd.",
+                           source: { label: "Coinglass", url: "/#sources" } },
+      spot_perp_cvd_div:  { label: "spot/perp CVD div", layman: "Difference between aggressive buying-vs-selling on regular spot markets vs leveraged perps. Positive = real spot money is buying while perps lag (durable rally). Negative = perp speculation is leading without spot confirmation (often a fakeout that reverses).",
+                           source: { label: "Coinglass", url: "/#sources" } },
+      put_call_ratio:    { label: "P/C vol",       layman: "Volume of DOWN-bet options divided by UP-bet options. Above 1.0 = traders are buying more downside protection (bearish lean or hedging). Below 1.0 = more upside speculation (bullish lean). Extreme readings are often contrarian — too much fear/greed marks turning points.",
+                           source: { label: "Deribit", url: "/#sources" } },
     };
     // Text → signal-family map (mirrors server-side _TEXT_SIGNAL_FAMILIES in
     // trader_summary.py). When a bullet has conditions:[] but its text names
@@ -3132,20 +3178,42 @@ function App() {
     // family member so the trader still sees live value + source link
     // instead of a "? UNKNOWN" badge.
     const TEXT_FAMILY_RULES = [
-      { rx: /\bwhale\b/i,                        metrics: ["spot_whale_buy_btc", "spot_whale_sell_btc"] },
-      { rx: /\btaker (buy|sell) (volume|flow)\b/i, metrics: ["taker_ratio", "taker_buy_volume", "taker_sell_volume", "taker_volume"] },
-      { rx: /\bBSR\b|taker ratio/i,              metrics: ["taker_ratio"] },
-      { rx: /\b(bid|ask) (imbalance|depth|wall)\b/i, metrics: ["bid_imbalance", "ask_imbalance", "bid_depth_05pct", "ask_depth_05pct"] },
+      // Plural-tolerant: "whale" / "whales" — bullets often say "Spot whales sold 0.68 BTC".
+      { rx: /\bwhales?\b/i,                      metrics: ["spot_whale_buy_btc", "spot_whale_sell_btc"] },
+      // Catches "taker buy", "taker sell", "taker buy and sell volumes", "taker aggression".
+      { rx: /\btaker\s+(?:buy|sell|aggression|aggressor)/i, metrics: ["taker_ratio", "taker_buy_volume", "taker_sell_volume", "taker_volume"] },
+      // Catches "taker volume(s)", "taker flow", "taker ratio".
+      { rx: /\btaker\s+(?:volumes?|flow|ratio)\b/i, metrics: ["taker_ratio", "taker_buy_volume", "taker_sell_volume", "taker_volume"] },
+      { rx: /\bBSR\b/i,                          metrics: ["taker_ratio"] },
+      { rx: /\b(?:bid|ask)\s+(?:imbalance|depth|wall|side|book)\b/i, metrics: ["bid_imbalance", "ask_imbalance", "bid_depth_05pct", "ask_depth_05pct"] },
+      // Plain "order book" mentions (without bid/ask qualifier) and "X BTC bids vs Y BTC asks" patterns.
+      { rx: /\border\s+book\b|\bBTC\s+(?:bids?|asks?)\b/i, metrics: ["bid_imbalance", "ask_imbalance", "bid_depth_05pct", "ask_depth_05pct"] },
       { rx: /\bfunding\b/i,                      metrics: ["funding_rate", "aggregate_funding_rate"] },
-      { rx: /\bOI\s+velocity\b|\bOI\s+(flips?|change|turns?|rising|falling|accelerat\w*)\b/i,
+      { rx: /\bOI\s+velocity\b|\bOI\s+(?:flips?|change|turns?|rising|falling|accelerat\w*)\b/i,
         metrics: ["oi_velocity_pct"] },
       { rx: /\bopen interest\b|\bOI\b/i,         metrics: ["open_interest", "oi_velocity_pct"] },
       { rx: /\bliquidations?\b/i,                metrics: ["aggregate_liquidations_usd"] },
       { rx: /\bRSI\b/i,                          metrics: ["rsi"] },
-      { rx: /\blong\/short\b|\bL\/S ratio\b/i,   metrics: ["long_short_ratio"] },
+      { rx: /\blong\/short\b|\bL\/S\s*ratio\b/i, metrics: ["long_short_ratio"] },
+      { rx: /\btop\s+(?:trader|account)s?\s+(?:L\/S|long\/short|position)\b/i, metrics: ["top_long_short_ratio"] },
       { rx: /\bCVD\b/i,                          metrics: ["aggregate_cvd_1h", "perp_cvd_1h", "spot_cvd_1h"] },
+      { rx: /\bspot[\/-]perp\s+(?:CVD\s+)?(?:divergence|div)\b/i, metrics: ["spot_perp_cvd_div"] },
       { rx: /\bbasis\b/i,                        metrics: ["basis_pct"] },
-      { rx: /\b(IV|implied vol|skew|risk[- ]reversal)\b/i, metrics: ["iv_30d_atm", "rr_25d_30d"] },
+      { rx: /\b(?:IV|implied\s+vol|skew|risk[- ]reversal)\b/i, metrics: ["iv_30d_atm", "rr_25d_30d"] },
+      // Technical indicators (live values come from strategies[]).
+      { rx: /\bstoch(?:astic)?\b|%\s*K\b|%\s*D\b/i, metrics: ["stoch_k"] },
+      { rx: /\bMACD\b/i,                         metrics: ["macd_histogram"] },
+      { rx: /\bADX\b/i,                          metrics: ["adx"] },
+      { rx: /\bEMA\s*\d+|ema_cross|EMA\s*cross/i, metrics: ["ema_5_13_diff"] },
+      { rx: /\bVWAP\b/i,                         metrics: ["vwap_ref"] },
+      // Dashboard signals (live values come from dashboard_signals[]).
+      { rx: /\bmark\s+premium\b/i,               metrics: ["mark_premium_pct"] },
+      { rx: /\bDVOL\b/i,                         metrics: ["dvol_pct"] },
+      { rx: /\bBTC\s+dominance\b|\bdominance\b/i, metrics: ["btc_dominance_pct"] },
+      { rx: /\bfear\s*[\&]\s*greed\b|\bF\&G\b/i, metrics: ["fear_greed"] },
+      { rx: /\bmempool\b/i,                      metrics: ["mempool_fee"] },
+      { rx: /\bKraken\s+premium\b/i,             metrics: ["kraken_premium_pct"] },
+      { rx: /\bput[\/-]call\b/i,                 metrics: ["put_call_ratio"] },
     ];
     const inferMetricsFromText = (text) => {
       if (!text) return [];
@@ -3395,7 +3463,7 @@ function App() {
         __inferred: inferred, __actionable: actionable,
         __condResults: results };
     };
-    const Bullet = ({ tone, text, conditions, if_met, __allMet, __hasConds, __actionable, __inferred, __condResults }) => {
+    const Bullet = ({ tone, text, conditions, if_met, heuristic_text, __allMet, __hasConds, __actionable, __inferred, __condResults }) => {
       const fired     = __allMet;
       const active    = __actionable;
       const phrase         = `${if_met || ""} ${text || ""}`.toLowerCase();
@@ -3463,6 +3531,16 @@ function App() {
               )}
               <span style={{ flex:1, minWidth:0, overflowWrap:"anywhere" }}>
                 <BullBearText text={text} size={16} baseColor={C.text} />
+                {heuristic_text && (
+                  <span title="Rule of thumb — bullet contains a threshold number that wasn't directly cited from this bar's live data (e.g. a regime boundary like 'BSR < 0.9' or '$1.2M liquidations'). The reasoning is preserved; treat the specific number as a heuristic, not a live anchor."
+                        style={{ display:"inline-flex", alignItems:"center", marginLeft:6,
+                          fontSize:9, fontWeight:900, color:C.muted, letterSpacing:0.6,
+                          padding:"1px 5px", border:`1px dashed ${C.borderSoft}`,
+                          borderRadius:3, background:"#FFFFFF",
+                          textTransform:"uppercase", verticalAlign:"middle" }}>
+                    rule of thumb
+                  </span>
+                )}
               </span>
             </div>
             {showIfMet && (

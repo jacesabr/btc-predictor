@@ -343,6 +343,90 @@ COMPLETENESS (LAZINESS IS AUDITED):
   under steelman) must appear in edge. Don't reduce "NEUTRAL because taker
   ratio inverted and OI is detaching" to "no edge" — preserve the reason.
 
+NEUTRAL ACTIONS — STATE CHANGES, NOT TRADE ORDERS:
+- On NEUTRAL DS bars, actions[] are still allowed AND useful — a manual
+  trader watches them as conditional triggers ("if X happens, the regime
+  shifts and a directional setup forms"). But the if_met / text MUST read
+  as a STATE CHANGE the trader must reassess from, NOT an auto-execute
+  directive.
+- BAD (directive on NEUTRAL): "If price breaks $77,650 with BSR > 2.0,
+  long with stop $77,500." → if_met: "Go long, stop $77,500."
+- GOOD (state-change on NEUTRAL): "If price breaks $77,650 with BSR > 2.0,
+  the bull thesis confirms — reassess and consider longs from this
+  reclaim." → if_met: "Bull thesis confirmed — reassess directional bias."
+- The trigger conditions are the same; only the framing changes. The
+  trader still gets the live monitoring; they just aren't told to fire
+  off a position DS explicitly declined.
+- This rule does NOT apply when DS signal is UP or DOWN — there a
+  directional action with stop is appropriate (DS endorsed a direction).
+
+ACTION STOPS — DS-CITED LEVELS ONLY:
+- A "stop at $X" clause inside an action requires that $X is a level DS
+  itself named as support / resistance / swing low / swing high / wall /
+  cluster / pivot / Fib in its narrative. DS effectively never authors
+  stops directly — the stop must be ANCHORED to a structural level DS
+  identified, not just any price token from the INPUT.
+- If you can't find a DS-cited structural level for the stop, OMIT the
+  "stop at $X" clause entirely. The action without a stop is still useful
+  ("If price breaks $77,650 with BSR > 2.0 → long setup forms"); a
+  fabricated stop misleads the trader into thinking $X is a tested
+  invalidator.
+- Do NOT round DS levels to nice numbers ($77,538.40 → $77,540 is a
+  fabrication, $77,500 if DS cited $77,485 is a fabrication).
+
+THRESHOLD ≠ CURRENT VALUE:
+- A condition value that sits AT or within rounding distance of the
+  current live reading fires on noise, not on a real regime change.
+- BAD: current OI is 33,856 BTC, condition `open_interest > 33,856` —
+  fires on +1 BTC of normal noise.
+- BAD: current BSR is 0.580, condition `taker_ratio < 0.580` — fires on
+  the next downtick.
+- BAD: current funding is -0.00543%, condition `funding_rate > -0.00543%`
+  — fires on display rounding.
+- GOOD: current BSR is 0.580, condition `taker_ratio < 0.30` — meaningful
+  regime shift to deeper sell-side dominance.
+- GOOD: current OI is 33,856 BTC, condition `open_interest > 34,000` —
+  meaningful upside breakout (+0.4% above current).
+- Pick thresholds at LEVELS DS NAMED as flip / break / persistence
+  triggers, not at the current reading.
+
+SPECIALIST DISAGREEMENT MUST APPEAR IN EDGE:
+- If DS's reasoning includes any of: "SPECIALIST_AGREEMENT: X/Y",
+  "ensemble votes UP at N% but ...", "NO_TRADE veto", "Binance expert
+  vetoes", "1 of 3 specialists agreed", "ensemble disagrees", or a
+  "blind baseline overruled" line — that disagreement is the most
+  load-bearing piece of context for the trader (it tells them this is a
+  contrarian-to-the-models call, or that one specialist explicitly says
+  don't trade).
+- The edge sentence MUST mention the disagreement in one short clause:
+  "ensemble UP 87% but Binance expert vetoes" / "2 of 3 specialists
+  NEUTRAL" / "DS overruling its own bullish blind baseline".
+- Without this, the trader has no idea why a NEUTRAL was called against
+  a strongly bullish ensemble, or why a directional call is contrarian.
+
+PREMORTEM COVERAGE — REQUIRED IF DS PROVIDES ONE:
+- If DS reasoning contains a "PREMORTEM:" / "Most likely reason this
+  call is wrong:" / "If wrong:" paragraph, at least ONE watch bullet
+  MUST validate the premortem trigger — sharing its specific numeric
+  thresholds verbatim. Example DS premortem: "the call is wrong if a
+  spot whale cluster (≥3 trades ≥0.5 BTC in 2 minutes) appears."
+  Required watch bullet: "If ≥3 spot whale buys ≥0.5 BTC fire in 2
+  minutes, the call invalidates" with `spot_whale_buy_btc >= 0.5`.
+- Do NOT weaken the premortem threshold (≥5 BTC → 0.5 BTC) — copy DS's
+  number verbatim. Weakening means the watch fires on noise rather than
+  on the actual invalidator.
+
+N DISCLOSURE ON ABSOLUTE CLAIMS:
+- "always", "never", "every time", "all of", "in every case",
+  "consistently" — these are ABSOLUTE quantifiers. They are only
+  allowed if the SAME SENTENCE includes the sample size DS gave
+  (n=X or X/Y count).
+- BAD: "history shows similar setups always drift sideways" — n hidden.
+- GOOD: "DS's 4 prior similar bars all drifted under 0.1% (4/4)" —
+  n=4 disclosed.
+- If DS's analog is n=2 or n=3 (small sample), it is NOT "always" — say
+  "2/3 prior", "3/3 noise (n=3)", etc.
+
 SCOPE-MATCHING (CRITICAL):
 - Every metric in the INPUT is scope-tagged (e.g. "Binance-perp 5m", "aggregate 5-venue
   0.5% band", "daily macro"). Do NOT compare metrics across incompatible scopes in the
@@ -411,6 +495,12 @@ _VALID_METRICS = {
     "rr_25d_30d", "iv_30d_atm",
     "spot_whale_buy_btc", "spot_whale_sell_btc",
     "aggregate_liquidations_usd",
+    # Technical indicators (sourced from strategies[] on the client).
+    "stoch_k", "macd_histogram", "adx", "ema_5_13_diff", "vwap_ref",
+    # Dashboard-signal-sourced metrics.
+    "mark_premium_pct", "dvol_pct", "btc_dominance_pct", "fear_greed",
+    "mempool_fee", "kraken_premium_pct", "top_long_short_ratio",
+    "spot_perp_cvd_div", "put_call_ratio",
 }
 _VALID_OPS = {">", ">=", "<", "<=", "=="}
 
@@ -424,6 +514,16 @@ _NON_NEGATIVE_METRICS: Set[str] = {
     "bid_depth_05pct", "ask_depth_05pct",
     "spot_whale_buy_btc", "spot_whale_sell_btc",
     "aggregate_liquidations_usd",
+    # Bounded-positive technical/dashboard metrics.
+    "adx",                  # 0-100
+    "stoch_k",              # 0-100
+    "vwap_ref",             # USD price
+    "dvol_pct",             # >= 0
+    "btc_dominance_pct",    # 0-100
+    "fear_greed",           # 0-100
+    "mempool_fee",          # sat/vB, >= 0
+    "top_long_short_ratio", # >= 0
+    "put_call_ratio",       # >= 0
 }
 
 # Expected unit per metric (what the frontend formatter assumes).
@@ -443,6 +543,13 @@ _EXPECTED_UNIT: Dict[str, str] = {
     "perp_cvd_1h": "BTC", "spot_cvd_1h": "BTC", "aggregate_cvd_1h": "BTC",
     "rr_25d_30d": "%", "iv_30d_atm": "%",
     "aggregate_liquidations_usd": "USD",
+    # Technical indicators (unitless / USD).
+    "stoch_k": "", "macd_histogram": "", "adx": "", "ema_5_13_diff": "USD",
+    "vwap_ref": "USD",
+    # Dashboard-signal metrics.
+    "mark_premium_pct": "%", "dvol_pct": "%", "btc_dominance_pct": "%",
+    "fear_greed": "", "mempool_fee": "sat/vB", "kraken_premium_pct": "%",
+    "top_long_short_ratio": "", "spot_perp_cvd_div": "BTC", "put_call_ratio": "",
 }
 
 # Plausible magnitude bounds per metric. Venice has emitted things like
@@ -488,6 +595,22 @@ _METRIC_MAGNITUDE_OK: Dict[str, Tuple[float, float]] = {
     "rsi":                    (0.0,    100.0),
     # big USD totals
     "aggregate_liquidations_usd": (0.0, 10_000_000_000.0),
+    # technical indicators
+    "stoch_k":                (0.0,    100.0),
+    "macd_histogram":         (-10_000.0, 10_000.0),  # signed dollars per bar
+    "adx":                    (0.0,    100.0),
+    "ema_5_13_diff":          (-10_000.0, 10_000.0),  # signed USD diff
+    "vwap_ref":               (1_000.0, 10_000_000.0),
+    # dashboard signals
+    "mark_premium_pct":       (-10.0,  10.0),
+    "dvol_pct":               (0.0,    500.0),
+    "btc_dominance_pct":      (0.0,    100.0),
+    "fear_greed":             (0.0,    100.0),
+    "mempool_fee":            (0.0,    10_000.0),
+    "kraken_premium_pct":     (-10.0,  10.0),
+    "top_long_short_ratio":   (0.0,    50.0),
+    "spot_perp_cvd_div":      (-100_000.0, 100_000.0),
+    "put_call_ratio":         (0.0,    20.0),
 }
 
 # Allowed values for the `sources` tag per bullet. Free-form but we coerce
@@ -500,13 +623,22 @@ _SOURCE_TAG_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)?$")
 # otherwise the conditions are dropped (preserving the bullet's text so the
 # trader still sees the claim, but without a misleading pill).
 _TEXT_SIGNAL_FAMILIES = [
-    (re.compile(r"\bwhale\b",                            re.I),
+    # Plural-tolerant: matches "whale" and "whales" (e.g. "Spot whales sold ...").
+    (re.compile(r"\bwhales?\b",                          re.I),
         {"spot_whale_buy_btc", "spot_whale_sell_btc"}),
-    (re.compile(r"\btaker (buy|sell) (volume|flow)\b",   re.I),
+    # Catches "taker buy", "taker sell", "taker buy and sell volumes",
+    # "taker aggression", "taker aggressor".
+    (re.compile(r"\btaker\s+(?:buy|sell|aggression|aggressor)", re.I),
         {"taker_buy_volume", "taker_sell_volume", "taker_volume", "taker_ratio"}),
-    (re.compile(r"\bBSR\b|taker ratio",                  re.I),
+    # Catches "taker volume(s)", "taker flow", "taker ratio" (plural-safe).
+    (re.compile(r"\btaker\s+(?:volumes?|flow|ratio)\b",  re.I),
+        {"taker_buy_volume", "taker_sell_volume", "taker_volume", "taker_ratio"}),
+    (re.compile(r"\bBSR\b",                              re.I),
         {"taker_ratio"}),
-    (re.compile(r"\b(bid|ask) (imbalance|depth|wall)\b", re.I),
+    (re.compile(r"\b(?:bid|ask)\s+(?:imbalance|depth|wall|side|book)\b", re.I),
+        {"bid_imbalance", "ask_imbalance", "bid_depth_05pct", "ask_depth_05pct"}),
+    # Plain "order book" mentions or "X BTC bids vs Y BTC asks" patterns.
+    (re.compile(r"\border\s+book\b|\bBTC\s+(?:bids?|asks?)\b", re.I),
         {"bid_imbalance", "ask_imbalance", "bid_depth_05pct", "ask_depth_05pct"}),
     (re.compile(r"\bfunding\b",                          re.I),
         {"funding_rate", "aggregate_funding_rate"}),
@@ -526,12 +658,39 @@ _TEXT_SIGNAL_FAMILIES = [
     (re.compile(r"\bliquidations?\b",                    re.I),
         {"aggregate_liquidations_usd"}),
     (re.compile(r"\bRSI\b",                              re.I), {"rsi"}),
-    (re.compile(r"\blong/short\b|\bL/S ratio\b",         re.I), {"long_short_ratio"}),
+    (re.compile(r"\blong/short\b|\bL/S\s*ratio\b",       re.I),
+        {"long_short_ratio"}),
+    (re.compile(r"\btop\s+(?:trader|account)s?\s+(?:L/S|long/short|position)\b", re.I),
+        {"top_long_short_ratio"}),
     (re.compile(r"\bCVD\b",                              re.I),
         {"perp_cvd_1h", "spot_cvd_1h", "aggregate_cvd_1h"}),
+    (re.compile(r"\bspot[/-]perp\s+(?:CVD\s+)?(?:divergence|div)\b", re.I),
+        {"spot_perp_cvd_div"}),
     (re.compile(r"\bbasis\b",                            re.I), {"basis_pct"}),
     (re.compile(r"\b(IV|implied vol|skew|risk[- ]reversal)\b", re.I),
         {"iv_30d_atm", "rr_25d_30d"}),
+    # Technical indicators (live values come from strategies[]).
+    (re.compile(r"\bstoch(?:astic)?\b|%\s*K\b|%\s*D\b",  re.I),
+        {"stoch_k"}),
+    (re.compile(r"\bMACD\b",                             re.I),
+        {"macd_histogram"}),
+    (re.compile(r"\bADX\b",                              re.I), {"adx"}),
+    (re.compile(r"\bEMA\s*\d+|ema_cross|EMA\s*cross",    re.I),
+        {"ema_5_13_diff"}),
+    (re.compile(r"\bVWAP\b",                             re.I), {"vwap_ref"}),
+    # Dashboard-signal-sourced metrics.
+    (re.compile(r"\bmark\s+premium\b",                   re.I),
+        {"mark_premium_pct"}),
+    (re.compile(r"\bDVOL\b",                             re.I), {"dvol_pct"}),
+    (re.compile(r"\bBTC\s+dominance\b|\bdominance\b",    re.I),
+        {"btc_dominance_pct"}),
+    (re.compile(r"\bfear\s*[\&]\s*greed\b|\bF\&G\b",     re.I),
+        {"fear_greed"}),
+    (re.compile(r"\bmempool\b",                          re.I), {"mempool_fee"}),
+    (re.compile(r"\bKraken\s+premium\b",                 re.I),
+        {"kraken_premium_pct"}),
+    (re.compile(r"\bput[/-]call\b",                      re.I),
+        {"put_call_ratio"}),
 ]
 
 
@@ -927,7 +1086,517 @@ def _text_signal_families(text: str) -> Set[str]:
     return fams
 
 
-def _norm_conditions(raw: Any, input_canons: Set[str], input_raw: List[str]) -> Tuple[list, List[str]]:
+# ── Degenerate-near-current detection (Fix 5: thresholds set at the live
+# reading fire on rounding noise rather than a real regime change) ─────
+#
+# Per-metric absolute tolerance. If |threshold − current| < tol, the
+# condition is degenerate and gets dropped. Values picked to be "the
+# smallest move that means anything" for each metric family.
+_DEGENERATE_NEAR_CURRENT_ABS: Dict[str, float] = {
+    "taker_ratio":                 0.05,    # BSR within 0.05 of current
+    "bsr":                         0.05,
+    "long_short_ratio":            0.05,
+    "rsi":                         1.5,     # RSI within 1.5 points
+    "funding_rate":                0.0005,  # within 0.0005% (display tick)
+    "aggregate_funding_rate":      0.005,
+    "bid_imbalance":               0.5,     # within 0.5 percentage points
+    "ask_imbalance":               0.5,
+    "oi_velocity_pct":             0.005,
+    "basis_pct":                   0.005,
+    "rr_25d_30d":                  0.05,
+    "iv_30d_atm":                  0.5,
+    "price_change_pct":            0.05,
+}
+# For metrics with no abs tolerance defined, fall back to relative %
+# of |current|. Volumes and depths are noisy → larger band; price tight.
+_DEGENERATE_NEAR_CURRENT_REL: Dict[str, float] = {
+    "open_interest":               0.001,   # 0.1% of OI (~30 BTC on 33k)
+    "bid_depth_05pct":             0.01,    # 1% of depth
+    "ask_depth_05pct":             0.01,
+    "taker_buy_volume":            0.10,    # 10% of taker volume
+    "taker_sell_volume":           0.10,
+    "taker_volume":                0.10,
+    "spot_whale_buy_btc":          0.10,
+    "spot_whale_sell_btc":         0.10,
+    "perp_cvd_1h":                 0.01,
+    "spot_cvd_1h":                 0.01,
+    "aggregate_cvd_1h":            0.01,
+    "price":                       0.0005,  # ~$40 on $80k BTC
+    "aggregate_liquidations_usd":  0.10,
+}
+
+
+def _is_degenerate_near_current(metric: str, op: str, value: float,
+                                 current_values: Dict[str, float]) -> bool:
+    """True if |value − current[metric]| is below the meaningful-move band.
+    Only applies to inequality ops (>, >=, <, <=). Equality is handled by
+    the existing fragile-equality-on-float check.
+
+    v3-D (2026-04-25): also flag round-number values within 0.5% of
+    current — Venice loves to write `OI > 34,000` when current is 33,976
+    BTC because 34,000 reads as a "level". The threshold is 0.07% above
+    current and inside any normal noise band."""
+    if op == "==":
+        return False
+    cur = current_values.get(metric)
+    if cur is None:
+        return False
+    abs_tol = _DEGENERATE_NEAR_CURRENT_ABS.get(metric)
+    if abs_tol is None:
+        rel = _DEGENERATE_NEAR_CURRENT_REL.get(metric)
+        if rel is None:
+            return False
+        abs_tol = rel * max(abs(cur), 1e-9)
+    if abs(value - cur) < abs_tol:
+        return True
+    # Round-number near current: if value is a "nice" round number AND
+    # within 0.5% of current, treat as degenerate. Catches 34,000 vs
+    # 33,976 (0.07%), 33,800 vs 33,856 (0.16%), etc.
+    if abs(cur) >= 100:
+        rel_dist = abs(value - cur) / max(abs(cur), 1e-9)
+        if rel_dist < 0.005:
+            ival = int(round(value))
+            if ival == value and (ival % 100 == 0 or ival % 1000 == 0):
+                return True
+    return False
+
+
+def _extract_current_metric_values(backend_snapshot: Optional[dict]) -> Dict[str, float]:
+    """Flat metric_name → current value map from the backend snapshot.
+    Mirrors _build_live_metrics_block but returns numbers for the
+    degenerate-near-current detector to compare against."""
+    out: Dict[str, float] = {}
+    if not backend_snapshot:
+        return out
+    ds = backend_snapshot.get("dashboard_signals") or {}
+    if not isinstance(ds, dict):
+        return out
+
+    def _f(v):
+        try:
+            return float(v) if v is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    tk = ds.get("taker_flow") or {}
+    if isinstance(tk, dict):
+        bsr = _f(tk.get("buy_sell_ratio"))
+        if bsr is not None:
+            out["taker_ratio"] = bsr
+            out["bsr"] = bsr
+        bv = _f(tk.get("taker_buy_vol_btc"))
+        sv = _f(tk.get("taker_sell_vol_btc"))
+        if bv is not None: out["taker_buy_volume"] = bv
+        if sv is not None: out["taker_sell_volume"] = sv
+        if bv is not None and sv is not None: out["taker_volume"] = bv + sv
+
+    ob = ds.get("order_book") or {}
+    if isinstance(ob, dict):
+        v = _f(ob.get("imbalance_05pct_pct"))
+        if v is not None:
+            out["bid_imbalance"] = v
+            out["ask_imbalance"] = -v
+        bd = _f(ob.get("bid_depth_05pct_btc"))
+        ad = _f(ob.get("ask_depth_05pct_btc"))
+        if bd is not None: out["bid_depth_05pct"] = bd
+        if ad is not None: out["ask_depth_05pct"] = ad
+
+    aoi = ds.get("aggregate_oi") or ds.get("oi_velocity") or {}
+    if isinstance(aoi, dict):
+        v = _f(aoi.get("change_30min_pct"))
+        if v is not None: out["oi_velocity_pct"] = v
+
+    oif = ds.get("oi_funding") or {}
+    if isinstance(oif, dict):
+        v = _f(oif.get("open_interest_btc"))
+        if v is not None: out["open_interest"] = v
+        v = _f(oif.get("funding_rate_8h_pct"))
+        if v is not None: out["funding_rate"] = v
+
+    afr = (ds.get("aggregate_funding") or {}).get("weighted_funding_rate")
+    afr = _f(afr)
+    if afr is not None: out["aggregate_funding_rate"] = afr * 100
+
+    al = (ds.get("aggregate_liquidations") or {}).get("total_usd")
+    al = _f(al)
+    if al is not None: out["aggregate_liquidations_usd"] = al
+
+    wf = ds.get("spot_whale_flow") or {}
+    if isinstance(wf, dict):
+        wb = _f(wf.get("whale_buy_btc"))
+        ws = _f(wf.get("whale_sell_btc"))
+        if wb is not None: out["spot_whale_buy_btc"] = wb
+        if ws is not None: out["spot_whale_sell_btc"] = ws
+
+    cvd = ds.get("cvd") or {}
+    if isinstance(cvd, dict):
+        for src, dst in [("perp_cvd_1h_btc", "perp_cvd_1h"),
+                         ("spot_cvd_1h_btc", "spot_cvd_1h"),
+                         ("aggregate_cvd_1h_btc", "aggregate_cvd_1h")]:
+            v = _f(cvd.get(src))
+            if v is not None: out[dst] = v
+
+    spb = ds.get("spot_perp_basis") or {}
+    if isinstance(spb, dict):
+        v = _f(spb.get("basis_pct"))
+        if v is not None: out["basis_pct"] = v
+
+    sk = ds.get("deribit_skew_term") or {}
+    if isinstance(sk, dict):
+        for src, dst in [("rr_25d_30d_pct", "rr_25d_30d"),
+                         ("iv_30d_atm_pct", "iv_30d_atm")]:
+            v = _f(sk.get(src))
+            if v is not None: out[dst] = v
+
+    ls = ds.get("long_short_ratio") or {}
+    if isinstance(ls, dict):
+        v = _f(ls.get("long_short_ratio"))
+        if v is not None: out["long_short_ratio"] = v
+
+    return out
+
+
+# ── Quality detectors (Fix 1, 2, 3, 4, 6) — flag-only, never strip ────
+#
+# These run after _validate has produced a cleaned summary. They populate
+# new audit fields that get_or_build feeds into retry_reasons. None of
+# them drop bullets or modify text — that's strictly Venice's job to fix
+# on retry, so we don't accidentally remove a feature traders rely on.
+
+_NEUTRAL_DIRECTIVE_RX = re.compile(
+    r"\b("
+    r"go long|go short|"
+    r"long with stop|short with stop|"
+    r"long entry|short entry|"
+    r"short, ?stop|long, ?stop|"
+    r"enter long|enter short|"
+    # v3-B (2026-04-25): catch "long/short/bear/bull setup forms|confirmed"
+    # patterns — the round-1 rewrite missed these because they're not
+    # imperative verbs, they're declarative claims that still imply a
+    # tradeable directive on a NEUTRAL bar.
+    r"long setup (?:forms|confirmed|forming)|"
+    r"short setup (?:forms|confirmed|forming)|"
+    r"bull setup (?:forms|confirmed|forming)|"
+    r"bear setup (?:forms|confirmed|forming)|"
+    # "Long with stop $X" / "Short, stop $X" already covered above; also
+    # cover "stop loss at $X" / "stop-loss $X"
+    r"stop[ -]?loss"
+    r")\b", re.I)
+
+_STOP_PATTERN = re.compile(r"\bstop\s+(?:at\s+|level\s+|@\s*)?\$?([\d,]+(?:\.\d+)?)", re.I)
+
+_LEVEL_CONTEXT_KEYWORDS = (
+    "stop", "support", "resistance", "swing low", "swing high",
+    "prior low", "prior high", "session low", "session high",
+    "range low", "range high", "range top", "range bottom",
+    "fib", "pivot", "structural", "wall", "cluster",
+    "rejection", "bounce", "high of", "low of",
+)
+
+_ABSOLUTE_LANGUAGE_RX = re.compile(
+    r"\b(always|never|every time|all of|each time|consistently|"
+    r"in every case|invariably)\b", re.I)
+_N_DISCLOSURE_RX = re.compile(
+    r"(?:n\s*=\s*\d+|\b\d+\s*/\s*\d+\b|"
+    r"\bin\s+(?:all\s+)?\d+\s+(?:of|prior|past|previous|similar)\s+"
+    r"(?:\d+\s+)?(?:bars?|cases?|times|setups?|precedents?))", re.I)
+
+_PREMORTEM_HEADER_RX = re.compile(
+    r"(?:^|\n)\s*(?:PREMORTEM[:\s]+|"
+    r"Most likely reason (?:this|the) call (?:is|would be) wrong[:\s]+|"
+    r"Why this could be wrong[:\s]+|If wrong[:\s]+|"
+    r"This call is wrong if[:\s]+)([^\n]{20,800})", re.I)
+
+_DS_DISAGREEMENT_RX = re.compile(
+    r"specialist_agreement\s*:\s*\d+\s*/?\s*\d+|"
+    r"\bensemble\b[^.\n]{0,80}(disagree|contradict|overrul|outvot|"
+    r"is the outlier|wrong rate|miss rate)|"
+    r"\b(NO_TRADE|NO TRADE)\s*(veto|tier)|"
+    r"my (blind\s+)?baseline[^.\n]{0,60}(disagree|overrul|overrid)|"
+    r"\d+\s*specialists?\s*(agreed|disagreed|fired)|"
+    r"\d+\s*/\s*\d+\s*(specialists?|agreed)",
+    re.I)
+
+_EDGE_DISAGREEMENT_RX = re.compile(
+    r"\bensemble\b|\bspecialist\b|\bNO[ _]?TRADE\b|\bveto\b|"
+    r"\bdisagree|\boverrul|\bcontradict|\bdissent|"
+    r"\b\d+\s*of\s*\d+\b|"
+    r"\bvotes?\s+(up|down)\b",
+    re.I)
+
+
+def _all_substring_indices(s: str, sub: str) -> List[int]:
+    out, start = [], 0
+    while True:
+        i = s.find(sub, start)
+        if i == -1:
+            break
+        out.append(i)
+        start = i + 1
+    return out
+
+
+def _detect_neutral_action_directives(actions: List[dict], pred_signal: str) -> List[Dict[str, Any]]:
+    """On NEUTRAL DS calls, action text/if_met shouldn't read as 'go long, stop X'.
+    It should describe a thesis-flip state ('Bull thesis confirmed — reassess')
+    so the trader knows the trigger means re-evaluate, not auto-execute.
+    Per user (2026-04-25): actions on NEUTRAL bars ARE legitimate as conditional
+    triggers — we just want the language to reflect that."""
+    if (pred_signal or "").upper() != "NEUTRAL":
+        return []
+    out = []
+    for b in actions:
+        text = (b.get("text") or "") + " " + (b.get("if_met") or "")
+        m = _NEUTRAL_DIRECTIVE_RX.search(text)
+        if m:
+            out.append({
+                "text": b.get("text"),
+                "if_met": b.get("if_met"),
+                "directive": m.group(0),
+            })
+    return out
+
+
+def _detect_unsourced_stops(actions: List[dict], ds_response: str) -> List[Dict[str, Any]]:
+    """For each action, find 'stop at $X' patterns where X isn't in a DS
+    support/resistance/swing context. DS effectively never authors stops, so
+    these usually repurpose a narrative price level as a stop without
+    endorsement. We FLAG for retry; we DO NOT strip — stripping a stop the
+    trader expects would remove a real feature."""
+    if not ds_response:
+        return []
+    low_ds = ds_response.lower()
+    out: List[Dict[str, Any]] = []
+    for b in actions:
+        text = b.get("text") or ""
+        for m in _STOP_PATTERN.finditer(text):
+            raw = m.group(1).replace(",", "")
+            try:
+                val = float(raw)
+            except ValueError:
+                continue
+            grounded = False
+            for form in _num_string_forms(val):
+                for idx in _all_substring_indices(low_ds, form.lower()):
+                    window = low_ds[max(0, idx - 70):idx + len(form) + 70]
+                    if any(kw in window for kw in _LEVEL_CONTEXT_KEYWORDS):
+                        grounded = True
+                        break
+                if grounded:
+                    break
+            if not grounded:
+                out.append({"text": text, "stop_value": raw})
+    return out
+
+
+_RATIO_PATTERN = re.compile(r"\b(\d+)\s*/\s*(\d+)\b")
+
+def _detect_fabricated_ratios(briefing_text: str, ds_text: str) -> List[str]:
+    """Detect 'X/Y' historical-count claims in the briefing whose literal
+    string doesn't appear in DS. Round-2 audit caught multiple cases
+    (bar20: '3/3' when DS said '2/3'; bar44: '2/2' when DS said '2/4';
+    bar15: '3/3' when DS sample was n=10). Flag-only — does not strip;
+    Venice gets a retry-feedback prompt to fix.
+
+    Returns list of fabricated ratio strings."""
+    if not briefing_text or not ds_text:
+        return []
+    # Normalize whitespace in DS text for substring lookup
+    ds_norm = re.sub(r"\s*/\s*", "/", ds_text)
+    # Also tolerate "X out of Y" phrasing
+    ds_norm = ds_norm.lower()
+    fabricated: List[str] = []
+    for m in _RATIO_PATTERN.finditer(briefing_text):
+        num, den = m.group(1), m.group(2)
+        # Skip trivial like 5/5 dates, page numbers — only check if the
+        # denominator is plausibly an n-count: 1-50 range
+        try:
+            den_int = int(den)
+        except ValueError:
+            continue
+        if not (1 <= den_int <= 50):
+            continue
+        # Check if "X/Y" or "X out of Y" appears in DS
+        ratio_str = f"{num}/{den}"
+        out_of_str = f"{num} out of {den}"
+        if ratio_str in ds_norm or out_of_str.lower() in ds_norm:
+            continue
+        # Also accept if Y appears as `n=Y` in DS (the count is sourced
+        # even if the X is reframed)
+        if f"n={den}" in ds_norm or f"n = {den}" in ds_norm:
+            # n is sourced; check if X is consistent with DS-stated count
+            # (any X/den is acceptable when the denominator matches)
+            continue
+        fabricated.append(ratio_str)
+    return fabricated
+
+
+def _detect_unsourced_absolutes(text: str) -> List[str]:
+    """Find 'always/never/every time' claims without an n=X / X/Y disclosure
+    in the same sentence. Flags the n=4-as-'always' failure mode."""
+    out: List[str] = []
+    if not text:
+        return out
+    for sentence in re.split(r"(?<=[.!?])\s+", text):
+        m = _ABSOLUTE_LANGUAGE_RX.search(sentence)
+        if m and not _N_DISCLOSURE_RX.search(sentence):
+            out.append(m.group(0))
+    return out
+
+
+def _extract_premortem_text(ds_response: str) -> Optional[str]:
+    if not ds_response:
+        return None
+    m = _PREMORTEM_HEADER_RX.search(ds_response)
+    if not m:
+        return None
+    return m.group(1).strip()
+
+
+def _check_premortem_validated(premortem: Optional[str], summary: dict) -> bool:
+    """True if at least one watch/action bullet shares a numeric anchor with
+    the premortem, OR if the premortem has no numbers worth matching. Catches
+    the common 'Venice dropped the entire premortem' pattern; tolerates the
+    case where the premortem is purely qualitative."""
+    if not premortem:
+        return True
+    pm_nums = set(_extract_output_numbers_in_text(premortem))
+    if not pm_nums:
+        return True
+    bullets = list(summary.get("watch") or []) + list(summary.get("actions") or [])
+    for b in bullets:
+        bullet_text = (b.get("text") or "") + " " + (b.get("if_met") or "")
+        bullet_nums = set(_extract_output_numbers_in_text(bullet_text))
+        if pm_nums & bullet_nums:
+            return True
+    return False
+
+
+# ── Surgical fabricated-content removal (final defense, strict mode only)
+#
+# Used as a last-resort cleanup AFTER Venice's retry has had a chance to
+# fix the issues itself. We surgically strip the fabricated parts of an
+# action while preserving the conditional-trigger feature traders rely on.
+#
+# Two transformations:
+#   1. Unsourced stop clause: " ... long with stop at $77,530" — the
+#      `$77,530` was flagged by _detect_unsourced_stops as not in DS
+#      support/resistance context. Strip the ", with stop at $X" tail.
+#   2. NEUTRAL directive verb: on NEUTRAL DS bars only, rewrite the
+#      "long with stop $X" / "go long" / "short, stop $X" tail into a
+#      tone-appropriate state-change clause. The trigger conditions
+#      stay verbatim — only the trade-execution language is reframed.
+#
+# UP/DOWN bars keep their directive language (DS endorsed direction);
+# only the unsourced stop clause gets stripped on those.
+
+_TONE_STATE_CHANGE = {
+    "bullish": "the bull thesis confirms — reassess directional bias",
+    "bearish": "sellers regain control — bearish setup forms",
+    "neutral": "regime confirms — stand aside",
+}
+
+# Directive verb anchors. Match conservatively — only when followed by a
+# stop clause OR appearing as a clear "go long / go short" directive.
+# v3-B (2026-04-25): also catch declarative directives like
+# "long setup confirmed, stop $X" / "bear setup forms" that the
+# imperative-only regex previously missed but which still imply a trade
+# action on NEUTRAL bars.
+_DIRECTIVE_VERB_FIND = re.compile(
+    r"\b("
+    r"go\s+long|go\s+short|"
+    r"long\s+with\s+stop\b[^.,;]*|"
+    r"short\s+with\s+stop\b[^.,;]*|"
+    r"long\s+entry\b[^.,;]*|"
+    r"short\s+entry\b[^.,;]*|"
+    r"enter\s+long\b[^.,;]*|"
+    r"enter\s+short\b[^.,;]*|"
+    r"long\s*,\s*stop\b[^.,;]*|"
+    r"short\s*,\s*stop\b[^.,;]*|"
+    r"long\s+setup\s+(?:forms|confirmed|forming)\b[^.,;]*|"
+    r"short\s+setup\s+(?:forms|confirmed|forming)\b[^.,;]*|"
+    r"bull\s+setup\s+(?:forms|confirmed|forming)\b[^.,;]*|"
+    r"bear\s+setup\s+(?:forms|confirmed|forming)\b[^.,;]*"
+    r")",
+    re.I)
+
+# Bare "with stop at $X" / ", stop $X" clause for stripping on UP/DOWN
+# bars where the directive verb (long/short) is legitimate but the stop
+# value is unsourced.
+_STOP_CLAUSE_REMOVE = re.compile(
+    r"\s*[,;—–-]?\s*(?:with\s+)?stop\s+(?:at\s+|level\s+|@\s*|near\s+)?"
+    r"\$?[\d,]+(?:\.\d+)?\b",
+    re.I)
+
+
+def _rewrite_action_to_state_change(text: str, tone: str) -> Optional[str]:
+    """If `text` contains a directive verb (long with stop / go short / etc),
+    cut at the most recent punctuation BEFORE the verb and append a
+    tone-appropriate state-change clause. Preserves the trigger sentence
+    verbatim. Returns the rewritten text, or None if no directive found."""
+    if not text:
+        return None
+    m = _DIRECTIVE_VERB_FIND.search(text)
+    if not m:
+        return None
+    cut_at = m.start()
+    # Walk back to most-recent clause separator
+    for i in range(cut_at - 1, -1, -1):
+        ch = text[i]
+        if ch in (",", ";"):
+            cut_at = i
+            break
+        # em-dash / en-dash / arrow markers (varying widths)
+        if text[i:i+1] in ("—", "–"):
+            cut_at = i
+            break
+    prefix = text[:cut_at].rstrip(" ,.;—–")
+    state_change = _TONE_STATE_CHANGE.get(tone, _TONE_STATE_CHANGE["neutral"])
+    if not prefix:
+        return state_change.capitalize() + "."
+    return f"{prefix} — {state_change}."
+
+
+def _strip_unsourced_stop_clause(text: str, unsourced_values: Set[str]) -> Optional[str]:
+    """Remove ', stop at $X' clauses where $X is in unsourced_values.
+    Used on UP/DOWN bars where the directive verb stays but the fabricated
+    stop is removed. Returns rewritten text or None if no change."""
+    if not text or not unsourced_values:
+        return None
+    rewritten = text
+    changed = False
+    for m in list(_STOP_CLAUSE_REMOVE.finditer(text)):
+        # Extract the numeric value
+        nm = re.search(r"[\d,]+(?:\.\d+)?", m.group(0))
+        if not nm:
+            continue
+        val_clean = nm.group(0).replace(",", "")
+        if val_clean in unsourced_values:
+            # Remove this clause from rewritten (find again since prior
+            # subs shift indices)
+            rewritten = _STOP_CLAUSE_REMOVE.sub(
+                lambda mm: "" if val_clean in mm.group(0).replace(",", "") else mm.group(0),
+                rewritten, count=1,
+            )
+            changed = True
+    if not changed:
+        return None
+    rewritten = rewritten.rstrip(" ,.;—–")
+    if rewritten and not rewritten.endswith((".", "?", "!")):
+        rewritten += "."
+    return rewritten
+
+
+def _ds_has_specialist_disagreement(ds_text: str) -> bool:
+    return bool(_DS_DISAGREEMENT_RX.search(ds_text or ""))
+
+
+def _edge_mentions_disagreement(edge: str) -> bool:
+    return bool(_EDGE_DISAGREEMENT_RX.search(edge or ""))
+
+
+def _norm_conditions(raw: Any, input_canons: Set[str], input_raw: List[str],
+                     current_values: Optional[Dict[str, float]] = None) -> Tuple[list, List[str]]:
     """Validate + normalize conditions. Returns (surviving_conditions, drop_notes).
 
     Preservation policy (2026-04-24, post "? UNKNOWN" incident): we keep a
@@ -935,7 +1604,12 @@ def _norm_conditions(raw: Any, input_canons: Set[str], input_raw: List[str]) -> 
     `heuristic: true` so the UI can still render the live value + met/unmet
     against a rule-of-thumb floor (e.g. "BSR < 0.80 persistence"). Only drop
     conditions that would produce an actively WRONG pill — wrong metric
-    family, wrong unit, or absurd magnitude."""
+    family, wrong unit, or absurd magnitude.
+
+    Added 2026-04-25 (Fix 5): degenerate-near-current detector — if
+    `current_values` is supplied and condition.value is within the per-metric
+    tolerance of the live reading, the condition fires on rounding noise and
+    is dropped so the trader doesn't get a meaningless trigger pill."""
     notes: List[str] = []
     if not isinstance(raw, list):
         return [], notes
@@ -970,6 +1644,12 @@ def _norm_conditions(raw: Any, input_canons: Set[str], input_raw: List[str]) -> 
             if op in (">", ">=", "=="):
                 notes.append(f"degenerate_trivial_threshold:{metric}{op}{val}")
                 continue
+        # Fix 5: reject thresholds set at the current live reading. These
+        # fire on rounding noise rather than a real regime change. The
+        # bullet's narrative is preserved (only the misleading pill drops).
+        if current_values and _is_degenerate_near_current(metric, op, val, current_values):
+            notes.append(f"degenerate_near_current:{metric}{op}{val} (current={current_values.get(metric)})")
+            continue
         # Reject `==` on a continuous float metric where the value isn't a
         # natural regime boundary. `whale_buy == 0.63` ticks false the
         # moment the live value moves to 0.70 — brittle and useless. Let
@@ -1093,7 +1773,9 @@ def _text_meets_family(text: str, metrics: Set[str]) -> Tuple[bool, Set[str]]:
     return False, fams
 
 
-def _validate(obj: Any, input_text: str, strict: bool = False) -> Tuple[Optional[dict], Dict[str, Any]]:
+def _validate(obj: Any, input_text: str, strict: bool = False,
+              current_values: Optional[Dict[str, float]] = None,
+              pred: Optional[dict] = None) -> Tuple[Optional[dict], Dict[str, Any]]:
     """Return (normalized summary, audit_notes).
 
     Two modes (per user feedback: don't nuke large sections over formatting):
@@ -1111,12 +1793,25 @@ def _validate(obj: Any, input_text: str, strict: bool = False) -> Tuple[Optional
           stripped) or, if unrecoverable, dropped. The goal is to never
           let a fabricated number reach the trader, without losing the
           entire bullet if some of it is verifiable.
+
+    Added 2026-04-25:
+      * `current_values`: live metric readings; lets _norm_conditions drop
+        thresholds that sit on the current value (degenerate-near-current).
+      * `pred`: DS prediction record; enables flag-only quality detectors
+        (NEUTRAL directives, fabricated stops, premortem coverage,
+        specialist-disagreement surfacing, n-disclosure on absolutes).
     """
     audit = {"dropped_values": [], "dropped_quotes": [],
              "family_mismatch_conditions_cleared": [],
              "fabricated_text_numbers": [], "bullets_dropped": [],
              "bullets_rescued": [], "missing_quotes_bullets": [],
-             "heuristic_thresholds_kept": []}
+             "heuristic_thresholds_kept": [],
+             # New (2026-04-25) — flag-only retry signals:
+             "neutral_action_directives": [],
+             "unsourced_action_stops":   [],
+             "unsourced_absolutes":      [],
+             "premortem_dropped":         False,
+             "specialist_disagreement_unsurfaced": False}
 
     if not isinstance(obj, dict):
         return None, audit
@@ -1157,14 +1852,56 @@ def _validate(obj: Any, input_text: str, strict: bool = False) -> Tuple[Optional
             # no pill. Heuristic thresholds (rule-of-thumb values not in INPUT)
             # are KEPT but flagged so the UI can style the pill differently
             # and the retry loop doesn't treat them as drops.
-            conds, drop_notes = _norm_conditions(b.get("conditions"), input_canons, input_raw)
+            conds, drop_notes = _norm_conditions(b.get("conditions"), input_canons, input_raw,
+                                                  current_values=current_values)
+            # v3-C (2026-04-25): when a condition is dropped as
+            # degenerate-near-current, also strip its numeric from the
+            # bullet's prose. Otherwise the trader sees "BSR > 0.5689"
+            # in text while the structured pill is gone — prose/JSON
+            # desync that the round-2 audit flagged on 15+ bars.
+            degen_near_current_vals: List[str] = []
             for n in drop_notes:
                 if n.startswith("heuristic_threshold_kept:"):
                     audit["heuristic_thresholds_kept"].append(n)
                 else:
                     audit["dropped_values"].append(n)
+                if n.startswith("degenerate_near_current:"):
+                    # Note shape: "degenerate_near_current:<metric><op><val> (current=...)"
+                    # extract the threshold value before the " (current=..."
+                    head = n.split(" (current=", 1)[0]
+                    body = head[len("degenerate_near_current:"):]
+                    m = re.search(r"(?:>=|<=|==|!=|>|<)(-?[\d.]+)$", body)
+                    if m:
+                        degen_near_current_vals.append(m.group(1))
+            if strict and degen_near_current_vals:
+                stripped_text = _rescue_text(text,   degen_near_current_vals)
+                stripped_ifm  = _rescue_text(if_met, degen_near_current_vals) if if_met else if_met
+                if stripped_text != text or stripped_ifm != if_met:
+                    audit.setdefault("degenerate_near_current_prose_stripped", []).append(
+                        {"text_before": text, "text_after": stripped_text,
+                         "ifmet_before": if_met, "ifmet_after": stripped_ifm,
+                         "values": degen_near_current_vals}
+                    )
+                    text, if_met = stripped_text, stripped_ifm
 
-            # Text fabrication: flag on pass 1, rescue / drop on pass 2.
+            # Text fabrication: flag on pass 1, rescue or soft-keep on pass 2.
+            #
+            # Asymmetry-fix (2026-04-25, post 50-bar audit): conditions[]
+            # already keeps heuristic-threshold values with `heuristic: true`
+            # — the trader sees a dashed-border pill. The strict pass used
+            # to NUKE entire bullets when the SAME kind of heuristic numbers
+            # (1.5 BTC, 0.9 BSR, $1.2M cluster) appeared in PROSE,
+            # destroying legitimate trader heuristics. Audit confirmed
+            # 18/19 strict drops were small heuristic values (<1000),
+            # 0/19 were price-level anchors. New policy:
+            #   * Try to rescue (strip clauses with bad numbers) as before.
+            #   * If still-bad numbers are PRICE-LIKE (>=1000): drop. A
+            #     wrong stop level is a real anchor risk to the trader.
+            #   * If still-bad numbers are SMALL heuristics (<1000): KEEP
+            #     the bullet, set heuristic_text=True. The UI flags it as
+            #     rule-of-thumb prose, mirroring the heuristic-condition
+            #     dashed-pill affordance.
+            heuristic_text_flag = False
             text_bad   = _bullet_text_numeric_coherence(text,   input_canons, input_raw)
             ifmet_bad  = _bullet_text_numeric_coherence(if_met, input_canons, input_raw)
             all_bad    = text_bad + ifmet_bad
@@ -1175,12 +1912,34 @@ def _validate(obj: Any, input_text: str, strict: bool = False) -> Tuple[Optional
                     rescued_ifmet  = _rescue_text(if_met, ifmet_bad) if if_met else if_met
                     still_bad_text   = _bullet_text_numeric_coherence(rescued_text,  input_canons, input_raw)
                     still_bad_ifmet  = _bullet_text_numeric_coherence(rescued_ifmet, input_canons, input_raw)
-                    if still_bad_text or still_bad_ifmet:
-                        # Can't salvage — drop rather than ship a lie.
-                        audit["bullets_dropped"].append({"text": text, "why": f"unrescuable_fabrication:{all_bad}"})
-                        continue
-                    audit["bullets_rescued"].append({"before": text, "after": rescued_text, "nums_removed": all_bad})
-                    text, if_met = rescued_text, rescued_ifmet
+                    still_bad = still_bad_text + still_bad_ifmet
+                    if still_bad:
+                        # _bullet_text_numeric_coherence returns strings; cast
+                        # to float so abs() works. Tokens that fail the cast
+                        # are non-price (already filtered by the extractor).
+                        def _abs_or_zero(s):
+                            try: return abs(float(s))
+                            except (TypeError, ValueError): return 0.0
+                        price_like = [s for s in still_bad if _abs_or_zero(s) >= 1000.0]
+                        if price_like:
+                            # Real anchor risk — drop rather than ship a wrong
+                            # price level the trader might use as a stop.
+                            audit["bullets_dropped"].append({"text": text, "why": f"unrescuable_fabrication:{all_bad}"})
+                            continue
+                        # All remaining fabs are <1000 — heuristic regime
+                        # boundaries. Keep the original (un-rescued) text so
+                        # the trader sees full reasoning; flag it heuristic
+                        # so the UI can render a "rule of thumb" badge.
+                        heuristic_text_flag = True
+                        audit["bullets_rescued"].append({
+                            "before": text, "after": text,
+                            "kind": "heuristic_text_kept",
+                            "nums_kept": still_bad,
+                        })
+                    else:
+                        # Rescue stripped all fabs cleanly — use cleaned prose.
+                        audit["bullets_rescued"].append({"before": text, "after": rescued_text, "nums_removed": all_bad})
+                        text, if_met = rescued_text, rescued_ifmet
 
             # Text-metric family contract
             metrics_used = {c["metric"] for c in conds}
@@ -1205,25 +1964,34 @@ def _validate(obj: Any, input_text: str, strict: bool = False) -> Tuple[Optional
             # with ~40 chars of surrounding context. This keeps the bullet
             # alive even when Venice forgets to fill source_quotes[] — per
             # "don't drop large sections over formatting".
+            #
+            # Soft-keep (2026-04-25, post 50-bar audit): the strict pass
+            # used to drop bullets here when neither Venice-supplied nor
+            # auto-derived quotes existed. Audit found these are nearly
+            # always pure-narrative bullets like "If bid imbalance flips
+            # positive above 0%" — qualitative, no fabrication risk, and
+            # the UI already renders quote-less bullets as narrative cards.
+            # Strict-drop here was gratuitous; we now flag and keep.
             if not quotes:
                 quotes = _auto_derive_quotes(text + " " + if_met, input_text, input_canons, input_raw)
                 if quotes:
                     audit["missing_quotes_bullets"].append({"text": text, "auto_derived": quotes})
-                elif strict:
-                    # Strict mode: if we can't derive ANY provable source, the
-                    # bullet is unanchored — drop it.
-                    audit["bullets_dropped"].append({"text": text, "why": "no_verifiable_source"})
-                    continue
                 else:
                     audit["missing_quotes_bullets"].append({"text": text, "auto_derived": []})
 
             out.append({
-                "tone":          tone,
-                "text":          text.strip(),
-                "conditions":    conds,
-                "if_met":        if_met or None,
-                "sources":       sources,
-                "source_quotes": quotes,
+                "tone":           tone,
+                "text":           text.strip(),
+                "conditions":     conds,
+                "if_met":         if_met or None,
+                "sources":        sources,
+                "source_quotes":  quotes,
+                # heuristic_text=True signals the UI to render a small
+                # "rule of thumb" badge on the bullet — same affordance as
+                # the dashed border on heuristic condition pills, just at
+                # bullet-level granularity for prose containing
+                # heuristic threshold numbers (e.g. "BSR < 0.9").
+                "heuristic_text": heuristic_text_flag,
             })
             if len(out) >= cap:
                 break
@@ -1231,11 +1999,164 @@ def _validate(obj: Any, input_text: str, strict: bool = False) -> Tuple[Optional
 
     watch   = _norm_bullets("watch",   5)
     actions = _norm_bullets("actions", 4)
-    return {
+
+    # Strict-mode final defense (2026-04-25, user-approved): surgically
+    # strip fabricated parts from actions[]. The trigger conditions stay
+    # verbatim — only the lying bits get rewritten:
+    #   * NEUTRAL DS bars: replace directive verbs (long with stop $X /
+    #     go short / etc) with a tone-appropriate state-change clause.
+    #     The conditional trigger remains; only the trade-execution
+    #     language is reframed.
+    #   * UP/DOWN DS bars: directive verbs stay (DS endorsed direction),
+    #     but unsourced stop clauses (where the stop value isn't in DS
+    #     support/resistance context) are stripped.
+    if strict and pred is not None:
+        ds_response = "\n".join([
+            str(pred.get("reasoning") or ""),
+            str(pred.get("narrative") or ""),
+            str(pred.get("free_observation") or ""),
+        ])
+        pred_signal = str(pred.get("signal") or "").upper()
+        unsourced_stop_vals: Set[str] = {
+            str(u.get("stop_value", ""))
+            for u in _detect_unsourced_stops(actions, ds_response)
+        }
+        for b in actions:
+            tone = b.get("tone", "neutral")
+            text = b.get("text") or ""
+            if_met = b.get("if_met") or ""
+            if pred_signal == "NEUTRAL":
+                # NEUTRAL: rewrite directive language to state-change.
+                new_text = _rewrite_action_to_state_change(text, tone)
+                if new_text and new_text != text:
+                    audit.setdefault("actions_rewritten_state_change", []).append(
+                        {"before": text, "after": new_text}
+                    )
+                    b["text"] = new_text
+                    text = new_text
+                # if_met: replace any directive entirely with the
+                # tone state-change phrase.
+                if if_met and _DIRECTIVE_VERB_FIND.search(if_met):
+                    new_if = _TONE_STATE_CHANGE.get(tone,
+                                _TONE_STATE_CHANGE["neutral"]).capitalize()
+                    audit.setdefault("if_met_rewritten_state_change", []).append(
+                        {"before": if_met, "after": new_if}
+                    )
+                    b["if_met"] = new_if
+                    if_met = new_if
+                # v3-A (2026-04-25): even after NEUTRAL rewrite, an
+                # unsourced stop clause may survive in if_met or text
+                # ("Long setup confirmed, stop $77,530"). Round-2 audit
+                # showed if_met retained `stop $X` on bar27/44/46 even
+                # after the directive rewrite. Strip those here too.
+                if unsourced_stop_vals:
+                    new_text2 = _strip_unsourced_stop_clause(text, unsourced_stop_vals)
+                    if new_text2 and new_text2 != text:
+                        audit.setdefault("unsourced_stops_stripped", []).append(
+                            {"before": text, "after": new_text2, "after_neutral_rewrite": True}
+                        )
+                        b["text"] = new_text2
+                    new_if2 = _strip_unsourced_stop_clause(if_met, unsourced_stop_vals)
+                    if new_if2 and new_if2 != if_met:
+                        audit.setdefault("unsourced_stops_stripped", []).append(
+                            {"before": if_met, "after": new_if2, "field": "if_met",
+                             "after_neutral_rewrite": True}
+                        )
+                        b["if_met"] = new_if2
+            else:
+                # UP/DOWN: directive verbs stay (DS endorsed direction);
+                # but unsourced stop clauses still get stripped.
+                if unsourced_stop_vals:
+                    new_text = _strip_unsourced_stop_clause(text, unsourced_stop_vals)
+                    if new_text and new_text != text:
+                        audit.setdefault("unsourced_stops_stripped", []).append(
+                            {"before": text, "after": new_text}
+                        )
+                        b["text"] = new_text
+                    if if_met:
+                        new_if = _strip_unsourced_stop_clause(if_met, unsourced_stop_vals)
+                        if new_if and new_if != if_met:
+                            audit.setdefault("unsourced_stops_stripped", []).append(
+                                {"before": if_met, "after": new_if, "field": "if_met"}
+                            )
+                            b["if_met"] = new_if
+
+    final = {
         "edge":    edge.strip(),
         "watch":   watch,
         "actions": actions,
-    }, audit
+    }
+
+    # ── Flag-only quality detectors (2026-04-25, no auto-strip) ─────
+    # These run AFTER the cleaned summary is built. They never modify
+    # bullets — only populate audit fields the orchestrator turns into
+    # retry feedback so Venice itself fixes the issues. Per user
+    # (2026-04-25): "be careful not to overshoot and remove actual
+    # features for our live traders."
+    if pred is not None:
+        ds_response = "\n".join([
+            str(pred.get("reasoning") or ""),
+            str(pred.get("narrative") or ""),
+            str(pred.get("free_observation") or ""),
+        ])
+        pred_signal = str(pred.get("signal") or "").upper()
+
+        # Fix 1 (reframed): NEUTRAL bars allow conditional triggers as
+        # actions, but if_met / text shouldn't read like a directive
+        # ("go long, stop $X"). Should describe state change so the
+        # trader knows to reassess, not auto-execute.
+        nd = _detect_neutral_action_directives(actions, pred_signal)
+        if nd:
+            audit["neutral_action_directives"] = nd
+
+        # Fix 2: stop levels in actions must reference DS-cited
+        # support/resistance/swing context. Flag (don't strip — a stop
+        # the trader expects is a real feature).
+        us = _detect_unsourced_stops(actions, ds_response)
+        if us:
+            audit["unsourced_action_stops"] = us
+
+        # Fix 3: premortem coverage — at least one bullet should share
+        # a numeric anchor with DS's PREMORTEM paragraph if DS supplied
+        # one with numbers. Catches "Venice dropped the premortem".
+        premortem = _extract_premortem_text(ds_response)
+        if premortem and not _check_premortem_validated(premortem, final):
+            audit["premortem_dropped"] = True
+            audit["premortem_text"] = premortem[:200]
+
+        # Fix 4: specialist disagreement must be visible in edge if DS
+        # explicitly flagged ensemble dissent / NO_TRADE veto / 2-vs-1
+        # specialist split. The "this is a contrarian-to-ensemble
+        # call" framing is the most-load-bearing meta-signal.
+        if _ds_has_specialist_disagreement(ds_response):
+            if not _edge_mentions_disagreement(final["edge"]):
+                audit["specialist_disagreement_unsurfaced"] = True
+
+    # Fix 6: forbid "always/never/every time" without a sample-size
+    # disclosure (n=X, X/Y) in the same sentence. Catches the
+    # n=4-as-"always" failure mode regardless of pred availability.
+    all_text_blob = final["edge"] + "\n" + "\n".join(
+        [(b.get("text") or "") + " " + (b.get("if_met") or "")
+         for b in (final["watch"] + final["actions"])]
+    )
+    abs_hits = _detect_unsourced_absolutes(all_text_blob)
+    if abs_hits:
+        audit["unsourced_absolutes"] = abs_hits
+
+    # v3-E (2026-04-25): detect fabricated n-counts (X/Y not in DS).
+    # Round-2 audit caught 5+ bars with invented historical ratios
+    # (bar20 "3/3" vs DS "2/3"; bar44 "2/2" vs DS "2/4"; etc).
+    if pred is not None:
+        ds_full = "\n".join([
+            str(pred.get("reasoning") or ""),
+            str(pred.get("narrative") or ""),
+            str(pred.get("free_observation") or ""),
+        ])
+        fab_ratios = _detect_fabricated_ratios(all_text_blob, ds_full)
+        if fab_ratios:
+            audit["fabricated_ratios"] = fab_ratios
+
+    return final, audit
 
 
 def _rescue_text(text: str, bad_nums: List[str]) -> str:
@@ -1435,10 +2356,16 @@ async def get_or_build(
             logger.warning("trader_summary JSON parse FAILED for bar %s: %s (raw=%r)", window_start_time, exc, raw[:300])
             return None
 
+        # Build live metric snapshot once — used by Fix 5 (degenerate-near-
+        # current detector) inside _norm_conditions to drop pills whose
+        # threshold sits on the live value.
+        current_values = _extract_current_metric_values(backend_snapshot)
+
         # PASS 1: lenient — drops fabricated condition values, flags text
         # fabrication + missing source_quotes but keeps the bullets so we don't
         # gut the briefing on the first try. We then decide whether to retry.
-        cleaned, audit = _validate(obj, user_prompt, strict=False)
+        cleaned, audit = _validate(obj, user_prompt, strict=False,
+                                    current_values=current_values, pred=pred)
         if not cleaned:
             logger.warning("trader_summary invalid shape for bar %s: %r", window_start_time, obj)
             return None
@@ -1482,6 +2409,56 @@ async def get_or_build(
                 f"only {total_bullets} bullets for {len(completeness['expected'])} major INPUT signals — insufficient density"
             )
 
+        # ── New retry triggers (2026-04-25, post 50-bar audit) ──────────
+        # Fix 1: NEUTRAL bars allow conditional triggers as actions, but
+        # the language must be state-change ("thesis flips bullish") not
+        # directive ("go long, stop $X"). The trader needs to know the
+        # trigger means reassess, not auto-execute.
+        if audit.get("neutral_action_directives"):
+            samples = [d.get("directive", "") for d in audit["neutral_action_directives"][:3]]
+            retry_reasons.append(
+                "NEUTRAL DS but action if_met / text reads as a trade directive "
+                f"({samples}); rephrase as state change ('Bull thesis confirmed — reassess', "
+                "'Sellers regain control')."
+            )
+        # Fix 2: stops must reference DS-cited support/resistance/swing
+        # context. We don't strip stops (real feature), but flag.
+        if audit.get("unsourced_action_stops"):
+            samples = [u.get("stop_value", "") for u in audit["unsourced_action_stops"][:3]]
+            retry_reasons.append(
+                f"action stop levels {samples} are not anchored to a DS-cited "
+                "support/resistance/swing/wall — either pick a level DS named "
+                "as such, or omit the stop clause."
+            )
+        # Fix 3: premortem coverage.
+        if audit.get("premortem_dropped"):
+            pm_quote = audit.get("premortem_text", "")[:160]
+            retry_reasons.append(
+                f"DS PREMORTEM ('{pm_quote}…') dropped — at least one watch bullet "
+                "must validate the premortem trigger (share its numeric thresholds)."
+            )
+        # Fix 4: specialist disagreement surfacing.
+        if audit.get("specialist_disagreement_unsurfaced"):
+            retry_reasons.append(
+                "DS flagged specialist disagreement / NO_TRADE veto / ensemble dissent "
+                "but edge text doesn't surface it — add one clause naming the "
+                "ensemble vote, the agreement count, or the veto."
+            )
+        # Fix 6: 'always/never/every time' without n disclosure.
+        if audit.get("unsourced_absolutes"):
+            retry_reasons.append(
+                f"absolute claim(s) {audit['unsourced_absolutes'][:3]} used without "
+                "explicit sample size (n=X or X/Y in the same sentence) — "
+                "either add the count or weaken the language."
+            )
+        # v3-E: fabricated X/Y historical-count claims.
+        if audit.get("fabricated_ratios"):
+            retry_reasons.append(
+                f"historical-count claim(s) {audit['fabricated_ratios'][:3]} "
+                "do not appear verbatim in DS — either use the exact ratio DS "
+                "wrote (e.g., '2/3' not '3/3') or drop the count."
+            )
+
         final_cleaned, final_audit = cleaned, audit
         if retry_reasons:
             logger.info("trader_summary bar %s retrying due to: %s", window_start_time, retry_reasons)
@@ -1496,7 +2473,28 @@ async def get_or_build(
                 + "* TEXT-METRIC CONTRACT: if the text names 'whale', 'bid wall', 'taker flow', "
                 + "'OI', 'funding', 'liquidations', 'RSI', etc., the conditions[] must use a metric "
                 + "from that same family.\n"
-                + "* COMPLETENESS: do NOT silently drop major signals cited in the INPUT.\n\n"
+                + "* COMPLETENESS: do NOT silently drop major signals cited in the INPUT.\n"
+                + "* THRESHOLD ≠ CURRENT: a watch/action condition's threshold must be a "
+                + "MEANINGFUL distance from the live reading. Setting `OI > 33,856` when current "
+                + "OI is 33,856 fires on rounding noise — pick a threshold the move would "
+                + "actually have to cross to mean something.\n"
+                + "* NEUTRAL ACTIONS: if DS signal is NEUTRAL, action `if_met` should describe a "
+                + "STATE CHANGE the trader must reassess from ('Bull thesis confirmed — reassess', "
+                + "'Sellers regain control — bearish setup forms'), NOT a directive ('Go long, "
+                + "stop $X'). The action is a conditional trigger, not an order.\n"
+                + "* ACTION STOPS: a stop level in an action must reference a price DS itself "
+                + "named as support/resistance/swing/wall/cluster. If DS gave no such level, "
+                + "OMIT the stop clause — do not repurpose a narrative price.\n"
+                + "* PREMORTEM COVERAGE: if DS includes a PREMORTEM ('most likely reason this "
+                + "call is wrong: ...'), at least one watch bullet MUST validate the premortem "
+                + "trigger, sharing its specific numeric thresholds verbatim.\n"
+                + "* SPECIALIST DISAGREEMENT: if DS surfaces SPECIALIST_AGREEMENT counts, ensemble "
+                + "dissent, or a NO_TRADE veto, the edge sentence MUST mention it (one clause is "
+                + "enough — 'ensemble UP 87% but Binance expert vetoes', '2 of 3 specialists "
+                + "NEUTRAL'). The contrarian framing is the most load-bearing meta-signal.\n"
+                + "* N DISCLOSURE: do not write 'always', 'never', 'every time', etc. without an "
+                + "explicit n=X or X/Y count from DS in the same sentence. n=3 historical analogs "
+                + "are NOT 'always' — say '3/3 prior bars'.\n\n"
                 + "Produce fresh JSON that fixes these issues. Keep the briefing format the same."
             )
             try:
@@ -1508,23 +2506,44 @@ async def get_or_build(
                     ],
                 )
                 obj2 = json.loads(raw2)
-                cleaned2, audit2 = _validate(obj2, user_prompt, strict=False)
+                cleaned2, audit2 = _validate(obj2, user_prompt, strict=False,
+                                              current_values=current_values, pred=pred)
                 if cleaned2 and (len(cleaned2["watch"]) + len(cleaned2["actions"])) >= 1:
                     completeness2 = _completeness_score(cleaned2, user_prompt)
                     fab1 = len(audit["fabricated_text_numbers"]) + len(audit["dropped_values"])
                     fab2 = len(audit2["fabricated_text_numbers"]) + len(audit2["dropped_values"])
                     bullets1 = len(cleaned["watch"]) + len(cleaned["actions"])
                     bullets2 = len(cleaned2["watch"]) + len(cleaned2["actions"])
+                    # 2026-04-25: composite "quality issues" score covers the
+                    # new flag-only signals so a retry that fixes a directive
+                    # / fabricated stop / dropped premortem / hidden ensemble
+                    # disagreement / unsourced "always" claim gets accepted
+                    # even if fabrications + coverage are unchanged.
+                    def _qual_issues(a: dict) -> int:
+                        return (
+                            len(a.get("neutral_action_directives") or []) +
+                            len(a.get("unsourced_action_stops") or []) +
+                            len(a.get("unsourced_absolutes") or []) +
+                            len(a.get("fabricated_ratios") or []) +
+                            (1 if a.get("premortem_dropped") else 0) +
+                            (1 if a.get("specialist_disagreement_unsurfaced") else 0)
+                        )
+                    qual1 = _qual_issues(audit)
+                    qual2 = _qual_issues(audit2)
                     # Accept retry if it's strictly better along any axis
                     # without regressing on the others:
                     #   (a) fewer fabrications, same-or-more bullets
                     #   (b) same fabrications, better coverage
                     #   (c) same fabrications + coverage, more bullets (denser)
-                    # Never accept a retry that ships FEWER bullets than pass 1.
-                    if fab2 <= fab1 and bullets2 >= bullets1:
+                    #   (d) same fabrications + coverage + bullets, fewer
+                    #       quality issues (Fix 1/2/3/4/6)
+                    # Never accept a retry that ships FEWER bullets than pass 1
+                    # or MORE fabrications.
+                    if fab2 <= fab1 and bullets2 >= bullets1 and qual2 <= qual1:
                         if (fab2 < fab1
                             or completeness2["ratio"] > completeness["ratio"]
-                            or bullets2 > bullets1):
+                            or bullets2 > bullets1
+                            or qual2 < qual1):
                             final_cleaned, final_audit = cleaned2, audit2
                             completeness = completeness2
             except Exception as exc:
@@ -1544,6 +2563,7 @@ async def get_or_build(
                           "source_quotes": b.get("source_quotes", [])}
                          for b in final_cleaned["actions"]]},
             user_prompt, strict=True,
+            current_values=current_values, pred=pred,
         )
         if not strict_cleaned:
             # Strict pass stripped the edge to empty or all bullets dropped.
@@ -1576,11 +2596,17 @@ async def get_or_build(
             final_audit_strict = {"strict_pass_fallback_to_lenient_with_drop": True}
         else:
             final_cleaned = strict_cleaned
-        # Merge audit trails
+        # Merge audit trails. Lists concat; bools OR-merge so we never
+        # lose a flag that fired on either pass; strings prefer the
+        # lenient pass (more context). Other scalars: prefer existing.
         merged_audit = dict(final_audit)
         for k, v in final_audit_strict.items():
             if isinstance(v, list):
                 merged_audit.setdefault(k, []).extend(v)
+            elif isinstance(v, bool):
+                merged_audit[k] = merged_audit.get(k, False) or v
+            elif isinstance(v, str) and not merged_audit.get(k):
+                merged_audit[k] = v
 
         final_cleaned["generated_at"]   = time.time()
         final_cleaned["generation_ms"]  = int((time.time() - started) * 1000)
