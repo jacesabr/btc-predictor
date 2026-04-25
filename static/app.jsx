@@ -2461,18 +2461,10 @@ function App() {
 
   const [pendingDeepseekReady,  setPendingDeepseekReady]  = useState(false);
   const [pendingDeepseekPred,   setPendingDeepseekPred]   = useState(null);
-  const [traderSummary,         setTraderSummary]         = useState(null);
-  // Collapsed by default — users said "waiting" section was too much scroll.
-  // Keep one dense summary visible with expand toggle for the full list.
-  // INFO defaults VISIBLE — these are the current-state expert observations
-  // (whale flow, taker flow narrative, book shape, funding regime) that
-  // explain the chart story. They pair with the edge sentence to form the
-  // full "here's what's happening right now" read. Only WAITING (future
-  // conditional triggers) stays collapsed.
-  const [infoOpen,              setInfoOpen]              = useState(true);
   const [serviceUnavailable,    setServiceUnavailable]    = useState(false);
   const [serviceUnavailReason,  setServiceUnavailReason]  = useState("");
   const [binanceExpert,         setBinanceExpert]         = useState(null);
+  const [historicalAnalysis,    setHistoricalAnalysis]    = useState("");
   const [tab,                   setTab]                   = useState(
     // If the URL arrives with #sources (from a briefing pill), land the
     // user on the public SOURCES tab — no admin login required.
@@ -2544,20 +2536,10 @@ function App() {
         if (d.pending_deepseek_prediction)            setPendingDeepseekPred(d.pending_deepseek_prediction);
         if (d.agree_accuracy)                         setAgreeAcc(d.agree_accuracy);
         if (d.pending_deepseek_ready !== undefined)   setPendingDeepseekReady(d.pending_deepseek_ready);
-        if (d.trader_summary) {
-          // Only accept a TRUTHY summary — ignore null sent by the backend
-          // briefly between bar-open and Venice completion. The JSON-equality
-          // guard still suppresses re-renders when the same summary ships on
-          // every 1-sec tick. The earlier fix (commit 14d0ca5) was only
-          // applied to the REST poll; mirror it here so both code paths agree.
-          setTraderSummary(prev => {
-            const a = JSON.stringify(prev), b = JSON.stringify(d.trader_summary);
-            return a === b ? prev : d.trader_summary;
-          });
-        }
         if (d.service_unavailable !== undefined)      setServiceUnavailable(!!d.service_unavailable);
         if (d.service_unavailable_reason !== undefined) setServiceUnavailReason(d.service_unavailable_reason || "");
         if (d.bar_binance_expert && d.bar_binance_expert.signal) setBinanceExpert(d.bar_binance_expert);
+        if (typeof d.bar_historical_analysis === "string") setHistoricalAnalysis(d.bar_historical_analysis);
         // Live dashboard_signals from the WS tick — every user (admin OR
         // anon) gets the current order_book / whale_flow / funding / OI /
         // liquidations / basis / skew values the metric() lookup reads.
@@ -2606,13 +2588,6 @@ function App() {
         if (d.pending_deepseek_prediction) setPendingDeepseekPred(d.pending_deepseek_prediction);
         if (d.pending_deepseek_ready !== undefined) setPendingDeepseekReady(d.pending_deepseek_ready);
         if (d.deepseek_prediction)         setDeepseekPred(d.deepseek_prediction);
-        // Only accept TRUTHY trader_summary updates. If the backend briefly
-        // reports null (new bar open, Venice hasn't generated yet), DON'T
-        // clobber the previous bar's summary — that was causing the
-        // "analysis appearing and disappearing" flash at every bar
-        // boundary. The WS handler bound at line ~2551 also guards via
-        // JSON-equality; this poll now mirrors that safety.
-        if (d.trader_summary)                        setTraderSummary(d.trader_summary);
         if (d.service_unavailable !== undefined)     setServiceUnavailable(!!d.service_unavailable);
         if (d.service_unavailable_reason !== undefined) setServiceUnavailReason(d.service_unavailable_reason || "");
       } catch(_) {}
@@ -2929,837 +2904,200 @@ function App() {
     [pendingDeepseekReady, pendingDeepseekPred, deepseekPred]
   );
 
-  // briefingJSX — memoized rendering of the trader briefing. Computed once per
-  // meaningful state change, cached across 500ms timer ticks so the
-  // Bullet/ConditionPill/BullBearText components defined inside the IIFE don't
-  // get re-instantiated on every render (root cause of the "entire tab flashes"
-  // symptom). `timeLeft` intentionally OMITTED from deps — the Closes-badge
-  // color in the status strip may lag up to 500ms, an acceptable trade for
-  // component-identity stability.
+  // briefingJSX — memoized rendering of the live DeepSeek analysis card.
+  // Top: NARRATIVE split into bold takeaway + detail (same visual format
+  // as before). Below: Binance microstructure expert + Historical
+  // similarity analyst summaries. Below: numbered REASONS list. Below:
+  // FREE_OBSERVATION. Plain text + BoldAnalysis highlighting — no
+  // structured pills, no condition machinery, no Venice translation.
   const briefingJSX = useMemo(() => {
-    const BULL_WORDS = new Set([
-      "bullish","uptrend","upside","upward","breakout","bounce","rally","surge",
-      "buyers","buying","accumulation","accumulating","support","higher","hh","hl",
-      "strong","long","longs","rising","rose","up","aligned","holding",
-    ]);
-    const BEAR_WORDS = new Set([
-      "bearish","downtrend","downside","downward","breakdown","rejection","selloff",
-      "drop","drops","falling","fell","sellers","selling","distribution","resistance",
-      "lower","ll","lh","weak","short","shorts","down","failing","losing",
-    ]);
-    const BullBearText = ({ text, size, baseColor }) => {
-      const refSize = size + 2;
-      // Bold numeric references ($-prices, percentages, and BTC amounts). All
-      // three forms need to support COMMA-grouped integers (e.g. "34,642.1 BTC",
-      // "1,234.5%", "$77,500"); otherwise "34,642.1 BTC" splits to "34," (prose)
-      // + "642.1 BTC" (bold) and the first digits lose their bold.
-      const REF = /(\$\d[\d,]*(?:\.\d+)?[kKmM]?|\d[\d,]*(?:\.\d+)?%|\d[\d,]*(?:\.\d+)?\s*BTC\b)/gi;
-      const segments = [];
-      let last = 0, m;
-      while ((m = REF.exec(text)) !== null) {
-        if (m.index > last) segments.push({ k: "prose", t: text.slice(last, m.index) });
-        segments.push({ k: "ref", t: m[0] });
-        last = REF.lastIndex;
-      }
-      if (last < text.length) segments.push({ k: "prose", t: text.slice(last) });
-      let key = 0;
-      return (
-        <span style={{ fontSize:size, color:baseColor, lineHeight:1.55 }}>
-          {segments.map((seg) => seg.k === "ref"
-            ? <strong key={key++} style={{ color:C.text, fontWeight:900, fontSize:refSize }}>{seg.t}</strong>
-            : <span key={key++}>{seg.t}</span>
-          )}
-        </span>
-      );
-    };
-    const fmt = {
-      // Aggressive precision — never let a non-zero reading round to "0".
-      // A "0 BTC" or "0.00%" pill made the trader think the source was
-      // dead; show whatever decimal count is needed to prove there's an
-      // actual value there.
-      //   value == 0           → "0 BTC"
-      //   |v| < 0.01           → 4 decimals (e.g. "0.0045 BTC")
-      //   |v| < 1              → 3 decimals (e.g. "0.152 BTC")
-      //   |v| < 10             → 2 decimals (e.g. "5.42 BTC")
-      //   |v| < 1000           → 1 decimal  (e.g. "320.5 BTC")
-      //   |v| ≥ 1000           → integer + commas (e.g. "34,839 BTC")
-      btc:  (v) => {
-        if (v === 0 || v == null) return "0 BTC";
-        const a = Math.abs(v);
-        if (a >= 1000)  return `${v.toLocaleString(undefined,{maximumFractionDigits:0})} BTC`;
-        if (a >= 10)    return `${v.toFixed(1)} BTC`;
-        if (a >= 1)     return `${v.toFixed(2)} BTC`;
-        if (a >= 0.01)  return `${v.toFixed(3)} BTC`;
-        return `${v.toFixed(4)} BTC`;
-      },
-      usd:  (v) => {
-        if (v === 0 || v == null) return "$0";
-        const a = Math.abs(v);
-        if (a >= 1)     return `$${v.toLocaleString(undefined,{maximumFractionDigits:0})}`;
-        return `$${v.toFixed(4)}`;
-      },
-      pct:  (v) => {
-        if (v === 0 || v == null) return "0%";
-        const a = Math.abs(v);
-        if (a >= 1)     return `${v.toFixed(2)}%`;
-        if (a >= 0.01)  return `${v.toFixed(3)}%`;
-        return `${v.toFixed(5)}%`;
-      },
-      num:  (v) => {
-        if (v === 0 || v == null) return "0";
-        const a = Math.abs(v);
-        if (a >= 1)     return v.toFixed(2);
-        if (a >= 0.01)  return v.toFixed(3);
-        return v.toFixed(4);
-      },
-    };
-    const ds     = (backendSnap?.snapshot?.dashboard_signals) || {};
-    const spb    = ds.spot_perp_basis;
-    const cvdBlk = ds.cvd;
-    const obFull = ds.order_book;
-    const skew   = ds.deribit_skew_term;
-    const metric = (m) => {
-      switch (m) {
-        case "price":             return price != null ? { v: price, f: fmt.usd } : null;
-        case "price_change_pct":  return (price != null && winStartPrice) ? { v: (price - winStartPrice) / winStartPrice * 100, f: fmt.pct } : null;
-        case "taker_buy_volume":  return tk?.bv  != null ? { v: tk.bv,  f: fmt.btc } : null;
-        case "taker_sell_volume": return tk?.sv  != null ? { v: tk.sv,  f: fmt.btc } : null;
-        case "taker_volume":      return tk?.bv!=null && tk?.sv!=null ? { v: tk.bv + tk.sv, f: fmt.btc } : null;
-        case "taker_ratio":       return tk?.bsr != null ? { v: tk.bsr, f: fmt.num } : null;
-        case "bsr":               return tk?.bsr != null ? { v: tk.bsr, f: fmt.num } : null;
-        case "bid_imbalance":     return (obFull?.imbalance_05pct_pct != null) ? { v: obFull.imbalance_05pct_pct, f: fmt.pct } : (ob?.imb != null ? { v: ob.imb, f: fmt.pct } : null);
-        case "ask_imbalance":     return (obFull?.imbalance_05pct_pct != null) ? { v: -obFull.imbalance_05pct_pct, f: fmt.pct } : (ob?.imb != null ? { v: -ob.imb, f: fmt.pct } : null);
-        case "funding_rate":
-          // Same rationale as open_interest above: prefer the backend-relayed
-          // value so pill matches bullet text even under OKX-fallback.
-          if (ds?.oi_funding?.funding_rate_8h_pct != null)
-            return { v: ds.oi_funding.funding_rate_8h_pct, f: fmt.pct };
-          return oif?.fr != null ? { v: oif.fr*100, f: fmt.pct } : null;
-        case "open_interest":
-          // Prefer backend's open_interest_btc (same source DeepSeek
-          // reasoned over) so the pill matches the bullet text even when
-          // the backend is on OKX-fallback because Binance fAPI is
-          // geo-blocked from Render's datacenter. Fall back to the
-          // browser's direct-Binance fetch when the backend value is
-          // unavailable — those paths produce different numbers (Binance
-          // perp OI ≈ 3× OKX perp OI), which was causing visible
-          // disagreement between "OI 34,839 BTC" in the bullet text and
-          // "now 96,771 BTC" in the pill for the same bar.
-          if (ds?.oi_funding?.open_interest_btc != null)
-            return { v: ds.oi_funding.open_interest_btc, f: fmt.btc };
-          return oif?.oi != null ? { v: oif.oi, f: fmt.btc } : null;
-        case "rsi":               return strategies?.rsi?.value != null ? { v: parseFloat(strategies.rsi.value), f: fmt.num } : null;
-        case "long_short_ratio":  return ls?.lsr != null ? { v: ls.lsr, f: fmt.num } : null;
-        case "basis_pct":         return spb?.basis_pct != null ? { v: spb.basis_pct, f: fmt.pct } : null;
-        case "perp_cvd_1h":       return cvdBlk?.perp_cvd_1h_btc != null ? { v: cvdBlk.perp_cvd_1h_btc, f: fmt.btc } : null;
-        case "spot_cvd_1h":       return cvdBlk?.spot_cvd_1h_btc != null ? { v: cvdBlk.spot_cvd_1h_btc, f: fmt.btc } : null;
-        case "aggregate_cvd_1h":  return cvdBlk?.aggregate_cvd_1h_btc != null ? { v: cvdBlk.aggregate_cvd_1h_btc, f: fmt.btc } : null;
-        case "bid_depth_05pct":   return obFull?.bid_depth_05pct_btc != null ? { v: obFull.bid_depth_05pct_btc, f: fmt.btc } : null;
-        case "ask_depth_05pct":   return obFull?.ask_depth_05pct_btc != null ? { v: obFull.ask_depth_05pct_btc, f: fmt.btc } : null;
-        case "rr_25d_30d":        return skew?.rr_25d_30d_pct != null ? { v: skew.rr_25d_30d_pct, f: fmt.pct } : null;
-        case "iv_30d_atm":        return skew?.iv_30d_atm_pct != null ? { v: skew.iv_30d_atm_pct, f: fmt.pct } : null;
-        case "spot_whale_buy_btc":  return ds.spot_whale_flow?.whale_buy_btc  != null ? { v: ds.spot_whale_flow.whale_buy_btc,  f: fmt.btc } : null;
-        case "spot_whale_sell_btc": return ds.spot_whale_flow?.whale_sell_btc != null ? { v: ds.spot_whale_flow.whale_sell_btc, f: fmt.btc } : null;
-        case "aggregate_funding_rate":    return ds.aggregate_funding?.weighted_funding_rate != null ? { v: ds.aggregate_funding.weighted_funding_rate*100, f: fmt.pct } : null;
-        case "aggregate_liquidations_usd":return ds.aggregate_liquidations?.total_usd != null ? { v: ds.aggregate_liquidations.total_usd, f: fmt.usd } : null;
-        case "oi_velocity_pct":   return ds.aggregate_oi?.change_30min_pct != null ? { v: ds.aggregate_oi.change_30min_pct, f: fmt.pct } : (oif?.oi_change_pct != null ? { v: oif.oi_change_pct, f: fmt.pct } : null);
-        // Technical indicators sourced from strategies[] (live-pushed via WS).
-        // .value is a string (e.g. "9.1", "1.3168", "-0.64"); parseFloat
-        // tolerates a leading "$" so vwap_ref ("$77508.08") parses cleanly.
-        case "stoch_k":           return strategies?.stochastic?.value != null ? { v: parseFloat(strategies.stochastic.value), f: fmt.num } : null;
-        case "macd_histogram":    return strategies?.macd?.value != null ? { v: parseFloat(strategies.macd.value), f: fmt.num } : null;
-        case "adx":               return strategies?.adx?.value != null ? { v: parseFloat(strategies.adx.value), f: fmt.num } : null;
-        case "ema_5_13_diff":     return strategies?.ema_cross?.value != null ? { v: parseFloat(strategies.ema_cross.value), f: fmt.usd } : null;
-        case "vwap_ref":          return strategies?.vwap?.value != null ? { v: parseFloat(String(strategies.vwap.value).replace(/[$,]/g,"")), f: fmt.usd } : null;
-        // Dashboard-signal-sourced metrics (live-pushed to all viewers).
-        case "mark_premium_pct":   return ds?.oi_funding?.mark_premium_vs_index_pct != null ? { v: ds.oi_funding.mark_premium_vs_index_pct, f: fmt.pct } : null;
-        case "dvol_pct":           return ds?.deribit_dvol?.dvol_pct != null ? { v: ds.deribit_dvol.dvol_pct, f: fmt.pct } : null;
-        case "btc_dominance_pct":  return ds?.btc_dominance?.btc_dominance_pct != null ? { v: ds.btc_dominance.btc_dominance_pct, f: fmt.pct } : null;
-        case "fear_greed":         return ds?.fear_greed?.value != null ? { v: ds.fear_greed.value, f: fmt.num } : null;
-        case "mempool_fee":        return ds?.mempool?.fastest_fee_sat_vb != null ? { v: ds.mempool.fastest_fee_sat_vb, f: (v)=>`${v} sat/vB` } : null;
-        case "kraken_premium_pct": return ds?.kraken_premium?.spread_pct != null ? { v: ds.kraken_premium.spread_pct, f: fmt.pct } : null;
-        case "top_long_short_ratio": return ds?.top_position_ratio?.long_short_ratio != null ? { v: ds.top_position_ratio.long_short_ratio, f: fmt.num } : null;
-        case "spot_perp_cvd_div":  return ds?.cvd?.spot_perp_divergence_btc != null ? { v: ds.cvd.spot_perp_divergence_btc, f: fmt.btc } : null;
-        case "put_call_ratio":     return ds?.deribit_skew_term?.put_call_volume_ratio != null ? { v: ds.deribit_skew_term.put_call_volume_ratio, f: fmt.num } : null;
-        default: return null;
-      }
-    };
-    const opCheck = { ">": (a,b)=>a>b, ">=": (a,b)=>a>=b, "<": (a,b)=>a<b, "<=": (a,b)=>a<=b, "==": (a,b)=>Math.abs(a-b)<1e-9 };
-    // Every layman below is written in "experienced trader calling in from a
-    // game-show helpline to a friend who doesn't know trader lingo" voice.
-    // No jargon. Every reading is followed by what it means for the next
-    // move / what to watch for. Traders who know the terms can still infer
-    // them from the plain-English description.
-    const METRIC_META = {
-      price:             { label: "price",      layman: "The live BTC price right now on Binance. That's it — no fancy math, just what a single coin costs this second.",
-                           source: { label: "Binance spot", url: "/#sources" } },
-      price_change_pct:  { label: "Δ price",    layman: "How much the price has moved since this 5-minute candle started. Up 0.2% means it's 0.2% higher than where the candle opened; negative means it's dropped since then.",
-                           source: { label: "Binance spot", url: "/#sources" } },
-      taker_buy_volume:  { label: "taker buy",  layman: "How much BTC got bought at market price in the last 5 minutes — people who clicked BUY and didn't care about the exact price, they just wanted in now. A big number here means buyers are eager; a tiny number means nobody's chasing.",
-                           source: { label: "Coinglass", url: "/#sources" } },
-      taker_sell_volume: { label: "taker sell", layman: "How much BTC got sold at market price in the last 5 minutes — people who clicked SELL and didn't wait for a better price, they wanted out now. Big number = sellers panicking or rushing; tiny number = nobody dumping.",
-                           source: { label: "Coinglass", url: "/#sources" } },
-      taker_volume:      { label: "taker vol",  layman: "Total BTC that changed hands by people hitting the market (buys plus sells) in the last 5 minutes. Near zero means nobody's acting — the market is just waiting. High number means traders are actively moving size.",
-                           source: { label: "Coinglass", url: "/#sources" } },
-      taker_ratio:       { label: "BSR",        layman: "BSR tells you who's actually pressing the trigger right now. Every second some people click BUY at the current price and some click SELL — BSR just divides those two. Above 1 means more people are clicking BUY than SELL (buyers in charge, price likely keeps going up). Below 1 means SELL is winning (price pressure is down). Extreme readings (like 3 or 0.3) mean one side is dominating hard — but also watch for exhaustion; the side pushing too hard often runs out of steam.",
-                           source: { label: "Coinglass", url: "/#sources" } },
-      bsr:               { label: "BSR",        layman: "BSR tells you who's actually pressing the trigger right now. Every second some people click BUY at the current price and some click SELL — BSR just divides those two. Above 1 means more people are clicking BUY than SELL (buyers in charge, price likely keeps going up). Below 1 means SELL is winning (price pressure is down). Extreme readings (like 3 or 0.3) mean one side is dominating hard — but also watch for exhaustion; the side pushing too hard often runs out of steam.",
-                           source: { label: "Coinglass", url: "/#sources" } },
-      bid_imbalance:     { label: "bid imb",    layman: "Near the current price, are there more BUY orders waiting, or SELL orders waiting? Positive = more buyers lined up below price waiting to catch it (cushion if it drops). Negative = the opposite — more sellers lined up above. Think of it as where the ready-to-act money is parked.",
-                           source: { label: "Binance depth", url: "/#sources" } },
-      ask_imbalance:     { label: "ask imb",    layman: "Mirror of bid imbalance — positive here means more SELL orders are waiting near the current price than BUY orders. Lots of sellers lined up above = harder for price to push through upward without first eating them.",
-                           source: { label: "Binance depth", url: "/#sources" } },
-      funding_rate:      { label: "funding",    layman: "On leveraged futures, one side has to pay the other a fee every 8 hours to keep the price tied to spot. Positive = people betting on UP are paying (too many of them crowded in — often a sign the up-trade is getting over-crowded). Negative = people betting on DOWN are paying (crowded short — sometimes signals an upcoming snap-back up). Near zero = balanced, no squeeze setup.",
-                           source: { label: "Coinglass", url: "/#sources" } },
-      open_interest:     { label: "OI",         layman: "Total BTC currently tied up in leveraged price bets on Binance. Think of it as 'how much money is actively gambling on the next move'. Rising while price rises = fresh buyers committing real money, trend has fuel. Falling while price rises = people taking profits / closing shorts, rally might not have legs.",
-                           source: { label: "Coinglass", url: "/#sources" } },
-      rsi:               { label: "RSI",        layman: "A 0-to-100 gauge of how fast price just ran. Over 70 = price rallied really fast, usually means a pullback or breather is coming. Under 30 = price dropped fast, bounce often follows. Near 50 = nothing happening either direction, moves are weak.",
-                           source: { label: "TradingView", url: "/#sources" } },
-      long_short_ratio:  { label: "L/S",        layman: "Out of the everyday traders on Binance futures, how many are betting UP vs betting DOWN. When it swings to extremes it's usually wrong — if 80% of the crowd is betting UP, price often goes DOWN (because 'the crowd' tends to be late and crowded).",
-                           source: { label: "Coinglass", url: "/#sources" } },
-      basis_pct:             { label: "basis",           layman: "Leveraged bet price vs. regular spot price. Positive = the leveraged market is paying extra over spot (traders bullish, expecting more up). Negative = leveraged is trading cheaper than spot (bearish sentiment in futures). The bigger the gap, the more one-sided the sentiment.",
-                               source: { label: "Coinglass", url: "/#sources" } },
-      perp_cvd_1h:           { label: "perp CVD 1h",     layman: "On the leveraged futures market, over the last hour, was there more aggressive buying or selling? Positive = buying pressure has been winning. Negative = selling pressure. Tracks the net 'who's been pressing the trigger' over the last 60 minutes.",
-                               source: { label: "Coinglass", url: "/#sources" } },
-      spot_cvd_1h:           { label: "spot CVD 1h",     layman: "Same idea as perp CVD but on the regular (non-leveraged) market. Positive means people have been net-buying with real spot money in the last hour — a stronger signal than futures alone because there's no leverage behind it.",
-                               source: { label: "Coinglass", url: "/#sources" } },
-      aggregate_cvd_1h:      { label: "aggregate CVD 1h",layman: "Net buying-vs-selling across every major exchange combined over the last hour. Cuts through the noise of looking at just one venue — if this is strongly positive, real money is net-buying globally, not just on one exchange.",
-                               source: { label: "Coinglass", url: "/#sources" } },
-      bid_depth_05pct:       { label: "bid depth",       layman: "How much BTC is waiting on the BUY side in a half-percent window right under the current price. If price drops a tiny bit, this is how much demand is ready to catch it. Big number = strong cushion below; small number = air pocket, any dip falls through easily.",
-                               source: { label: "Binance depth", url: "/#sources" } },
-      ask_depth_05pct:       { label: "ask depth",       layman: "How much BTC is waiting on the SELL side in a half-percent window right above the current price. If price tries to go up, this is the supply it has to chew through. Big number = hard to break up (stiff resistance); small number = a small nudge can launch it.",
-                               source: { label: "Binance depth", url: "/#sources" } },
-      rr_25d_30d:            { label: "RR 25d/30d",      layman: "Among traders making 30-day bets, are more of them paying up for UP-bets or DOWN-bets? Positive = they're willing to pay more for upside insurance/speculation (bullish lean over the month). Negative = more fear, paying for downside protection (bearish lean).",
-                               source: { label: "Deribit", url: "/#sources" } },
-      iv_30d_atm:            { label: "IV 30d",          layman: "A single number that says 'how big a move does the market think BTC will make over the next 30 days'. Higher = traders expect wild swings (buckle up). Lower = traders expect a calm/quiet month. Think of it as the market's nervousness level.",
-                               source: { label: "Deribit", url: "/#sources" } },
-      spot_whale_buy_btc:    { label: "whale buy",       layman: "When a single trade of 5+ BTC hits the regular spot market as a BUY, that's usually a big player (fund, institution, long-time holder) taking a position. This shows how much of that showed up in the last 5 minutes. Sudden spike = a big player is stepping in on the buy side — often marks the start of a move up.",
-                               source: { label: "Coinglass", url: "/#sources" } },
-      spot_whale_sell_btc:   { label: "whale sell",      layman: "Mirror of whale buy — one big player dumped 5+ BTC in one click. This is how much of that happened in the last 5 minutes. Big number = a serious holder is offloading, often a warning that they know something or want out before price drops further.",
-                               source: { label: "Coinglass", url: "/#sources" } },
-      aggregate_funding_rate:{ label: "agg funding",     layman: "Same as funding_rate but averaged across every major exchange — catches the overall 'who's crowded in' picture without being fooled by one venue being different. Positive = UP-bettors paying globally, crowded long. Negative = DOWN-bettors paying globally, crowded short.",
-                               source: { label: "Coinglass", url: "/#sources" } },
-      aggregate_liquidations_usd:{label:"liquidations",  layman: "When leveraged traders get on the wrong side of a move, their position gets auto-closed (forced exit). This is the total $-value of those forced exits across all exchanges in the last 5 minutes. Big spikes here = a stop-cascade where forced selling (or buying) is fueling the move further.",
-                               source: { label: "Coinglass", url: "/#sources" } },
-      oi_velocity_pct:       { label: "OI velocity",     layman: "How fast money is flowing INTO or OUT OF leveraged bets right now. Rising = fresh traders committing new money — trend has real fuel. Falling = traders closing out — the current move might be running on fumes.",
-                               source: { label: "Coinglass", url: "/#sources" } },
-      stoch_k:           { label: "Stoch %K",      layman: "A 0-to-100 gauge of where price is sitting in its recent 5-minute range. Above 80 = price is pinned near the top of the range (overbought, breather likely). Below 20 = pinned near the bottom (oversold, bounce likely). It moves faster than RSI so it tags extremes more often.",
-                           source: { label: "TradingView", url: "/#sources" } },
-      macd_histogram:    { label: "MACD hist",     layman: "Shows whether short-term momentum is pulling away from longer-term momentum or coming back together. Positive and rising = momentum building UP. Negative and rising (less negative) = down-momentum fading, possible reversal. Crossing zero = momentum is flipping sides.",
-                           source: { label: "TradingView", url: "/#sources" } },
-      adx:               { label: "ADX",           layman: "How strong the current trend is, regardless of direction. Above 25 = real trend is happening (don't fade it). Below 20 = no trend, price chopping around (range-trade or stand aside). It doesn't tell you UP or DOWN, just whether the move has conviction.",
-                           source: { label: "TradingView", url: "/#sources" } },
-      ema_5_13_diff:     { label: "EMA 5/13 Δ",    layman: "How far the very-short-term average has pulled away from the slightly-longer one. Positive = short-term is above long-term (bullish slope). Negative = the opposite. Big absolute number = strong trend; near zero = no momentum, lines about to cross.",
-                           source: { label: "TradingView", url: "/#sources" } },
-      vwap_ref:          { label: "VWAP",          layman: "The volume-weighted average price for the current session — what the average buyer/seller has paid this session. Price above VWAP = buyers in control on average. Below = sellers. Distance from VWAP shows how stretched the current move is.",
-                           source: { label: "Binance spot", url: "/#sources" } },
-      mark_premium_pct:  { label: "mark prem",     layman: "How much the leveraged perpetual price is above (or below) the spot index price. Positive = perp is paying a premium over spot (bullish lean). Negative = perp is trading at a discount (bearish lean). Tracks short-term futures vs spot tension.",
-                           source: { label: "Coinglass", url: "/#sources" } },
-      dvol_pct:          { label: "DVOL",          layman: "Deribit's option-implied volatility index — what options traders are pricing in for moves over the next 30 days. Higher = options expect bigger swings (fear or anticipation). Lower = options expect calm. Sudden spikes here often precede big price moves.",
-                           source: { label: "Deribit", url: "/#sources" } },
-      btc_dominance_pct: { label: "BTC dom",       layman: "BTC's share of the entire crypto market cap. Rising = money rotating OUT of altcoins INTO BTC (often bullish for BTC, bearish for alts). Falling = money flowing into alts (alt-season). Above ~58% historically signals strong BTC preference.",
-                           source: { label: "CoinGecko", url: "/#sources" } },
-      fear_greed:        { label: "Fear & Greed",  layman: "A 0-100 sentiment gauge. Below 25 = traders are scared (often a contrarian buy signal). Above 75 = traders are greedy (often a contrarian sell signal). Mid-range = balanced. Daily macro indicator, not for 5-minute scalping but useful as background context.",
-                           source: { label: "Alternative.me", url: "/#sources" } },
-      mempool_fee:       { label: "mempool fee",   layman: "How crowded the Bitcoin network is right now (sat/vB to confirm fast). Low (1-5) = quiet network, no on-chain panic. High (50+) = lots of urgent transactions waiting, often coincides with market stress. Background context, not a direct trade signal.",
-                           source: { label: "Mempool.space", url: "/#sources" } },
-      kraken_premium_pct: { label: "Kraken prem",  layman: "How much higher (or lower) Kraken's price is vs OKX. Positive = EU/US regulated buyers paying up over global average (often institutional accumulation). Negative = the opposite. Big spread = regional dislocation, often bullish or bearish depending on direction.",
-                           source: { label: "Kraken", url: "/#sources" } },
-      top_long_short_ratio: { label: "top L/S",    layman: "Among the TOP traders on Binance futures (top 20% by account size), how many are betting UP vs DOWN. Different from retail L/S — these are the bigger, more informed accounts. When top traders heavily lean one way, it's a stronger signal than the crowd.",
-                           source: { label: "Coinglass", url: "/#sources" } },
-      spot_perp_cvd_div:  { label: "spot/perp CVD div", layman: "Difference between aggressive buying-vs-selling on regular spot markets vs leveraged perps. Positive = real spot money is buying while perps lag (durable rally). Negative = perp speculation is leading without spot confirmation (often a fakeout that reverses).",
-                           source: { label: "Coinglass", url: "/#sources" } },
-      put_call_ratio:    { label: "P/C vol",       layman: "Volume of DOWN-bet options divided by UP-bet options. Above 1.0 = traders are buying more downside protection (bearish lean or hedging). Below 1.0 = more upside speculation (bullish lean). Extreme readings are often contrarian — too much fear/greed marks turning points.",
-                           source: { label: "Deribit", url: "/#sources" } },
-    };
-    // Text → signal-family map (mirrors server-side _TEXT_SIGNAL_FAMILIES in
-    // trader_summary.py). When a bullet has conditions:[] but its text names
-    // a known signal, we synthesize an info-only pill from the first matched
-    // family member so the trader still sees live value + source link
-    // instead of a "? UNKNOWN" badge.
-    const TEXT_FAMILY_RULES = [
-      // Plural-tolerant: "whale" / "whales" — bullets often say "Spot whales sold 0.68 BTC".
-      { rx: /\bwhales?\b/i,                      metrics: ["spot_whale_buy_btc", "spot_whale_sell_btc"] },
-      // Catches "taker buy", "taker sell", "taker buy and sell volumes", "taker aggression".
-      { rx: /\btaker\s+(?:buy|sell|aggression|aggressor)/i, metrics: ["taker_ratio", "taker_buy_volume", "taker_sell_volume", "taker_volume"] },
-      // Catches "taker volume(s)", "taker flow", "taker ratio".
-      { rx: /\btaker\s+(?:volumes?|flow|ratio)\b/i, metrics: ["taker_ratio", "taker_buy_volume", "taker_sell_volume", "taker_volume"] },
-      { rx: /\bBSR\b/i,                          metrics: ["taker_ratio"] },
-      { rx: /\b(?:bid|ask)\s+(?:imbalance|depth|wall|side|book)\b/i, metrics: ["bid_imbalance", "ask_imbalance", "bid_depth_05pct", "ask_depth_05pct"] },
-      // Plain "order book" mentions (without bid/ask qualifier) and "X BTC bids vs Y BTC asks" patterns.
-      { rx: /\border\s+book\b|\bBTC\s+(?:bids?|asks?)\b/i, metrics: ["bid_imbalance", "ask_imbalance", "bid_depth_05pct", "ask_depth_05pct"] },
-      { rx: /\bfunding\b/i,                      metrics: ["funding_rate", "aggregate_funding_rate"] },
-      { rx: /\bOI\s+velocity\b|\bOI\s+(?:flips?|change|turns?|rising|falling|accelerat\w*)\b/i,
-        metrics: ["oi_velocity_pct"] },
-      { rx: /\bopen interest\b|\bOI\b/i,         metrics: ["open_interest", "oi_velocity_pct"] },
-      { rx: /\bliquidations?\b/i,                metrics: ["aggregate_liquidations_usd"] },
-      { rx: /\bRSI\b/i,                          metrics: ["rsi"] },
-      { rx: /\blong\/short\b|\bL\/S\s*ratio\b/i, metrics: ["long_short_ratio"] },
-      { rx: /\btop\s+(?:trader|account)s?\s+(?:L\/S|long\/short|position)\b/i, metrics: ["top_long_short_ratio"] },
-      { rx: /\bCVD\b/i,                          metrics: ["aggregate_cvd_1h", "perp_cvd_1h", "spot_cvd_1h"] },
-      { rx: /\bspot[\/-]perp\s+(?:CVD\s+)?(?:divergence|div)\b/i, metrics: ["spot_perp_cvd_div"] },
-      { rx: /\bbasis\b/i,                        metrics: ["basis_pct"] },
-      { rx: /\b(?:IV|implied\s+vol|skew|risk[- ]reversal)\b/i, metrics: ["iv_30d_atm", "rr_25d_30d"] },
-      // Technical indicators (live values come from strategies[]).
-      { rx: /\bstoch(?:astic)?\b|%\s*K\b|%\s*D\b/i, metrics: ["stoch_k"] },
-      { rx: /\bMACD\b/i,                         metrics: ["macd_histogram"] },
-      { rx: /\bADX\b/i,                          metrics: ["adx"] },
-      { rx: /\bEMA\s*\d+|ema_cross|EMA\s*cross/i, metrics: ["ema_5_13_diff"] },
-      { rx: /\bVWAP\b/i,                         metrics: ["vwap_ref"] },
-      // Dashboard signals (live values come from dashboard_signals[]).
-      { rx: /\bmark\s+premium\b/i,               metrics: ["mark_premium_pct"] },
-      { rx: /\bDVOL\b/i,                         metrics: ["dvol_pct"] },
-      { rx: /\bBTC\s+dominance\b|\bdominance\b/i, metrics: ["btc_dominance_pct"] },
-      { rx: /\bfear\s*[\&]\s*greed\b|\bF\&G\b/i, metrics: ["fear_greed"] },
-      { rx: /\bmempool\b/i,                      metrics: ["mempool_fee"] },
-      { rx: /\bKraken\s+premium\b/i,             metrics: ["kraken_premium_pct"] },
-      { rx: /\bput[\/-]call\b/i,                 metrics: ["put_call_ratio"] },
-    ];
-    const inferMetricsFromText = (text) => {
-      if (!text) return [];
-      const found = new Set();
-      for (const { rx, metrics } of TEXT_FAMILY_RULES) {
-        if (rx.test(text)) {
-          for (const m of metrics) {
-            if (metric(m) != null) { found.add(m); break; } // first live one per family
-          }
-        }
-      }
-      return [...found];
-    };
-    const ConditionPill = ({ cond, stableMet }) => {
-      const live = metric(cond.metric);
-      const heuristic = !!cond.heuristic;
-      const infoOnly  = !!cond.__infoOnly;
-      const thresholdStr = live ? live.f(cond.value) : `${cond.value}${cond.unit||""}`;
-      const rawMet = (live && !infoOnly) ? opCheck[cond.op](live.v, cond.value) : null;
-      const isMet = infoOnly ? null
-                  : (stableMet !== undefined && stableMet !== null) ? stableMet : rawMet;
-      const ok = isMet === true;
-      const bad = isMet === false;
-      // Heuristic thresholds: green/red still indicates met/unmet, but the
-      // border is dashed to signal "rule of thumb, not a live-anchored level".
-      // Info-only pills (no threshold, text-inferred): neutral grey always.
-      const borderC = infoOnly ? C.borderSoft
-                    : ok ? C.green : bad ? C.red : C.borderSoft;
-      const bgC     = infoOnly ? "#F5F5F4"
-                    : ok ? C.greenBg : bad ? C.redBg : "#F5F5F4";
-      const fgC     = infoOnly ? C.textSec
-                    : ok ? "#166534" : bad ? "#991B1B" : C.textSec;
-      const icon = infoOnly     ? "ⓘ"
-                 : !live        ? "ⓘ"
-                 : cond.op === ">" || cond.op === ">=" ? "▲"
-                 : cond.op === "<" || cond.op === "<=" ? "▼"
-                 : "●";
-      const meta    = METRIC_META[cond.metric] || {};
-      const labelText = meta.label || cond.metric.replace(/_/g," ");
-      const borderStyle = (heuristic && !infoOnly) ? "dashed" : "solid";
-      // Detect degenerate conditions against live value: ">X" when live is
-      // already 1.5x past X, or "<X" when live is already 0.67x below — the
-      // condition is trivially true forever so the pill is misleading. We
-      // still render it, but visually de-emphasise and annotate the tooltip
-      // so the trader instantly sees "this threshold is meaningless".
-      const degenerateLive = (() => {
-        // Flag only EXTREME threshold/live mismatches (live >3x past threshold
-        // on > side, or live <1/3 of threshold on < side). Normal observation
-        // bullets describing current state have a threshold AT the regime
-        // boundary (e.g. BSR < 1.0 when live is 0.58) — we don't want to
-        // flag those as degenerate. The 3x band catches things like
-        // "OI > 34,635 BTC" when live OI is 96,832 BTC (2.8x past) —
-        // actually that's exactly the case that prompted this, so 2.5x:
-        if (!live || infoOnly || heuristic) return false;
-        const v = cond.value;
-        if (!Number.isFinite(v) || v === 0) return false;
-        if (cond.op === ">" || cond.op === ">=") {
-          return live.v >= v * 2.5 && live.v > v;
-        }
-        if (cond.op === "<" || cond.op === "<=") {
-          return live.v <= v * 0.4 && live.v < v;
-        }
-        return false;
-      })();
-      const pillTitle = [
-        meta.layman || null,
-        degenerateLive ? "⚠ Live value is already far past this threshold — the trigger is trivially true and tells you nothing about future moves." : null,
-        heuristic ? "Rule-of-thumb threshold from DeepSeek — not live-anchored." : null,
-      ].filter(Boolean).join("\n\n");
-      return (
-        <span title={pillTitle}
-              style={{ display:"inline-flex", alignItems:"center", gap:7,
-            fontSize:13, fontWeight:700, padding:"4px 10px", borderRadius:5,
-            background: bgC, color: fgC,
-            border:`1px ${degenerateLive ? "dashed" : borderStyle} ${degenerateLive ? C.muted : borderC}`,
-            opacity: degenerateLive ? 0.7 : 1 }}>
-          <span style={{ fontSize:15, fontWeight:900 }}>{icon}</span>
-          {infoOnly ? (
-            <span>{labelText} · live reading</span>
-          ) : (
-            <span>{labelText} {cond.op}{" "}
-              <strong style={{ fontSize:17, color:C.text }}>{thresholdStr}</strong>
-              {heuristic && (
-                <span title="Rule-of-thumb threshold from DeepSeek — not a live-anchored level"
-                      style={{ marginLeft:5, fontSize:9, fontWeight:900, letterSpacing:0.6,
-                        color:C.muted, background:"#FFFFFF",
-                        border:`1px dashed ${C.borderSoft}`, borderRadius:3,
-                        padding:"0 4px", textTransform:"uppercase" }}>
-                  rule of thumb
-                </span>
-              )}
-              {degenerateLive && (
-                <span title="Live value already far past this threshold — trigger is trivially met"
-                      style={{ marginLeft:5, fontSize:9, fontWeight:900, letterSpacing:0.6,
-                        color:C.muted, background:"#FFFFFF",
-                        border:`1px dashed ${C.muted}`, borderRadius:3,
-                        padding:"0 4px", textTransform:"uppercase" }}>
-                  already past
-                </span>
-              )}
-            </span>
-          )}
-          {live ? (
-            <span style={{ color:C.muted, fontWeight:600 }}>{infoOnly ? "" : "· "}now{" "}
-              <strong style={{ color:C.text, fontWeight:900, fontSize:17 }}>{live.f(live.v)}</strong>
-            </span>
-          ) : (
-            <span style={{ color:C.muted, fontWeight:600, fontStyle:"italic" }}>· source unavailable</span>
-          )}
-          {meta.source && (
-            (() => {
-              const url = meta.source.url || "";
-              const isInternal = url.startsWith("/#") || url.startsWith("#");
-              return (
-                <a href={url}
-                   title={`Jump to ${meta.source.label} in the Sources tab`}
-                   {...(isInternal ? {} : { target:"_blank", rel:"noopener noreferrer" })}
-                   style={{ color:C.muted, textDecoration:"underline",
-                     textDecorationColor:C.borderSoft, textUnderlineOffset:2,
-                     fontSize:10, fontWeight:700, marginLeft:4, letterSpacing:0.3 }}
-                   onClick={(e)=>e.stopPropagation()}>↗ {meta.source.label}</a>
-              );
-            })()
-          )}
-        </span>
-      );
-    };
-    const stableMet = (condKey, rawMet) => {
-      const now = Date.now();
-      const ref = hysteresisRef.current;
-      let t = ref[condKey];
-      if (!t) {
-        t = { committed: rawMet, raw: rawMet, changeAt: now };
-        ref[condKey] = t;
-        return rawMet;
-      }
-      if (rawMet !== t.raw) {
-        t.raw = rawMet;
-        t.changeAt = now;
-      }
-      if (rawMet !== t.committed && (now - t.changeAt) >= HYSTERESIS_MS) {
-        t.committed = rawMet;
-      }
-      return t.committed;
-    };
-    // Auto-extract real (machine-checkable) conditions from bullet prose
-    // when Venice forgot to emit them. Common failure pattern observed:
-    // "If price drops below $77,590 and the ask wall at 421.6 BTC holds"
-    // — Venice ships the bullet with no conditions, so it falls through to
-    // INFO and the trigger (price < $77,590, ask_depth >= 421.6 BTC) goes
-    // untracked. This extractor reads the prose for explicit thresholds and
-    // promotes them to first-class conditions so the bullet behaves like
-    // any other actionable trigger.
-    const extractCondsFromText = (text) => {
-      if (!text) return [];
-      const out = [];
-      // Helper to canonicalize $-prices and BTC volumes
-      const num = (s) => {
-        const v = parseFloat(String(s).replace(/[$,]/g, ""));
-        return Number.isFinite(v) ? v : null;
-      };
-      // PRICE — "If price [drops|breaks|falls] below $X" → price < X
-      const reBelow = /\bprice\b[^.\n]*?\b(?:drops?|breaks?|falls?|moves?)\s+below\s+\$?([\d,]+(?:\.\d+)?)/gi;
-      let m;
-      while ((m = reBelow.exec(text)) !== null) {
-        const v = num(m[1]); if (v !== null) out.push({ metric: "price", op: "<", value: v, unit: "USD" });
-      }
-      // PRICE — "If price [holds|stays] above $X" → price > X
-      const reAbove = /\bprice\b[^.\n]*?\b(?:holds?|stays?|breaks?|moves?|reaches?)\s+above\s+\$?([\d,]+(?:\.\d+)?)/gi;
-      while ((m = reAbove.exec(text)) !== null) {
-        const v = num(m[1]); if (v !== null) out.push({ metric: "price", op: ">", value: v, unit: "USD" });
-      }
-      // PRICE — "price can't break $X" / "price fails to break $X" → price < X
-      const reCantBreak = /\bprice\b[^.\n]*?\b(?:can't|cannot|can\s*not|fails?\s+to)\s+break\s+\$?([\d,]+(?:\.\d+)?)/gi;
-      while ((m = reCantBreak.exec(text)) !== null) {
-        const v = num(m[1]); if (v !== null) out.push({ metric: "price", op: "<", value: v, unit: "USD" });
-      }
-      // ASK WALL — "ask wall at X BTC holds" / "ask wall ... doesn't fill"
-      const reAskWall = /\bask\s+(?:wall|stack|side)[^.\n]*?\bat\s+([\d,]+(?:\.\d+)?)\s*BTC\b/gi;
-      while ((m = reAskWall.exec(text)) !== null) {
-        const v = num(m[1]); if (v !== null) out.push({ metric: "ask_depth_05pct", op: ">=", value: v, unit: "BTC" });
-      }
-      // BID WALL — same shape on the buy side
-      const reBidWall = /\bbid\s+(?:wall|stack|side)[^.\n]*?\bat\s+([\d,]+(?:\.\d+)?)\s*BTC\b/gi;
-      while ((m = reBidWall.exec(text)) !== null) {
-        const v = num(m[1]); if (v !== null) out.push({ metric: "bid_depth_05pct", op: ">=", value: v, unit: "BTC" });
-      }
-      // De-dupe: prefer the first occurrence of each metric+op
-      const seen = new Set(); const dedup = [];
-      for (const c of out) {
-        const k = `${c.metric}|${c.op}`;
-        if (seen.has(k)) continue;
-        seen.add(k); dedup.push(c);
-      }
-      return dedup;
-    };
+    const _dsBad = (s) => s === "ERROR" || s === "UNAVAILABLE";
+    const ds = activeDeepseekPred;
+    const ready = pendingDeepseekReady && ds && !_dsBad(ds.signal);
 
-    const evalBullet = (b) => {
-      const realConds = Array.isArray(b.conditions) ? b.conditions : [];
-      // If the bullet text contains explicit thresholds (e.g. "price drops
-      // below $X", "ask wall at Y BTC holds") that Venice forgot to emit
-      // as conditions, recover them here. These become FIRST-CLASS
-      // conditions (not info-only) so the bullet's met/unmet evaluation
-      // and ACTIONABLE bucketing both work properly.
-      const textConds = extractCondsFromText(`${b.text || ""} ${b.if_met || ""}`);
-      // Merge: keep Venice's original conditions, add text-extracted ones
-      // that aren't already covered (by metric+op).
-      const haveMetricOp = new Set(realConds.map(c => `${c.metric}|${c.op}`));
-      const recovered = textConds.filter(c => !haveMetricOp.has(`${c.metric}|${c.op}`));
-      const mergedConds = [...realConds, ...recovered.map(c => ({ ...c, __recovered: true }))];
-
-      // If still no real conditions but text names a signal family, fall
-      // through to the existing info-only pill synthesis (live readings
-      // for context).
-      let effectiveConds = mergedConds;
-      let inferred = false;
-      if (mergedConds.length === 0) {
-        const combined = `${b.text || ""} ${b.if_met || ""}`;
-        const inferredMetrics = inferMetricsFromText(combined);
-        if (inferredMetrics.length > 0) {
-          effectiveConds = inferredMetrics.map((m) => ({
-            metric: m, op: "==", value: 0, unit: "", __infoOnly: true,
-          }));
-          inferred = true;
-        }
-      }
-      const results = effectiveConds.map((c) => {
-        if (c.__infoOnly) return { raw: null, stable: null };
-        const live = metric(c.metric);
-        const raw  = live ? opCheck[c.op](live.v, c.value) : null;
-        if (raw === null) return { raw: null, stable: null };
-        const key  = `${b.text || ""}|${c.metric}|${c.op}|${c.value}`;
-        return { raw, stable: stableMet(key, raw) };
-      });
-      // Real conditions = whatever Venice emitted PLUS anything we
-      // recovered from the prose. A bullet whose only conditions are
-      // text-recovered (e.g. "price drops below $X") still gets full
-      // ACTIONABLE/WAITING bucketing, which is the whole point.
-      const hasRealConds = mergedConds.length > 0;
-      const allMet = hasRealConds && results.every(r => r.stable === true);
-      // Narrative-only bullets (no machine-checkable threshold) are no longer
-      // falsely marked "actionable · live now". They show as info context.
-      const actionable = hasRealConds && allMet;
-      return { ...b,
-        conditions: effectiveConds,
-        __allMet: allMet, __hasConds: hasRealConds,
-        __inferred: inferred, __actionable: actionable,
-        __condResults: results };
-    };
-    const Bullet = ({ tone, text, conditions, if_met, heuristic_text, __allMet, __hasConds, __actionable, __inferred, __condResults }) => {
-      const fired     = __allMet;
-      const active    = __actionable;
-      const phrase         = `${if_met || ""} ${text || ""}`.toLowerCase();
-      const DIRECTIONAL_RE = /\b(long|short|buy|sell|enter|exit|rally|drop|breakout|breakdown|upside|downside|bullish|bearish)\b/;
-      const NEUTRAL_RE     = /\b(indecision|no breakout|no breakdown|no break|not breaking|fails to break|range-?bound|consolidation|consolidating|stand aside|sidelines?|chop(?:py)?|neutral)\b/;
-      const directional    = DIRECTIONAL_RE.test(phrase) && !NEUTRAL_RE.test(phrase);
-      const firedBull = active && tone === "bullish" && directional;
-      const firedBear = active && tone === "bearish" && directional;
-      const narrative = !__hasConds;  // no machine-checkable thresholds at all
-      let bg, border, leftBar, msgColor, actionLabel, actionIcon;
-      if (firedBull)       { bg = "#ECFDF5"; border = C.green;        leftBar = C.green;  msgColor = "#15803D"; actionLabel = "BUY";   actionIcon = "▲"; }
-      else if (firedBear)  { bg = "#FEF2F2"; border = C.red;          leftBar = C.red;    msgColor = "#B91C1C"; actionLabel = "SELL";  actionIcon = "▼"; }
-      else if (narrative)  { bg = "#F5F5F4"; border = C.borderSoft;   leftBar = C.muted;  msgColor = "#57534E"; actionLabel = "INFO";  actionIcon = "ⓘ"; }
-      else if (active)     { bg = "#F5F5F4"; border = C.borderSoft;   leftBar = C.muted;  msgColor = "#57534E"; actionLabel = "PAUSE"; actionIcon = "⏸"; }
-      else                 { bg = "#FAFAF9"; border = C.borderSoft;   leftBar = C.muted;  msgColor = C.muted;   actionLabel = null;    actionIcon = "⏸"; }
-      // Source lookup (direct from a condition's metric, or inferred from
-      // bullet prose for narrative-only bullets that name a known family).
-      const conds = conditions || [];
-      let sourced = conds.map(c => METRIC_META[c.metric]).find(m => m && m.source);
-      let inferredSrc = false;
-      if (!sourced) {
-        for (const { rx, metrics } of TEXT_FAMILY_RULES) {
-          if (rx.test(text || "")) {
-            for (const m of metrics) {
-              const meta = METRIC_META[m];
-              if (meta && meta.source) { sourced = meta; inferredSrc = true; break; }
-            }
-            if (sourced) break;
-          }
-        }
-      }
-      // Should we render the if_met consequence line? Only on fired bullets,
-      // and skip when the text already carries the implication via an arrow
-      // or em-dash of its own.
-      const showIfMet = (() => {
-        if (!if_met || !fired) return false;
-        const textHasArrow = /→|—/.test(text || "");
-        const textLongEnough = (text || "").length >= 60;
-        return !(textHasArrow && textLongEnough);
-      })();
-      const hasRightColumn = (conds && conds.length > 0) || sourced || !sourced;
+    if (!ready) {
       return (
-        <div style={{ display:"flex", gap:12, alignItems:"stretch",
-          padding:"10px 14px", borderRadius:6,
-          background: bg,
-          borderLeft: `4px solid ${leftBar}`,
-          border: `1px solid ${border}`,
-          transition: "background-color 400ms ease, border-color 400ms ease, border-left-color 400ms ease" }}>
-          {/* LEFT COLUMN — action chip + bullet narrative + if_met consequence */}
-          <div style={{ flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:6 }}>
-            <div style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
-              {actionLabel ? (
-                <span style={{ display:"inline-flex", alignItems:"center", gap:4,
-                  fontSize:12, fontWeight:900, color:msgColor,
-                  background:"#FFFFFF", border:`2px solid ${border}`,
-                  borderRadius:4, padding:"3px 9px", letterSpacing:1.5,
-                  flexShrink:0, lineHeight:1.2, minWidth:64, justifyContent:"center" }}>
-                  <span style={{ fontSize:13 }}>{actionIcon}</span>
-                  {actionLabel}
-                </span>
-              ) : (
-                <span style={{ fontSize:14, color:C.muted, opacity:0.6, flexShrink:0, paddingTop:3, minWidth:64, textAlign:"center" }}>
-                  ⏸
-                </span>
-              )}
-              <span style={{ flex:1, minWidth:0, overflowWrap:"anywhere" }}>
-                <BullBearText text={text} size={16} baseColor={C.text} />
-                {heuristic_text && (
-                  <span title="Rule of thumb — bullet contains a threshold number that wasn't directly cited from this bar's live data (e.g. a regime boundary like 'BSR < 0.9' or '$1.2M liquidations'). The reasoning is preserved; treat the specific number as a heuristic, not a live anchor."
-                        style={{ display:"inline-flex", alignItems:"center", marginLeft:6,
-                          fontSize:9, fontWeight:900, color:C.muted, letterSpacing:0.6,
-                          padding:"1px 5px", border:`1px dashed ${C.borderSoft}`,
-                          borderRadius:3, background:"#FFFFFF",
-                          textTransform:"uppercase", verticalAlign:"middle" }}>
-                    rule of thumb
-                  </span>
-                )}
-              </span>
-            </div>
-            {showIfMet && (
-              <div style={{ marginLeft:28, lineHeight:1.4,
-                display:"flex", flexWrap:"wrap", alignItems:"baseline", gap:6 }}>
-                <span style={{ fontSize:14, fontWeight:800, color:C.muted, letterSpacing:0.2 }}>→</span>
-                <span style={{ fontSize:15, fontWeight:700, color: msgColor, overflowWrap:"anywhere" }}>
-                  {if_met}
-                </span>
-              </div>
+        <div style={{ ...card, flexShrink:0, padding:"12px 14px",
+          display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
+          <span style={{ fontSize:14, lineHeight:1.4 }}>
+            {pendingDeepseekReady && ds?.signal === "ERROR" ? (
+              <span style={{ color:C.red, fontWeight:700 }}>⚠️ Analysis error this bar — detail in History tab</span>
+            ) : (
+              <span style={{ color:C.amber }}>⟳ Analyzing new bar — analysis in ~30–60s</span>
             )}
-          </div>
-
-          {/* RIGHT COLUMN — live values + source, contained on the right so
-              the eye can sweep [narrative ← | → live data] at a glance. */}
-          {hasRightColumn && (
-            <div style={{ flex:"0 0 auto", width:260, maxWidth:"42%",
-              display:"flex", flexDirection:"column", gap:6,
-              paddingLeft:10, borderLeft:`1px solid ${C.borderSoft}` }}>
-              {__inferred && (
-                <span title="The bullet text mentions this signal without attaching a formal threshold. The NUMBER below is the live reading pulled straight from the backend feed — NOT made up. We just added the pill so you can see the current value at a glance without digging."
-                      style={{ fontSize:9, fontWeight:800, color:C.muted, letterSpacing:1,
-                        padding:"2px 7px", border:`1px dashed ${C.borderSoft}`,
-                        borderRadius:3, background:"#FFFFFF", alignSelf:"flex-start",
-                        textTransform:"uppercase" }}>
-                  live reading (no threshold)
-                </span>
-              )}
-              {(conds && conds.length > 0) && conds.map((c, i) => (
-                <div key={i} style={{ display:"flex", alignItems:"flex-start" }}>
-                  <ConditionPill cond={c}
-                    stableMet={(__condResults && __condResults[i]) ? __condResults[i].stable : undefined} />
-                </div>
-              ))}
-              {sourced ? (() => {
-                const url = sourced.source.url || "";
-                const isInternal = url.startsWith("/#") || url.startsWith("#");
-                return (
-                <a href={url}
-                   {...(isInternal ? {} : { target:"_blank", rel:"noopener noreferrer" })}
-                   title={inferredSrc
-                     ? `Inferred source: ${sourced.source.label} (bullet prose names this family) — jump to the Sources tab to see live readings.`
-                     : `Jump to ${sourced.source.label} in the Sources tab`}
-                   onClick={(e)=>e.stopPropagation()}
-                   style={{ color:"#B91C1C", textDecoration:"none",
-                     fontSize:9, fontWeight:800, letterSpacing:1,
-                     padding:"3px 8px", alignSelf:"flex-start",
-                     border: inferredSrc ? "1px dashed #DC2626" : "1px solid #DC2626",
-                     borderRadius:3, background:"#FFFFFF", lineHeight:1.3, whiteSpace:"nowrap" }}>
-                  ↗ SOURCE
-                </a>
-                );
-              })() : (
-                <span title="No verifiable source mapped for this claim — flag for audit"
-                      style={{ color:C.muted, fontSize:9, fontWeight:700, letterSpacing:1,
-                        padding:"3px 8px", border:`1px dashed ${C.muted}`, alignSelf:"flex-start",
-                        borderRadius:3, background:"transparent",
-                        lineHeight:1.3, whiteSpace:"nowrap", fontStyle:"italic" }}>
-                  ? UNKNOWN
-                </span>
-              )}
-            </div>
+          </span>
+          {barCloseUTC && (
+            <span style={{ fontSize:14, fontWeight:800, color:"#15803D",
+              background:"#F0FDF4", border:"1px solid #86EFAC",
+              borderRadius:5, padding:"3px 10px" }}>
+              Closes {barCloseUTC}
+            </span>
           )}
         </div>
       );
-    };
-    // Treat UNAVAILABLE like ERROR — in both cases DeepSeek didn't produce a
-    // valid directional call, so the briefing + SignalRow shouldn't render
-    // as if they did. Previously only ERROR was gated.
-    const _dsBad = (s) => s === "ERROR" || s === "UNAVAILABLE";
-    const briefingReady = traderSummary && pendingDeepseekReady && activeDeepseekPred && !_dsBad(activeDeepseekPred.signal);
+    }
+
+    // Split NARRATIVE into a bold takeaway + a regular-weight detail
+    // paragraph at the earliest of (em-dash, en-dash, sentence-end) past
+    // position 20, so the eye lands on a single punchy idea first.
+    const narrative = (ds.narrative || "").trim();
+    let takeaway = narrative, detail = "";
+    if (narrative) {
+      const cands = [];
+      const em   = narrative.indexOf(" — ");
+      const dash = narrative.indexOf(" – ");
+      if (em   >= 20) cands.push({ at: em,   skip: 3 });
+      if (dash >= 20) cands.push({ at: dash, skip: 3 });
+      const sent = narrative.match(/[.!?]\s+[A-Z0-9$]/);
+      if (sent && sent.index >= 20) cands.push({ at: sent.index + 1, skip: 1 });
+      cands.sort((a, b) => a.at - b.at);
+      const first = cands[0];
+      if (first && first.at < narrative.length - 4) {
+        takeaway = narrative.slice(0, first.at).trim().replace(/[.!?]$/, "");
+        detail   = narrative.slice(first.at + first.skip).trim();
+      }
+    }
+
+    // REASONS — DeepSeek emits these as numbered prose lines joined with
+    // newlines into ds.reasoning. Pick lines starting with a digit + period.
+    const reasoningRaw = (ds.reasoning || "").trim();
+    const reasonItems = reasoningRaw
+      .split("\n")
+      .map(s => s.trim())
+      .filter(s => /^\d+\./.test(s))
+      .map(s => {
+        const m = s.match(/^(\d+)\.\s*(.+)$/);
+        return m ? { num: m[1], text: m[2] } : { num: "•", text: s };
+      });
+
+    // Binance microstructure expert — pick the richest summary field that
+    // exists on the bar's expert dict. Order matters: edge > analysis >
+    // narrative > reasoning > confluence > taker_flow.
+    const beFields = ["edge", "analysis", "narrative", "reasoning", "confluence", "taker_flow"];
+    let beSummary = "";
+    if (binanceExpert) {
+      for (const f of beFields) {
+        const v = (binanceExpert[f] || "").toString().trim();
+        if (v) { beSummary = v; break; }
+      }
+    }
+    const histSummary = (historicalAnalysis || "").trim();
+
+    const sectionDivider = `1px solid ${C.borderSoft}`;
+
     return (
       <div style={{ width:"100%", minWidth:360, display:"flex", flexDirection:"column", gap:8 }}>
-        {briefingReady && (
-          <div style={{ ...card, flexShrink:0, padding:"14px 16px",
-            background:"#FAFAF9", border:`2px solid ${C.borderSoft}` }}>
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-              <span style={{ fontSize:12, fontWeight:900, color:C.text,
-                letterSpacing:1.2, textTransform:"uppercase" }}>⚡ Trader Briefing</span>
-              <span style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>
-                ~30s read · decision-ready
-              </span>
-            </div>
-            {(() => {
-              // Split the edge into takeaway + supporting detail. Rendered at
-              // ONE consistent font size (15px) with a small vertical gap
-              // between them — user feedback was that mixing 17px + 13px looked
-              // like jarring headline/caption, not a coherent story. Keep the
-              // hierarchy cue via font-weight instead (takeaway bolder, detail
-              // regular) so the eye can still jump to the first line in a
-              // scan, without the size whiplash.
-              //
-              // Split rule: the EARLIEST of (first em-dash, first en-dash,
-              // first sentence-end) — pick whichever break happens first so
-              // the takeaway is a single punchy idea, not two sentences run
-              // together.
-              const raw = (traderSummary.edge || "").trim();
-              const cands = [];
-              const em   = raw.indexOf(" — ");
-              const dash = raw.indexOf(" – ");
-              if (em   >= 20) cands.push({ at: em,   skip: 3 });
-              if (dash >= 20) cands.push({ at: dash, skip: 3 });
-              const sent = raw.match(/[.!?]\s+[A-Z0-9$]/);
-              if (sent && sent.index >= 20) cands.push({ at: sent.index + 1, skip: 1 });
-              cands.sort((a,b) => a.at - b.at);
-              const first = cands[0];
-              let takeaway, detail;
-              if (first && first.at < raw.length - 4) {
-                takeaway = raw.slice(0, first.at).trim().replace(/[.!?]$/, "");
-                detail   = raw.slice(first.at + first.skip).trim();
-              } else {
-                takeaway = raw; detail = "";
-              }
-              const hasMore = (traderSummary.watch?.length || traderSummary.actions?.length);
-              // width:100% + overflow-wrap:anywhere makes the edge text hug
-                // the card's inner width and wrap at any point — prevents the
-                // "rice bounced off $77,484..." / "$77" clipping seen when the
-                // narrator ran a long sentence into a narrow container.
-              const edgeStyle = {
-                width: "100%", maxWidth: "100%",
-                overflowWrap: "anywhere", wordBreak: "break-word",
-                fontSize: 17, color: C.text, lineHeight: 1.5,
-              };
-              return (
-                <div style={{ marginBottom: hasMore ? 12 : 0 }}>
-                  <div style={{ ...edgeStyle, fontWeight: 700 }}>
-                    <BullBearText text={takeaway} size={17} baseColor={C.text} />
-                  </div>
-                  {detail && (
-                    <div style={{ ...edgeStyle, marginTop: 8, fontWeight: 400 }}>
-                      <BullBearText text={detail} size={17} baseColor={C.text} />
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-            {(() => {
-              const all = [
-                ...(traderSummary.watch   || []).map(b => ({ ...b, __src: "w" })),
-                ...(traderSummary.actions || []).map(b => ({ ...b, __src: "a" })),
-              ].map(evalBullet);
-              const actionable = all.filter(b => b.__actionable);
-              // Info bullets: no machine-checkable threshold at all (either
-              // pure narrative or only inferred info-pills). These used to be
-              // lumped into "Actionable · live now" — misleading since there's
-              // nothing firing. Split into a dedicated context section.
-              const info       = all.filter(b => !b.__actionable && !b.__hasConds);
-              // Bullets whose conditions haven't fired are intentionally
-              // excluded from the briefing (user directive: waiting-for-
-              // conditions is noise). If we need them later for diagnostics,
-              // they're still in the raw Venice output.
-              return (<>
-                {actionable.length > 0 && (
-                  <div style={{ marginTop:10 }}>
-                    <div style={{ fontSize:11, fontWeight:800, color:"#15803D", letterSpacing:1.2,
-                      textTransform:"uppercase", marginBottom:6 }}>Actionable · {actionable.length} live now</div>
-                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                      {actionable.map((b, i) => <Bullet key={`act${b.__src}${i}`} {...b} />)}
-                    </div>
-                  </div>
-                )}
-                {info.length > 0 && (
-                  <div style={{ marginTop:12 }}>
-                    <button onClick={() => setInfoOpen(v => !v)}
-                      style={{ width:"100%", display:"flex", alignItems:"center",
-                        justifyContent:"space-between", gap:8,
-                        background:"none", border:"none", padding:"4px 0",
-                        cursor:"pointer", fontFamily:"inherit" }}>
-                      <span style={{ fontSize:11, fontWeight:700, color:C.muted,
-                        letterSpacing:1.2, textTransform:"uppercase" }}>
-                        {infoOpen ? "▾" : "▸"} Info · live context · {info.length}
-                      </span>
-                      <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>
-                        {infoOpen ? "hide" : "show"}
-                      </span>
-                    </button>
-                    {infoOpen && (
-                      <div style={{ display:"flex", flexDirection:"column", gap:6, marginTop:6 }}>
-                        {info.map((b, i) => <Bullet key={`info${b.__src}${i}`} {...b} />)}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {/* WAITING FOR CONDITIONS section removed per user directive
-                    — unfired conditions are noise. Only ACTIONABLE (live-fired)
-                    and INFO (current-state narrative) bullets remain visible. */}
-              </>);
-            })()}
-          </div>
-        )}
-        {!briefingReady && (
-          <div style={{ ...card, flexShrink:0, padding:"12px 14px",
-            display:"flex", alignItems:"center", justifyContent:"space-between", gap:10, flexWrap:"wrap" }}>
-            <span style={{ fontSize:14, lineHeight:1.4 }}>
-              {pendingDeepseekReady && activeDeepseekPred?.signal==="ERROR" ? (
-                <span style={{ color:C.red, fontWeight:700 }}>⚠️ Analysis error this bar — detail in History tab</span>
-              ) : pendingDeepseekReady && activeDeepseekPred ? (
-                <span style={{ color:C.textSec, fontStyle:"italic" }}>⟳ Preparing trader briefing…</span>
-              ) : (
-                <span style={{ color:C.amber }}>⟳ Analyzing new bar — briefing in ~30–60s</span>
-              )}
+        <div style={{ ...card, flexShrink:0, padding:"14px 16px",
+          background:"#FAFAF9", border:`2px solid ${C.borderSoft}` }}>
+
+          {/* Header */}
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
+            <span style={{ fontSize:12, fontWeight:900, color:C.text,
+              letterSpacing:1.2, textTransform:"uppercase" }}>⚡ DeepSeek Analysis</span>
+            <span style={{ fontSize:10, color:C.muted, fontStyle:"italic" }}>
+              5-minute directional read
             </span>
-            {barCloseUTC && (
-              <span style={{ fontSize:14, fontWeight:800, color:"#15803D",
+          </div>
+
+          {/* TOP — narrative takeaway + detail */}
+          {narrative && (
+            <div style={{ marginBottom:14 }}>
+              <div style={{
+                width:"100%", maxWidth:"100%", overflowWrap:"anywhere", wordBreak:"break-word",
+                fontSize:17, color:C.text, lineHeight:1.5, fontWeight:700
+              }}>
+                <BoldAnalysis text={takeaway} color={C.text} />
+              </div>
+              {detail && (
+                <div style={{
+                  width:"100%", maxWidth:"100%", overflowWrap:"anywhere", wordBreak:"break-word",
+                  fontSize:15, color:C.text, lineHeight:1.6, fontWeight:400, marginTop:8
+                }}>
+                  <BoldAnalysis text={detail} color={C.text} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* EXPERT OPINIONS */}
+          {(beSummary || histSummary) && (
+            <div style={{ marginBottom:14, paddingTop:12, borderTop:sectionDivider }}>
+              <div style={{ fontSize:11, fontWeight:800, color:C.textSec, letterSpacing:1.2,
+                textTransform:"uppercase", marginBottom:8 }}>Expert Opinions</div>
+              {beSummary && (
+                <div style={{ marginBottom:histSummary ? 10 : 0 }}>
+                  <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:3 }}>
+                    Binance Microstructure Expert{binanceExpert?.signal ? ` — ${binanceExpert.signal}` : ""}
+                  </div>
+                  <div style={{ fontSize:13, color:C.text, lineHeight:1.6 }}>
+                    <BoldAnalysis text={beSummary} color={C.text} />
+                  </div>
+                </div>
+              )}
+              {histSummary && (
+                <div>
+                  <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:3 }}>
+                    Historical Similarity Analyst
+                  </div>
+                  <div style={{ fontSize:13, color:C.text, lineHeight:1.6, whiteSpace:"pre-wrap" }}>
+                    <BoldAnalysis text={histSummary} color={C.text} />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* REASONS */}
+          {reasonItems.length > 0 && (
+            <div style={{ marginBottom: ds.free_observation ? 12 : 0,
+              paddingTop:12, borderTop:sectionDivider }}>
+              <div style={{ fontSize:11, fontWeight:800, color:C.textSec, letterSpacing:1.2,
+                textTransform:"uppercase", marginBottom:8 }}>Reasoning</div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {reasonItems.map((it, i) => (
+                  <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
+                    <span style={{ fontSize:11, fontWeight:900, color:C.muted,
+                      minWidth:14, marginTop:3 }}>
+                      {it.num}.
+                    </span>
+                    <div style={{ fontSize:13, color:C.text, lineHeight:1.6, flex:1 }}>
+                      <BoldAnalysis text={it.text} color={C.text} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* FREE OBSERVATION */}
+          {ds.free_observation && (
+            <div style={{ paddingTop:12, borderTop:sectionDivider }}>
+              <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:3 }}>
+                Free Observation
+              </div>
+              <div style={{ fontSize:12, color:C.amber, lineHeight:1.6, fontStyle:"italic" }}>
+                {ds.free_observation}
+              </div>
+            </div>
+          )}
+
+          {/* Bar close badge */}
+          {barCloseUTC && (
+            <div style={{ marginTop:10, display:"flex", justifyContent:"flex-end" }}>
+              <span style={{ fontSize:11, fontWeight:800, color:"#15803D",
                 background:"#F0FDF4", border:"1px solid #86EFAC",
                 borderRadius:5, padding:"3px 10px" }}>
                 Closes {barCloseUTC}
               </span>
-            )}
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
     );
-  // `price` intentionally omitted — it ticks every ~1s and putting it in
-  // deps rebuilds the entire briefingJSX tree on every tick, defeating
-  // the memoization and re-mounting Bullet / ConditionPill components.
-  // `winStartPrice` changes only at bar boundaries so it stays.
-  }, [traderSummary, pendingDeepseekReady, activeDeepseekPred, backendSnap,
-      winStartPrice, tk, ob, oif, ls, strategies, infoOpen, barCloseUTC]);
+  // `price` and the live microstructure feeds (tk/ob/oif/ls) intentionally
+  // omitted from deps — they tick every ~1s and putting them in deps would
+  // rebuild the entire card tree on every tick.
+  }, [pendingDeepseekReady, activeDeepseekPred, binanceExpert, historicalAnalysis, barCloseUTC]);
 
   const strats = STRATEGY_META.filter(m=>strategies[m.key]).map(m=>({...m,...strategies[m.key]}));
 
@@ -3817,11 +3155,9 @@ function App() {
               </div>
             </div>
 
-            {/* RIGHT: Trader briefing + DeepSeek header — 50% of screen,
-                with a subtle zoom:0.85 to scale everything down ~15% since
-                user noted the text was feeling big at native size. The
-                2-column Bullet layout + 50% width absorbs the scale cleanly
-                (pills don't re-wrap). */}
+            {/* RIGHT: DeepSeek analysis card — 50% of screen, with a subtle
+                zoom:0.85 to scale everything down ~15% since user noted the
+                text was feeling big at native size. */}
             <div style={{ flex:"0 0 50%", minWidth:0, display:"flex", flexDirection:"column", gap:5, overflowY:"auto", zoom:0.85 }}>
 
               {/* ① PREDICTION BAR — DeepSeek only */}
@@ -3984,17 +3320,12 @@ function App() {
                 );
               })()}
 
-              {/* TRADER BRIEFING + STATUS STRIP — wrapped in ErrorBoundary so a
-                  render exception (bad Venice output, missing metric, etc.) doesn't
-                  crash the whole live tab. Trader keeps seeing chart + DeepSeek card. */}
+              {/* DeepSeek analysis card. Wrapped in ErrorBoundary so a render
+                  exception (bad data, missing field, etc.) doesn't crash the
+                  whole live tab. */}
               <ErrorBoundary key="briefing">
               {briefingJSX}
               </ErrorBoundary>
-
-              {/* Historical Pattern block removed — the raw pattern data is fed into Venice
-                  and surfaces in the trader briefing above as Watch/Actions bullets when relevant.
-                  The full historical_analysis string is still computed, stored in Postgres, and
-                  viewable in the History tab for operators. */}
 
               {/* Strategy indicators + microstructure moved to ENSEMBLE tab. LIVE is DeepSeek-only. */}
             </div>

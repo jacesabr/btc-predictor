@@ -185,8 +185,7 @@ async def deepseek_status():
         "specialist_completed_at":     current_state.get("specialist_completed_at"),
         "bar_historical_analysis":     current_state.get("bar_historical_analysis", ""),
         "bar_historical_context":      current_state.get("bar_historical_context", ""),
-        "bar_binance_expert":          current_state.get("bar_binance_expert", {}),   # <-- ADD THIS LINE
-        "trader_summary":              current_state.get("trader_summary"),
+        "bar_binance_expert":          current_state.get("bar_binance_expert", {}),
         "service_unavailable":         current_state.get("service_unavailable", False),
         "service_unavailable_reason":  current_state.get("service_unavailable_reason", ""),
     }
@@ -309,18 +308,6 @@ async def backfill_correct(limit: int = 100):
     NULL. Returns counts."""
     limit = max(1, min(int(limit or 100), 500))
     return _safe_storage(storage.backfill_stuck_correct, limit, default={"error": "storage_unavailable"})
-
-
-@app.get("/audit/trader-summary", dependencies=[Depends(require_admin)])
-async def get_trader_summary_audit(n: int = 100):
-    """Rolling last-N audit view for the Venice trader-summary translation
-    layer. Returns, per bar, the DeepSeek full_prompt + raw_response + the
-    Venice output (structured JSON, including its own audit.completeness,
-    retry_reasons, bullets_dropped, etc.). Used for weekly/random audit of
-    translation fidelity — NOT a live path, not read by the predictor or
-    UI. Default n=100 is the rolling window the user specified."""
-    n = max(1, min(int(n or 100), 500))
-    return _safe_storage(storage.get_trader_summary_audit, n, default=[])
 
 
 @app.get("/historical-analysis/{window_start}", dependencies=[Depends(require_admin)])
@@ -786,15 +773,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     # pill rendered "source unavailable" — bullets never fired.
                     _bs = current_state.get("backend_snapshot") or {}
                     _dash = _bs.get("dashboard_signals") if isinstance(_bs, dict) else None
-                    # Strip the (admin-only) internal audit payload from the
-                    # trader_summary before broadcasting — the UI doesn't render
-                    # `audit.fabricated_text_numbers` / `dropped_values` /
-                    # `completeness` / `retry_reasons`, it's only read by the
-                    # /audit/trader-summary admin endpoint from Postgres. Saves
-                    # ~0.5-2KB on every 1-sec tick * every connected client.
-                    _ts = current_state.get("trader_summary")
-                    if isinstance(_ts, dict) and "audit" in _ts:
-                        _ts = {k: v for k, v in _ts.items() if k != "audit"}
                     payload = _json_safe({
                         "type":                        "tick",
                         "price":                       current_state["price"],
@@ -811,7 +789,6 @@ async def websocket_endpoint(websocket: WebSocket):
                         "bar_historical_analysis":     current_state.get("bar_historical_analysis", ""),
                         "bar_historical_context":      current_state.get("bar_historical_context", ""),
                         "bar_binance_expert":          current_state.get("bar_binance_expert", {}),
-                        "trader_summary":              _ts,
                         "service_unavailable":         current_state.get("service_unavailable", False),
                         "service_unavailable_reason":  current_state.get("service_unavailable_reason", ""),
                         "dashboard_signals":           _dash,

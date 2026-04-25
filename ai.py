@@ -26,6 +26,7 @@ Public exports:
 
 import asyncio
 import logging
+import os
 import re
 import time
 from datetime import datetime, timezone
@@ -157,6 +158,24 @@ DEEPSEEK_API_URL   = "https://api.deepseek.com/v1/chat/completions"
 DEEPSEEK_MODEL     = "deepseek-reasoner"  # chain-of-thought — final prediction only
 DEEPSEEK_FAST_MODEL = "deepseek-chat"     # fast — specialists, analyst, expert, postmortem
 
+# ── Venice fallback (emergency only) ────────────────────────────
+# When api.deepseek.com is unavailable (out of credits, 5xx, rate-limit), retry
+# the same prompt against api.venice.ai using the closest functional analog
+# of the DeepSeek model. Venice's catalog uses different identifiers — the map
+# below is intentionally narrow: alternates documented inline so swapping is
+# a one-line change.
+VENICE_API_URL = "https://api.venice.ai/api/v1/chat/completions"
+VENICE_MODEL_FOR_DEEPSEEK = {
+    # Production fast path uses deepseek-chat (V3.x). Closest Venice analog:
+    "deepseek-chat":     "deepseek-v4-flash",  # alternates: deepseek-v3.2, deepseek-v4-pro
+    # Production reasoning path uses deepseek-reasoner. Closest Venice analog:
+    "deepseek-reasoner": "deepseek-v4-pro",    # alternates: deepseek-v3.2, deepseek-v4-flash
+}
+# HTTP status codes that signal "DeepSeek itself is unavailable" — fall back to
+# Venice. 4xx codes other than 401/402/429 are NOT retried (bad request will
+# fail on Venice too with the same prompt).
+_DEEPSEEK_FALLBACK_STATUS = {401, 402, 429, 500, 502, 503, 504}
+
 COHERE_EMBED_URL  = "https://api.cohere.com/v2/embed"
 COHERE_RERANK_URL = "https://api.cohere.com/v2/rerank"
 COHERE_EMBED_MODEL  = "embed-english-v3.0"
@@ -204,13 +223,11 @@ def _append(path: Path, content: str):
         logger.warning("Could not append %s: %s", path.name, exc)
 
 
-async def _api_call(
-    api_key: str,
-    prompt: str,
-    max_tokens: int = 1000,
-    timeout_s: Optional[float] = 90.0,
-    model: str = DEEPSEEK_FAST_MODEL,
-) -> str:
+async def _post_chat(url: str, api_key: str, model: str, prompt: str,
+                      max_tokens: int, timeout_s: Optional[float]) -> str:
+    """One POST to an OpenAI-compatible /chat/completions endpoint. Returns the
+    assistant message content. Raises RuntimeError("HTTP <status>: ...") on
+    non-200 — caller decides whether to retry/fallback."""
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     payload = {
         "model":       model,
@@ -221,15 +238,55 @@ async def _api_call(
     timeout   = aiohttp.ClientTimeout(total=timeout_s)  # timeout_s=None → wait forever
     connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
     async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
-        async with session.post(DEEPSEEK_API_URL, headers=headers, json=payload) as resp:
+        async with session.post(url, headers=headers, json=payload) as resp:
             body = await resp.text()
             if resp.status != 200:
                 raise RuntimeError(f"HTTP {resp.status}: {body[:300]}")
             data = await resp.json(content_type=None)
             choice = data["choices"][0]
             if choice.get("finish_reason") == "length":
-                logger.warning("_api_call: response truncated at token limit (max_tokens=%d)", max_tokens)
+                logger.warning("_post_chat: response truncated at token limit (max_tokens=%d)", max_tokens)
             return choice["message"]["content"]
+
+
+def _is_deepseek_fallback_error(exc: BaseException) -> bool:
+    """True if the exception indicates DeepSeek is unavailable (credits, rate
+    limit, server error) — falling back to Venice may succeed. False for prompt
+    bugs (400, 422) where the same request will also fail on Venice."""
+    if isinstance(exc, asyncio.TimeoutError):
+        return True
+    if isinstance(exc, aiohttp.ClientError):
+        return True
+    msg = str(exc)
+    if msg.startswith("HTTP "):
+        try:
+            status = int(msg.split()[1].rstrip(":"))
+            return status in _DEEPSEEK_FALLBACK_STATUS
+        except (ValueError, IndexError):
+            pass
+    return False
+
+
+async def _api_call(
+    api_key: str,
+    prompt: str,
+    max_tokens: int = 1000,
+    timeout_s: Optional[float] = 90.0,
+    model: str = DEEPSEEK_FAST_MODEL,
+) -> str:
+    """Call DeepSeek's chat completions endpoint. On credits/rate-limit/server
+    errors, auto-retry once via Venice if VENICE_API_KEY is configured. Venice
+    is emergency-only — it isn't tried unless DeepSeek actually fails."""
+    try:
+        return await _post_chat(DEEPSEEK_API_URL, api_key, model, prompt, max_tokens, timeout_s)
+    except Exception as exc:
+        venice_key = os.environ.get("VENICE_API_KEY", "").strip()
+        if not venice_key or not _is_deepseek_fallback_error(exc):
+            raise
+        venice_model = VENICE_MODEL_FOR_DEEPSEEK.get(model, "deepseek-v4-flash")
+        logger.warning("DeepSeek unavailable (%s) — falling back to Venice model=%s",
+                       _fmt_exc(exc), venice_model)
+        return await _post_chat(VENICE_API_URL, venice_key, venice_model, prompt, max_tokens, timeout_s)
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -58,11 +58,10 @@ class Config:
     deepseek_use_vision: bool = False
     deepseek_enabled: bool = True
 
-    # Venice AI — trader-friendly summarizer over main page output.
-    # Non-persistent, cached per bar; falls back to raw blocks on any error.
+    # Venice AI — emergency fallback for the DeepSeek main-prompt API only.
+    # Read directly from env in ai.py; not consumed via Config. Kept here so
+    # render.yaml's VENICE_API_KEY entry has a documented home.
     venice_api_key:  str  = os.environ.get("VENICE_API_KEY", "")
-    venice_model:    str  = "qwen3-next-80b"
-    venice_enabled:  bool = True
 
     # Dashboard signal API keys (for microstructure data fed into DeepSeek)
     coinalyze_key:  str = os.environ.get("COINALYZE_KEY",  "")

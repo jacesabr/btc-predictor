@@ -56,15 +56,9 @@ from ai import (
     run_embedding_audit, load_embedding_audit_log as _load_embedding_audit_ndjson,
     set_flag_callback, set_audit_persist_callback,
 )
-import trader_summary
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Venice summarizer — read env vars directly to keep config.py untouched.
-# The summarizer is optional/non-persistent, so it's gated purely on presence of the key.
-VENICE_API_KEY = os.environ.get("VENICE_API_KEY", "")
-VENICE_MODEL   = os.environ.get("VENICE_MODEL", "qwen3-next-80b")
 
 # ── Paths ─────────────────────────────────────────────────────
 _ROOT       = pathlib.Path(__file__).parent
@@ -313,7 +307,6 @@ current_state: Dict = {
     "bar_historical_context":     "",
     "bar_historical_analyst_fired": False,
     "bar_binance_expert":         {},
-    "trader_summary":             None,
     "service_unavailable":        False,
     "service_unavailable_reason": "",
     "embedding_audit_log":        [],
@@ -334,58 +327,6 @@ def _record_stage(stage: str, elapsed_s: float, ok: bool, error: str = "") -> No
         }
     except Exception:
         pass
-
-
-async def _build_trader_summary_bg(window_start_time: float) -> None:
-    """Generate the Venice-powered trader briefing for this bar and stash it on
-    current_state so the next WebSocket tick picks it up. Any failure is
-    logged and the state stays None — the frontend renders the raw blocks."""
-    try:
-        pred = current_state.get("pending_deepseek_prediction") or {}
-        if not pred or pred.get("signal") in (None, "ERROR", "UNAVAILABLE"):
-            return
-        # Only generate for the bar we opened this task for — if the bar has
-        # already flipped to the next one, bail.
-        if current_state.get("window_start_time") != window_start_time:
-            return
-        summary = await trader_summary.get_or_build(
-            window_start_time=window_start_time,
-            pred=pred,
-            historical=current_state.get("bar_historical_analysis", "") or "",
-            binance_expert=current_state.get("bar_binance_expert", {}) or {},
-            # Additional context forwarded to Venice (previously dropped):
-            #  - bar_historical_context: prose of CURRENT bar used for similarity search
-            #  - specialist_signals: Dow/Fib/Alligator/A/D/Harmonic strategy calls
-            #  - ensemble_result: vote breakdown + probability
-            #  - backend_snapshot: live metric readings so Venice can anchor
-            #    conditions[] to the same numbers the UI displays
-            historical_context=current_state.get("bar_historical_context", "") or "",
-            specialist_signals=current_state.get("bar_specialist_signals", {}) or {},
-            ensemble_result=current_state.get("ensemble_prediction") or {},
-            backend_snapshot=current_state.get("backend_snapshot") or {},
-            api_key=VENICE_API_KEY,
-            model=VENICE_MODEL,
-        )
-        # Another bar may have opened while Venice was working; don't overwrite
-        # a fresher bar's state with a stale summary.
-        if summary and current_state.get("window_start_time") == window_start_time:
-            current_state["trader_summary"] = summary
-        # Persist for audit trail. Fire-and-forget — any DB failure here must
-        # NOT impact the live path (the in-memory `current_state` is already
-        # set above). Saved rows are only read by /audit/trader-summary.
-        if summary:
-            try:
-                import json as _json
-                storage.save_trader_summary(
-                    window_start_time, _json.dumps(_json_safe(summary))
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "trader_summary audit-save failed for bar %s: %s",
-                    window_start_time, exc,
-                )
-    except Exception as exc:
-        logger.warning("trader_summary bg task FAILED for bar %s: %s", window_start_time, exc)
 
 
 # ── Utilities ─────────────────────────────────────────────────
@@ -655,11 +596,6 @@ async def _run_deepseek(
             current_state["pending_deepseek_prediction"] = result
             current_state["pending_deepseek_ready"]      = True
             logger.info("DeepSeek STAGED for bar %s — awaiting bar close", bar_ts)
-            # Fire-and-forget: build the trader-friendly summary via Venice. Cached by
-            # window_start_time, so this runs at most once per bar. Failure is silent —
-            # the frontend just shows the raw blocks below when trader_summary is null.
-            if VENICE_API_KEY:
-                asyncio.create_task(_build_trader_summary_bg(window_start_time))
         else:
             logger.warning("DeepSeek returned %s for bar %s — not staging", result["signal"], bar_ts)
 
@@ -718,7 +654,6 @@ async def _run_full_prediction(prices, is_force=False):
     current_state["bar_historical_context"]      = ""
     current_state["bar_historical_analyst_fired"] = False
     current_state["bar_binance_expert"]          = {}
-    current_state["trader_summary"]              = None
     current_state["bar_timings"]                 = {
         "window_start_time": window_start_time,
         "started_at":        now,
