@@ -85,11 +85,17 @@ STEP 6 — DEVIL'S ADVOCATE
   counter-bars from Step 3. If this paragraph feels easy to write, downgrade your confidence.
 
 STEP 7 — CALIBRATION & POSITION
-  Apply this rubric strictly:
+  Apply this rubric strictly. Note especially: this is a **5-minute direction
+  bet**, not a magnitude bet. UP +0.03% pays the same as UP +0.50% — what
+  matters is the sign, not the size. A "noise-bound regime where moves are
+  <0.1%" is NOT a reason to recommend NEUTRAL when Tier A outcomes were
+  directionally unanimous; small UP moves still win the UP bet.
 
   CONFIDENCE RUBRIC  (Tier A has 3 bars — smaller denominator than before)
     • Tier A unanimous (3/0) + base-rate delta ≥ +15pp + no reliability concern
         → 75–85% confidence
+        (apply this even if all 3 outcomes were small in magnitude — direction
+         wins regardless of size)
     • Tier A unanimous (3/0) + Tier B majority same direction
         → 68–78% confidence
     • Tier A 2/1 majority + Tier B majority same + base-rate delta ≥ +10pp
@@ -115,11 +121,14 @@ STEP 7 — CALIBRATION & POSITION
   After applying the rubric, ask yourself: "If I ran this exact reasoning on 100 setups like
   this, would I be correct at the confidence I just stated?" If not, lower it.
 
-STEP 8 — FINAL SANITY CHECKS  (must pass all four)
+STEP 8 — FINAL SANITY CHECKS  (must pass all five)
   ☐ My confidence number came from the rubric, not a gut feel.
   ☐ I did not round up to agree with the 81% ensemble.
   ☐ My "edge observation" cites n≥5 or is explicitly labeled weak.
   ☐ If Tier A was genuinely split, I chose NEUTRAL.
+  ☐ I did NOT override a Tier A unanimous direction by citing
+    "small move magnitude" or "noise-bound regime" — direction wins
+    the bet regardless of size; magnitude is a separate concern.
 
 ═══════════════════════════════════════════════════════
   OUTPUT FORMAT  (strict — the parser depends on the first three lines)
