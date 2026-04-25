@@ -1094,15 +1094,17 @@ four gate questions G1–G4 in your output before stating POSITION (see RESPONSE
 
 TREND-RESPECT RULE (fires when the trend stack is unanimous): The "trend stack" = Dow Theory
 direction + Williams Alligator state + EMA21/55 direction + 20-bar micro-trend direction.
-When all four agree (T1=YES), counter-signals only justify NEUTRAL if MAGNITUDE-material:
-spot-whale flow >5 BTC net, taker BSR on >2 BTC aggressive volume, OR a funding/OI delta
-that arrived in the last 1–3 bars (not a structural rate held constant across the window).
-A 1.8 BTC whale cluster or a -0.57% aggregate funding rate unchanged across the window is
-NOT material — it is background already priced in by the trend stack. When T1=YES and
-counter-signals fail this magnitude test (T2=NO), POSITION must commit in the trend
-direction at 55–65%. "Signals conflict" alone is not grounds for NEUTRAL when one side is
-weighed in BTC and the other in residual basis points. Answer T1–T2 in your output before
-stating POSITION.
+When all four agree (T1=YES), counter-signals only justify NEUTRAL if MAGNITUDE-material.
+Material counter-signals (any one passes): spot-whale net flow >2.5 BTC AND ≥70% in
+opposite-of-trend direction; taker BSR on >2 BTC aggressive volume opposing trend; a
+funding/OI delta that ARRIVED in the last 1–3 bars (not a structural rate held constant);
+OR "trend exhausting" — last 4-5 bars show <0.05% net move and volume <50% of trend-active
+median (price flat-lined, sellers/buyers gone). A 1.8 BTC whale cluster or a -0.57%
+aggregate funding rate unchanged across the window is NOT material — it is background
+already priced in by the trend stack. When T1=YES and counter-signals fail this magnitude
+test (T2=NO), POSITION must commit in the trend direction at 55–65%. "Signals conflict"
+alone is not grounds for NEUTRAL when one side is weighed in BTC and the other in residual
+basis points. Answer T1–T2 in your output before stating POSITION.
 
 ══════════════════════════════════════════════
   WINDOW #{window_num}
@@ -1290,7 +1292,7 @@ POST_SPIKE_GATE:
   IF all four = YES → POSITION must be opposite the spike direction OR NEUTRAL.
 TREND_RESPECT_GATE:
   T1 (trend stack unanimous: Dow + Alligator + EMA21/55 + Micro 20-bar all same direction): YES/NO + cite each
-  T2 (counter-signals MAGNITUDE-material: whale >5 BTC net OR taker BSR on >2 BTC OR funding/OI delta arrived in last 1–3 bars): YES/NO + cite numbers
+  T2 (counter-signals MAGNITUDE-material — ANY one of: whale net >2.5 BTC AND ≥70% opposite-trend; taker BSR on >2 BTC opposing; funding/OI delta in last 1–3 bars; trend exhausting (last 4-5 bars <0.05% net move + low volume)): YES/NO + cite numbers
   IF T1=YES AND T2=NO → POSITION must commit in the trend direction at 55–65% (NEUTRAL is not allowed).
 POSITION: ABOVE | BELOW | NEUTRAL
 CONFIDENCE: XX%
