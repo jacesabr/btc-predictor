@@ -1609,7 +1609,7 @@ async def run_specialists(
     _save(_SPEC_PROMPT_OUT, f"# Sent at {ts_str}\n\n{prompt}")
 
     try:
-        raw = await _api_call(api_key, prompt, max_tokens=6000, timeout_s=80.0, model=DEEPSEEK_FAST_MODEL)
+        raw = await _api_call(api_key, prompt, max_tokens=6000, timeout_s=120.0, model=DEEPSEEK_FAST_MODEL)
         _append(_SPEC_RESPONSE, f"\n{'='*60}\n# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n{'='*60}\n\n{raw}")
         strategies, suggestion = _parse_specialist_response(raw)
         if suggestion:
@@ -2192,7 +2192,27 @@ def _build_current_bar(
     ses_k  = _session(window_start_time) if window_start_time else ""
     ses_s  = _SESSIONS.get(ses_k, ses_k) if isinstance(_SESSIONS, dict) else _SESSION_DESCRIPTIONS.get(ses_k, ses_k)
     ind    = current_indicators or {}
-    dash   = dashboard_signals_raw or {}
+
+    # Coerce None → 0 for numeric-looking keys in nested dashboard dicts.
+    # Some upstream sources (Bybit 403 → fallback feeds) return null for
+    # fields where downstream f"{x:+.2f}" would crash. String fields like
+    # 'interpretation', 'source', 'venue' are NOT touched.
+    _NUMERIC_SUFFIXES = ("_pct", "_btc", "_usd", "_score", "_count",
+                          "_min", "_bps", "_pts", "_ratio", "_5m", "_1h",
+                          "_1bar", "_30m", "_24h", "_8h", "_5bars",
+                          "_3bars", "_index", "_value")
+    def _denone(obj):
+        if not isinstance(obj, dict): return obj
+        out = {}
+        for k, v in obj.items():
+            if isinstance(v, dict):
+                out[k] = _denone(v)
+            elif v is None and any(k.endswith(s) for s in _NUMERIC_SUFFIXES):
+                out[k] = 0
+            else:
+                out[k] = v
+        return out
+    dash   = _denone(dashboard_signals_raw or {})
 
     parts = [f"CURRENT BAR — {day} {time_s}, {ses_s} session."]
 
@@ -2623,6 +2643,26 @@ def _build_binance_expert_block(ds: Optional[Dict]) -> str:
     """Format Binance-specific signals for the expert prompt (rich numbers, not just UP/DOWN)."""
     if not ds:
         return "  (no Binance data available this bar)"
+
+    # Coerce None → 0 for numeric-suffixed nested fields. Some upstream
+    # sources return null for fields where downstream f"{x:+.2f}" would
+    # crash. String fields (interpretation, source, signal) untouched.
+    _NUMERIC_SUFFIXES = ("_pct", "_btc", "_usd", "_score", "_count",
+                          "_min", "_bps", "_pts", "_ratio", "_5m", "_1h",
+                          "_1bar", "_30m", "_24h", "_8h", "_5bars",
+                          "_3bars", "_index", "_value", "_lsr")
+    def _denone(obj):
+        if not isinstance(obj, dict): return obj
+        out = {}
+        for k, v in obj.items():
+            if isinstance(v, dict):
+                out[k] = _denone(v)
+            elif v is None and any(k.endswith(s) for s in _NUMERIC_SUFFIXES):
+                out[k] = 0
+            else:
+                out[k] = v
+        return out
+    ds = _denone(ds)
 
     def _src_line(key: str) -> Optional[str]:
         blk = ds.get(key)
