@@ -1082,6 +1082,16 @@ challenge with a concrete rebuttal grounded in specific fields and numbers, comm
 reflect the robustness of your argument *after* weighing the opposing case, not raw enthusiasm — but
 there is NO confidence floor. A genuine 55% edge with a clean rebuttal is a call you take.
 
+POST-SPIKE REGISTRATION RULE (overrides specialist consensus when it fires): BSR, taker delta,
+ensemble vote and small-n historical "precedents" are computed over a TRAILING window. A single
+capitulation/blow-off bar (volume ≥5× neighbours) inside that window makes them score the spike,
+not the next bar. When that is the case, a "100% precedent (n≤10)" reading is a sample-of-the-spike,
+not predictive of the next bar. Forward-looking fields on the CURRENT bar — RSI(4)/MFI(4) extremes,
+BB %B outside [0,1], A/D slope flip, order-book imbalance flip, current bar closing back across
+its open — describe the next 5 minutes. When forward signals all agree OPPOSITE the spike, take
+the bounce side at 55–69%; do not commit in the spike's direction. You will explicitly answer the
+four gate questions G1–G4 in your output before stating POSITION (see RESPONSE FORMAT).
+
 ══════════════════════════════════════════════
   WINDOW #{window_num}
   START : {ts_start}
@@ -1260,6 +1270,12 @@ apply a blanket confidence penalty. If a new UP call survives stricter scrutiny,
 ══════════════════════════════════════════════
 RESPOND EXACTLY IN THIS FORMAT:
 ══════════════════════════════════════════════
+POST_SPIKE_GATE:
+  G1 (volume spike ≥5× median in last 1–2 bars): YES/NO + cite spike bar time + spike volume + median
+  G2 (RSI(4)/MFI(4) extreme AND BB %B outside [0,1]): YES/NO + cite numbers
+  G3 (current bar closed on OPPOSITE side of its open vs spike direction): YES/NO + cite open + close
+  G4 (order-book imbalance OR A/D slope flipped sign vs spike bar): YES/NO + cite numbers
+  IF all four = YES → POSITION must be opposite the spike direction OR NEUTRAL.
 POSITION: ABOVE | BELOW | NEUTRAL
 CONFIDENCE: XX%
 DATA_RECEIVED: [state which signals were available]
