@@ -12,6 +12,7 @@ Call order per bar:
 Prompt files loaded from:
   specialists/unified_analyst/PROMPT.md
   specialists/historical_analyst/PROMPT.md
+  specialists/binance_expert/PROMPT.md
 
 Debug output written to specialists/*/last_*.txt for inspection.
 
@@ -406,26 +407,6 @@ def _smma_val(arr: np.ndarray, period: int) -> float:
     for v in arr[1:]:
         val = float(v) * k + val * (1.0 - k)
     return val
-
-
-def _rsi(closes: np.ndarray, period: int = 4) -> np.ndarray:
-    out = np.full(len(closes), 50.0)
-    if len(closes) <= period:
-        return out
-    deltas = np.diff(closes.astype(float))
-    gains  = np.maximum(deltas, 0.0)
-    losses = np.maximum(-deltas, 0.0)
-    avg_g = float(gains[:period].mean())
-    avg_l = float(losses[:period].mean())
-    def _rv(g, l):
-        if l == 0: return 100.0 if g > 0 else 50.0
-        return 100.0 - 100.0 / (1.0 + g / l)
-    out[period] = _rv(avg_g, avg_l)
-    for i in range(period, len(deltas)):
-        avg_g = (avg_g * (period - 1) + gains[i]) / period
-        avg_l = (avg_l * (period - 1) + losses[i]) / period
-        out[i + 1] = _rv(avg_g, avg_l)
-    return out
 
 
 def _linreg(y: np.ndarray) -> Tuple[float, float, float]:

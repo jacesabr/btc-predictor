@@ -47,7 +47,6 @@ from semantic_store import (
 )
 from strategies import (
     get_all_predictions, EnsemblePredictor, LinearRegressionChannel,
-    calculate_ev,
 )
 from ai import (
     DeepSeekPredictor, run_specialists, run_historical_analyst,

@@ -13,12 +13,10 @@ Usage:
 """
 
 import asyncio
-import json
 import logging
 import pathlib
-import sys
 import time
-from typing import List, Optional
+from typing import Optional
 
 try:
     from dotenv import load_dotenv

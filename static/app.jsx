@@ -891,7 +891,7 @@ function EnsembleTab({ weights, ob, ls, tk, oif, lq, fg, mp, cz, cg, dots, price
     microAcc[shortKey] = r;
   });
 
-  // Aggressive-precision BTC formatter — matches the briefing pill's fmt.btc.
+  // Aggressive-precision BTC formatter for live microstructure values.
   // Never round a non-zero value to "0"; add decimal precision as the value
   // gets smaller so the trader can see there's a real reading even when it's
   // a fraction of a BTC.
@@ -2444,13 +2444,11 @@ function ErrorsTab({ errors }) {
 function App() {
   // ── Core state ───────────────────────────────────────────────
   const [connected,      setConnected]      = useState(false);
-  const [dataSource,     setDataSource]     = useState("—");
   const [price,          setPrice]          = useState(null);
   const [winStartPrice,  setWinStartPrice]  = useState(null);
   const [winStartTime,   setWinStartTime]   = useState(null);
   const [timeLeft,       setTimeLeft]       = useState(300);
   const [strategies,     setStrategies]     = useState({});
-  const [ensemblePred,   setEnsemblePred]   = useState(null);
   const [deepseekPred,   setDeepseekPred]   = useState(null);
   const [deepseekAcc,    setDeepseekAcc]    = useState(null);
   const [agreeAcc,       setAgreeAcc]       = useState(null);
@@ -2478,8 +2476,6 @@ function App() {
   const [expandedAdminSection,  setExpandedAdminSection]  = useState("");   // "" | history | ensemble | timing | embed_audit | errors
   const [errorLog,              setErrorLog]              = useState([]);
   const [backendSnap,    setBackendSnap]    = useState(null);
-  const [sourceHistory,  setSourceHistory]  = useState([]);
-  const [selectedSource, setSelectedSource] = useState(0);
   const [allAccuracy,    setAllAccuracy]    = useState(null);
   const [allAccuracyErr, setAllAccuracyErr] = useState(false);
   const [embeddingAuditLog, setEmbeddingAuditLog] = useState([]);
@@ -2488,12 +2484,6 @@ function App() {
   const wsRef           = useRef(null);
   const reconnectRef    = useRef(null);
   const prevDsWindowRef = useRef(null);
-  // Hysteresis state for condition pill met/unmet. A condition must be met for
-  // HYSTERESIS_MS continuously before the pill flips to "met", and unmet for
-  // HYSTERESIS_MS continuously before flipping back — prevents flashing when
-  // live values bounce around the threshold.
-  const hysteresisRef   = useRef({});
-  const HYSTERESIS_MS   = 10000;
 
   // ── Microstructure live state ─────────────────────────────────
   // (displayed live; DeepSeek gets a fresh snapshot at each bar open via Python backend)
@@ -2528,10 +2518,6 @@ function App() {
         if (d.window_start_price!=null) setWinStartPrice(d.window_start_price);
         if (d.window_start_time!=null)  setWinStartTime(d.window_start_time);
         if (d.strategies && Object.keys(d.strategies).length) setStrategies(d.strategies);
-        if (d.ensemble_prediction) {
-          const ep=d.ensemble_prediction;
-          setEnsemblePred({ signal:ep.signal, confidence:ep.confidence, bullish:ep.bullish_count, bearish:ep.bearish_count, upProb:ep.up_probability });
-        }
         if (d.deepseek_prediction)                    setDeepseekPred(d.deepseek_prediction);
         if (d.pending_deepseek_prediction)            setPendingDeepseekPred(d.pending_deepseek_prediction);
         if (d.agree_accuracy)                         setAgreeAcc(d.agree_accuracy);
@@ -2566,7 +2552,6 @@ function App() {
       };
     }
     connect();
-    fetch("/price").then(r=>r.json()).then(d=>setDataSource(d.data_source||"—")).catch(()=>{});
     return () => { wsRef.current?.close(); clearTimeout(reconnectRef.current); };
   }, []);
 
@@ -2651,19 +2636,6 @@ function App() {
     if (expandedAdminSection !== "errors") return;
     fetch("/errors").then(r=>r.ok?r.json():null).then(d=>{ if(d) setErrorLog(d.errors||[]); }).catch(()=>{});
   }, [expandedAdminSection]);
-
-  // ── Source history — fetch on tab switch + refresh every 60s ──
-  useEffect(() => {
-    if (tab !== "sources") return;
-    fetch("/deepseek/source-history?n=20").then(r=>r.json()).then(d=>{ setSourceHistory(d); setSelectedSource(0); }).catch(()=>{});
-  }, [tab]);
-  useEffect(() => {
-    if (tab !== "sources") return;
-    const id = setInterval(()=>{
-      fetch("/deepseek/source-history?n=20").then(r=>r.json()).then(setSourceHistory).catch(()=>{});
-    }, 60000);
-    return () => clearInterval(id);
-  }, [tab]);
 
   // ── All accuracy — fetch on ensemble tab switch + refresh every 20s ──
   const fetchAllAccuracy = React.useCallback(() => {
@@ -3098,8 +3070,6 @@ function App() {
   // omitted from deps — they tick every ~1s and putting them in deps would
   // rebuild the entire card tree on every tick.
   }, [pendingDeepseekReady, activeDeepseekPred, binanceExpert, historicalAnalysis, barCloseUTC]);
-
-  const strats = STRATEGY_META.filter(m=>strategies[m.key]).map(m=>({...m,...strategies[m.key]}));
 
   // Cross-exchange divergence (for microstructure display)
   if (serviceUnavailable) return (

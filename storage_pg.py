@@ -219,19 +219,6 @@ def get_reset_at() -> float:
         _put(conn)
 
 
-def set_reset_at(ts: float, note: str = "") -> None:
-    conn = _conn()
-    try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE score_reset SET reset_at=%s, reset_note=%s WHERE id=1",
-                (ts, note),
-            )
-        conn.commit()
-    finally:
-        _put(conn)
-
-
 # ── Storage class (same public interface as storage.py) ───────────────────────
 
 class StoragePG:
@@ -260,27 +247,6 @@ class StoragePG:
                     (_MAX_TICKS,),
                 )
             conn.commit()
-        finally:
-            _put(conn)
-
-    def get_prices(self, n: Optional[int] = None, since: Optional[float] = None) -> List[float]:
-        conn = _conn()
-        try:
-            with conn.cursor() as cur:
-                if since:
-                    cur.execute(
-                        "SELECT mid_price FROM ticks WHERE timestamp >= %s ORDER BY timestamp",
-                        (since,),
-                    )
-                else:
-                    limit = n or _MAX_TICKS
-                    cur.execute(
-                        "SELECT mid_price FROM ticks ORDER BY timestamp DESC LIMIT %s",
-                        (limit,),
-                    )
-                    rows = [r[0] for r in cur.fetchall()]
-                    return list(reversed(rows))
-                return [r[0] for r in cur.fetchall()]
         finally:
             _put(conn)
 
@@ -721,17 +687,6 @@ class StoragePG:
                     (n,),
                 )
                 return [dict(r) for r in cur.fetchall()]
-        finally:
-            _put(conn)
-
-    def get_next_bar_number(self) -> int:
-        """Return max stored window_count + 1 for persistent bar numbering."""
-        conn = _conn()
-        try:
-            with conn.cursor() as cur:
-                cur.execute("SELECT MAX(window_count) FROM deepseek_predictions")
-                result = cur.fetchone()[0]
-                return (result or 0) + 1
         finally:
             _put(conn)
 

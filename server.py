@@ -18,17 +18,16 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from engine import (
-    config, collector, storage, ensemble, lr_strategy, feature_engine,
-    deepseek, binance_klines, current_state, ws_clients,
+    config, collector, storage, ensemble,
+    deepseek, current_state, ws_clients,
     STATIC_DIR, CHARTS_DIR,
-    _json_safe, _safe_storage, _dashboard_signals_to_preds,
-    _pred_for_ws, _run_full_prediction, _run_deepseek,
-    generate_bar_chart, run_collector, run_binance_feed,
-    run_indicator_refresh, run_prediction_loop, run_embedding_audit_loop, SPECIALIST_KEYS,
+    _json_safe, _safe_storage,
+    _pred_for_ws, _run_full_prediction,
+    run_collector, run_binance_feed,
+    run_indicator_refresh, run_prediction_loop, run_embedding_audit_loop,
     _error_log, load_embedding_audit_log, _trigger_embedding_bootstrap,
 )
-from signals import fetch_dashboard_signals, extract_signal_directions
-from semantic_store import compute_all_indicator_accuracy, compute_dashboard_accuracy, load_all as load_pattern_history
+from semantic_store import compute_all_indicator_accuracy, load_all as load_pattern_history
 
 logger = logging.getLogger(__name__)
 
