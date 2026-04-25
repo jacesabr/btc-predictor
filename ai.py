@@ -167,10 +167,14 @@ DEEPSEEK_FAST_MODEL = "deepseek-chat"     # fast — specialists, analyst, exper
 # a one-line change.
 VENICE_API_URL = "https://api.venice.ai/api/v1/chat/completions"
 VENICE_MODEL_FOR_DEEPSEEK = {
-    # Production fast path uses deepseek-chat (V3.x). Closest Venice analog:
-    "deepseek-chat":     "deepseek-v4-flash",  # alternates: deepseek-v3.2, deepseek-v4-pro
-    # Production reasoning path uses deepseek-reasoner. Closest Venice analog:
-    "deepseek-reasoner": "deepseek-v4-pro",    # alternates: deepseek-v3.2, deepseek-v4-flash
+    # Quality-comparison experiment (~2026-04-25, ~$10 Venice budget = ~1 hour
+    # of all-Opus runtime). Both fast and reasoning paths route to Claude Opus
+    # 4.7 via Venice while DeepSeek's balance is exhausted. To revert: restore
+    # "deepseek-chat" → "deepseek-v4-flash" and "deepseek-reasoner" →
+    # "deepseek-v4-pro". Other Claude options on Venice: claude-opus-4-6,
+    # claude-sonnet-4-6 (40% cheaper).
+    "deepseek-chat":     "claude-opus-4-7",  # was: deepseek-v4-flash
+    "deepseek-reasoner": "claude-opus-4-7",  # was: deepseek-v4-pro
 }
 # HTTP status codes that signal "DeepSeek itself is unavailable" — fall back to
 # Venice. 4xx codes other than 401/402/429 are NOT retried (bad request will
@@ -876,31 +880,42 @@ def build_prompt(
 
     csv_block = "(no kline data)"
     if klines and len(klines) >= 5:
-        # Tolerate missing optional columns — Bybit/OKX/Kraken return None for
-        # trades-count and taker-buy-volume; we still want the OHLCV row.
+        # Bybit/OKX/Kraken return None for trades-count and taker-buy-volume.
+        # Emit "NA" rather than 0 so the analyst doesn't read missing data as
+        # a measured "0% buyers / 0 trades" regime.
         def _fnum(v, default=0.0):
             try:
                 return float(v) if v is not None else default
             except (TypeError, ValueError):
                 return default
-        def _inum(v, default=0):
+        def _na(v, fmt="{:.0f}"):
+            if v is None or v == "":
+                return "NA"
+            if isinstance(v, str) and v.upper() in ("NA", "NONE", "NULL"):
+                return "NA"
             try:
-                return int(v) if v is not None else default
-            except (TypeError, ValueError):
-                return default
+                return fmt.format(float(v))
+            except (ValueError, TypeError):
+                return "NA"
 
         csv_rows = ["Time(UTC),Open,High,Low,Close,Volume,QuoteVol,Trades,BuyVol%"]
         for k in klines[-50:]:
             try:
-                ts_str  = time.strftime("%m-%d %H:%M", time.gmtime(int(k[0]) / 1000))
-                vol     = _fnum(k[5]) if len(k) > 5 else 0.0
-                quote_v = _fnum(k[7]) if len(k) > 7 else 0.0
-                trades  = _inum(k[8]) if len(k) > 8 else 0
-                buy_vol = _fnum(k[9]) if len(k) > 9 else 0.0
-                buy_pct = round(buy_vol / vol * 100, 1) if vol > 0 else 0.0
+                ts_str    = time.strftime("%m-%d %H:%M", time.gmtime(int(k[0]) / 1000))
+                vol       = _fnum(k[5]) if len(k) > 5 else 0.0
+                quote_str = _na(k[7]) if len(k) > 7 else "NA"
+                trades_s  = _na(k[8], "{:.0f}") if len(k) > 8 else "NA"
+                bv_raw    = k[9] if len(k) > 9 else None
+                if bv_raw is None or bv_raw == "" or (isinstance(bv_raw, str) and bv_raw.upper() in ("NA", "NONE", "NULL")):
+                    buy_pct_s = "NA"
+                else:
+                    try:
+                        buy_pct_s = f"{round(float(bv_raw) / vol * 100, 1)}" if vol > 0 else "NA"
+                    except (ValueError, TypeError):
+                        buy_pct_s = "NA"
                 csv_rows.append(
                     f"{ts_str},{_fnum(k[1]):.2f},{_fnum(k[2]):.2f},"
-                    f"{_fnum(k[3]):.2f},{_fnum(k[4]):.2f},{vol:.1f},{quote_v:.0f},{trades},{buy_pct}"
+                    f"{_fnum(k[3]):.2f},{_fnum(k[4]):.2f},{vol:.1f},{quote_str},{trades_s},{buy_pct_s}"
                 )
             except Exception as row_exc:
                 logger.warning("CSV row build failed for kline=%r: %s", k, row_exc)
@@ -1128,9 +1143,11 @@ there is NO confidence floor. A genuine 55% edge with a clean rebuttal is a call
 {historical_block}
 
 ──────────────────────────────────────────────
-  LAST 50 BARS  (1-min, real Binance data)
+  LAST 50 BARS  (1-min OHLCV, Bybit primary → OKX → Kraken → Binance)
   Columns: Time(UTC), Open, High, Low, Close, Volume(BTC), QuoteVol(USDT), Trades, BuyVol%
   BuyVol% = taker-buy base volume / total volume × 100
+  NA in any column = source did not supply that field this window (NOT a measured zero —
+  do NOT infer "zero buyers" / "zero trades" / "zero-flow regime" from NA).
   Rows are oldest → newest. The last row is the current bar.
 ──────────────────────────────────────────────
 {csv_block}
@@ -2544,8 +2561,10 @@ async def run_historical_analyst(
     _mark("deepseek_call")
     _t = time.time()
     try:
-        # No timeout: caller waits for the analyst to complete before continuing.
-        raw     = await _api_call(api_key, prompt, max_tokens=2000, timeout_s=None, model=DEEPSEEK_FAST_MODEL)
+        # 120s cap: enough headroom for Opus 4.7 (slower than deepseek-v4-flash)
+        # while still ensuring a hung Venice request can't freeze the prediction
+        # loop (root cause of the 2026-04-25 12:00–13:00 outage).
+        raw     = await _api_call(api_key, prompt, max_tokens=2000, timeout_s=120.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = time.time() - t0
         _record("deepseek_call", _t)
         _save(_HIST_RESPONSE, f"# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}  elapsed={elapsed:.1f}s\n\n{raw}")

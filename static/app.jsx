@@ -193,35 +193,62 @@ function BoldAnalysis({ text, color }) {
   );
 }
 
-// Parse the strict Historical Similarity Analyst output (see
-// specialists/historical_analyst/PROMPT.md). Returns a structured object;
-// unknown content falls back to `extra` so nothing is silently dropped.
-const HIST_SECTIONS = ["POSITION","CONFIDENCE","LEAN","BASE_RATES",
-  "PRECEDENT_TABLE","AGAINST","ENSEMBLE_RELIABILITY","FOR","DEVIL","EDGE",
-  "SUGGESTION"];
-const HIST_SECT_RE = new RegExp("^(" + HIST_SECTIONS.join("|") + ")\\s*:\\s*(.*)$");
+// Map UP/DOWN/NEUTRAL/FLAT/BULLISH/BEARISH to the green/red/amber palette.
+function posColors(pos) {
+  const p = (pos || "").toUpperCase();
+  if (/^(UP|BULLISH)/.test(p))   return { color: C.green, bg: C.greenBg, border: C.greenBorder };
+  if (/^(DOWN|BEARISH)/.test(p)) return { color: C.red,   bg: C.redBg,   border: C.redBorder };
+  return { color: C.amber, bg: C.amberBg, border: C.amberBorder };
+}
+
+// Parse the strict Historical Similarity Analyst schema (POSITION/CONFIDENCE/
+// LEAN/BASE_RATES/PRECEDENT_TABLE/AGAINST/ENSEMBLE_RELIABILITY/FOR/DEVIL/EDGE/
+// SUGGESTION). The model alternates between this and free-form markdown, so
+// callers should detect format with `isStrictHistSchema` first.
+const HIST_KEYS = ["POSITION","CONFIDENCE","LEAN","BASE_RATES","PRECEDENT_TABLE",
+  "AGAINST","ENSEMBLE_RELIABILITY","FOR","DEVIL","EDGE","SUGGESTION"];
+const HIST_KEY_RE = new RegExp("^(" + HIST_KEYS.join("|") + ")\\s*:\\s*(.*)$");
+
+// The model sometimes wraps schema keys in markdown bold (`**LEAN:**`,
+// `**POSITION: NEUTRAL**`). Strip those wrappers so the parser sees the
+// canonical `KEY: value` shape.
+function normalizeHistSchema(raw) {
+  if (!raw) return raw;
+  const K = HIST_KEYS.join("|");
+  return raw
+    // `**KEY: VALUE**` — whole line bolded
+    .replace(new RegExp("^\\s*\\*\\*\\s*(" + K + ")\\s*:\\s*([^*\\n]*?)\\s*\\*\\*\\s*$", "gm"), "$1: $2")
+    // `**KEY:**` — just the key bolded
+    .replace(new RegExp("^\\s*\\*\\*\\s*(" + K + ")\\s*:\\s*\\*\\*\\s*", "gm"), "$1: ")
+    // Stray leading `**KEY:` with no closer (rare, but defensive)
+    .replace(new RegExp("^\\s*\\*\\*\\s*(" + K + ")\\s*:\\s*", "gm"), "$1: ");
+}
+function isStrictHistSchema(raw) {
+  if (!raw) return false;
+  const norm = normalizeHistSchema(raw);
+  const first = norm.split("\n").map(l => l.trim()).find(Boolean) || "";
+  return /^POSITION\s*:/.test(first);
+}
 function parseHistAnalysis(raw) {
+  raw = normalizeHistSchema(raw);
   const out = { position:"", confidence:"", lean:"", baseRates:"",
     precedents:[], against:"", ensemble:"", forText:"", devil:"", edge:"",
     suggestion:"", extra:"" };
   if (!raw) return out;
   const buckets = {};
   let cur = null, buf = [];
-  const stash = () => {
-    if (cur == null) {
-      const t = buf.join("\n").trim();
-      if (t) out.extra = (out.extra ? out.extra + "\n" : "") + t;
-    } else {
-      buckets[cur] = buf.join("\n").trim();
-    }
+  const flush = () => {
+    const v = buf.join("\n").trim();
+    if (cur == null) { if (v) out.extra = (out.extra ? out.extra + "\n" : "") + v; }
+    else buckets[cur] = v;
     buf = [];
   };
   for (const line of raw.split("\n")) {
-    const m = line.match(HIST_SECT_RE);
-    if (m) { stash(); cur = m[1]; if (m[2]) buf.push(m[2]); }
+    const m = line.match(HIST_KEY_RE);
+    if (m) { flush(); cur = m[1]; if (m[2]) buf.push(m[2]); }
     else buf.push(line);
   }
-  stash();
+  flush();
 
   out.position   = (buckets.POSITION   || "").trim();
   out.confidence = (buckets.CONFIDENCE || "").trim();
@@ -234,35 +261,342 @@ function parseHistAnalysis(raw) {
   out.edge       = (buckets.EDGE       || "").trim();
   out.suggestion = (buckets.SUGGESTION || "").trim();
 
-  // Precedent rows: `#NNN | outcome | align: … | diverge: …`
-  const tableRaw = buckets.PRECEDENT_TABLE || "";
-  out.precedents = tableRaw.split("\n")
+  out.precedents = (buckets.PRECEDENT_TABLE || "").split("\n")
     .map(l => l.trim())
     .filter(l => /^#?\d+\s*\|/.test(l))
     .map(l => {
       const parts = l.split("|").map(s => s.trim());
       const num = (parts[0] || "").replace(/^#/, "");
-      const outcome = (parts[1] || "").toUpperCase();
+      const outcomeRaw = parts[1] || "";
+      const oMatch = outcomeRaw.match(/^(UP|DOWN|NEUTRAL|FLAT)\b\s*(.*)$/i);
+      const outcome = oMatch ? oMatch[1].toUpperCase() : outcomeRaw;
+      const outcomeMeta = oMatch ? oMatch[2].trim() : "";
       let align = "", diverge = "";
       for (let i = 2; i < parts.length; i++) {
         const p = parts[i];
-        if (/^align:/i.test(p))   align   = p.replace(/^align:\s*/i, "");
-        else if (/^diverge:/i.test(p)) diverge = p.replace(/^diverge:\s*/i, "");
-        else if (!align) align = p;
-        else diverge = (diverge ? diverge + " | " : "") + p;
+        if (/^align:/i.test(p))         align   = p.replace(/^align:\s*/i, "");
+        else if (/^diverge:/i.test(p))  diverge = p.replace(/^diverge:\s*/i, "");
+        else if (!align)                align   = p;
+        else                            diverge = (diverge ? diverge + " | " : "") + p;
       }
-      return { num, outcome, align, diverge };
+      return { num, outcome, outcomeMeta, align, diverge };
     });
 
   return out;
 }
 
-// Map UP/DOWN/NEUTRAL to the same green/red/amber palette used elsewhere.
-function posColors(pos) {
-  const p = (pos || "").toUpperCase();
-  if (p === "UP")   return { color: C.green, bg: C.greenBg, border: C.greenBorder };
-  if (p === "DOWN") return { color: C.red,   bg: C.redBg,   border: C.redBorder };
-  return { color: C.amber, bg: C.amberBg, border: C.amberBorder };
+// ── Briefing section helpers ────────────────────────────────
+// A peer top-level section in the analysis card: bold uppercase title with a
+// thin accent bar and an optional verdict pill / confidence on the right.
+function BriefingSection({ title, verdict, confidence, accent, first, children }) {
+  const accentColor = accent || (verdict ? posColors(verdict).color : C.text);
+  return (
+    <div style={{
+      paddingTop: first ? 0 : 14,
+      borderTop: first ? "none" : `1px solid ${C.borderSoft}`,
+      marginBottom: 14
+    }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+        <span style={{ width:3, height:16, background:accentColor, borderRadius:2,
+          flexShrink:0 }} />
+        <span style={{
+          fontSize:12, fontWeight:900, color:C.text,
+          letterSpacing:1.4, textTransform:"uppercase", flex:1
+        }}>{title}</span>
+        {verdict && <VerdictPill verdict={verdict} />}
+        {confidence && (
+          <span style={{ fontSize:13, fontWeight:800, color:C.textSec,
+            fontVariantNumeric:"tabular-nums" }}>
+            {confidence}
+          </span>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function VerdictPill({ verdict }) {
+  const c = posColors(verdict);
+  return (
+    <span style={{
+      fontSize:11, fontWeight:900, color:c.color, background:c.bg,
+      border:`1px solid ${c.border}`, borderRadius:4, padding:"2px 10px",
+      letterSpacing:0.8
+    }}>{String(verdict).toUpperCase()}</span>
+  );
+}
+
+// Smaller tracked label for sub-sections inside a BriefingSection.
+function SubLabel({ children, color, marginTop }) {
+  return (
+    <div style={{
+      fontSize:9, fontWeight:800, color: color || C.muted,
+      letterSpacing:1.2, textTransform:"uppercase",
+      marginTop: marginTop != null ? marginTop : 10,
+      marginBottom:5
+    }}>{children}</div>
+  );
+}
+
+// Label-and-paragraph block. Used for AGAINST / FOR / DEVIL / EDGE / etc.
+function KvBlock({ label, color, children }) {
+  return (
+    <div style={{ marginTop:10 }}>
+      <SubLabel color={color} marginTop={0}>{label}</SubLabel>
+      <div style={{ fontSize:12, color:C.text, lineHeight:1.55 }}>{children}</div>
+    </div>
+  );
+}
+
+// Single Tier-A precedent card — #ID + outcome pill on top, ALIGN / DIVERGE
+// rows below with green / red micro-labels.
+function PrecedentCard({ p }) {
+  const opc = posColors(p.outcome);
+  return (
+    <div style={{
+      background:"#FFFFFF", border:`1px solid ${C.borderSoft}`,
+      borderRadius:6, padding:"7px 10px"
+    }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:5 }}>
+        <span style={{ fontSize:11, fontWeight:900, color:C.text,
+          fontVariantNumeric:"tabular-nums" }}>#{p.num}</span>
+        <span style={{ fontSize:10, fontWeight:900, color:opc.color,
+          background:opc.bg, border:`1px solid ${opc.border}`, borderRadius:3,
+          padding:"1px 7px", letterSpacing:0.5 }}>
+          {p.outcome || "?"}
+        </span>
+        {p.outcomeMeta && (
+          <span style={{ fontSize:11, color:C.textSec,
+            fontVariantNumeric:"tabular-nums" }}>{p.outcomeMeta}</span>
+        )}
+      </div>
+      {p.align && (
+        <div style={{ display:"flex", gap:6, marginBottom:p.diverge ? 3 : 0 }}>
+          <span style={{ fontSize:9, fontWeight:900, color:C.green,
+            letterSpacing:0.8, minWidth:50, paddingTop:2 }}>ALIGN</span>
+          <span style={{ fontSize:12, color:C.text, lineHeight:1.5, flex:1 }}>
+            <BoldAnalysis text={p.align} color={C.text} />
+          </span>
+        </div>
+      )}
+      {p.diverge && (
+        <div style={{ display:"flex", gap:6 }}>
+          <span style={{ fontSize:9, fontWeight:900, color:C.red,
+            letterSpacing:0.8, minWidth:50, paddingTop:2 }}>DIVERGE</span>
+          <span style={{ fontSize:12, color:C.text, lineHeight:1.5, flex:1 }}>
+            <BoldAnalysis text={p.diverge} color={C.text} />
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Lightweight markdown block parser. Handles headings (# … ######), horizontal
+// rules (---/***/___), pipe tables, bullet lists (- / *), and paragraphs. The
+// historical analyst sometimes follows the strict `POSITION:` schema and
+// sometimes emits the step-structured markdown from the prompt's reasoning
+// protocol — this parser handles either since strict-schema lines just look
+// like paragraphs.
+function parseMarkdownBlocks(raw) {
+  if (!raw) return [];
+  const lines = raw.split("\n");
+  const blocks = [];
+  const isHeader = (t) => /^#{1,6}\s+/.test(t);
+  const isHr     = (t) => /^([-*_])\1{2,}\s*$/.test(t);
+  const isBullet = (t) => /^[-*]\s+/.test(t);
+  const isTableLine = (t) => t.startsWith("|") && t.endsWith("|");
+  const isTableSep  = (t) => /^\|[\s:|-]+\|$/.test(t) && t.includes("-");
+  const splitRow    = (l) => l.trim().replace(/^\||\|$/g, "").split("|").map(s => s.trim());
+
+  let i = 0;
+  while (i < lines.length) {
+    const t = lines[i].trim();
+
+    if (!t) { i++; continue; }
+
+    if (isHeader(t)) {
+      const m = t.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+      blocks.push({ type:"heading", level:m[1].length, text:m[2] });
+      i++;
+      continue;
+    }
+
+    if (isHr(t)) {
+      blocks.push({ type:"hr" });
+      i++;
+      continue;
+    }
+
+    if (isTableLine(t) && i+1 < lines.length && isTableSep(lines[i+1].trim())) {
+      const header = splitRow(t);
+      i += 2;
+      const rows = [];
+      while (i < lines.length) {
+        const l = lines[i].trim();
+        if (!isTableLine(l) || isTableSep(l)) break;
+        rows.push(splitRow(l));
+        i++;
+      }
+      blocks.push({ type:"table", header, rows });
+      continue;
+    }
+
+    if (isBullet(t)) {
+      const items = [];
+      while (i < lines.length && isBullet(lines[i].trim())) {
+        items.push(lines[i].trim().replace(/^[-*]\s+/, ""));
+        i++;
+      }
+      blocks.push({ type:"list", items });
+      continue;
+    }
+
+    // Paragraph — gather until blank line or block-starting line.
+    const para = [];
+    while (i < lines.length) {
+      const tt = lines[i].trim();
+      if (!tt) break;
+      if (isHeader(tt) || isHr(tt) || isBullet(tt)) break;
+      if (isTableLine(tt) && i+1 < lines.length && isTableSep(lines[i+1].trim())) break;
+      para.push(tt);
+      i++;
+    }
+    if (para.length) blocks.push({ type:"para", text: para.join(" ") });
+  }
+  return blocks;
+}
+
+// Render an inline string with **bold** highlighting. Non-bold segments fall
+// through to BoldAnalysis for term-level styling consistent with the rest of
+// the card.
+function MdInline({ text, color }) {
+  if (!text) return null;
+  const parts = String(text).split(/(\*\*[^*\n]+?\*\*)/g);
+  return (
+    <>{parts.map((p, idx) => {
+      if (!p) return null;
+      if (p.startsWith("**") && p.endsWith("**")) {
+        return <strong key={idx} style={{ fontWeight:800, color: color || C.text }}>
+          {p.slice(2, -2)}
+        </strong>;
+      }
+      return <BoldAnalysis key={idx} text={p} color={color} />;
+    })}</>
+  );
+}
+
+// Render a markdown table. If a column header matches "outcome", that cell is
+// rendered as a colored UP/DOWN/NEUTRAL badge. Each row is a card so it stays
+// readable in a narrow sidebar.
+function MdTable({ header, rows }) {
+  const outcomeIdx = header.findIndex(h => /\boutcome\b/i.test(h));
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:8 }}>
+      {rows.map((r, i) => (
+        <div key={i} style={{ background:"#FFFFFF",
+          border:`1px solid ${C.borderSoft}`, borderRadius:5,
+          padding:"6px 8px" }}>
+          {r.map((cell, j) => {
+            const lab = header[j] || "";
+            if (j === outcomeIdx) {
+              const m = String(cell).match(/^\s*(UP|DOWN|NEUTRAL)\b/i);
+              const tag = m ? m[1].toUpperCase() : String(cell);
+              const rest = m ? String(cell).slice(m[0].length).trim() : "";
+              const opc = posColors(tag);
+              return (
+                <div key={j} style={{ display:"flex", gap:6, alignItems:"center",
+                  marginBottom: j === r.length-1 ? 0 : 4 }}>
+                  <span style={{ fontSize:9, fontWeight:700, color:C.muted,
+                    letterSpacing:0.8, minWidth:64, flexShrink:0,
+                    textTransform:"uppercase" }}>
+                    {lab}
+                  </span>
+                  <span style={{ fontSize:10, fontWeight:900, color:opc.color,
+                    background:opc.bg, border:`1px solid ${opc.border}`,
+                    borderRadius:3, padding:"1px 6px", letterSpacing:0.5 }}>
+                    {m ? tag : <MdInline text={tag} />}
+                  </span>
+                  {rest && <span style={{ fontSize:11, color:C.text }}>
+                    <MdInline text={rest} />
+                  </span>}
+                </div>
+              );
+            }
+            return (
+              <div key={j} style={{ display:"flex", gap:6,
+                alignItems:"flex-start",
+                marginBottom: j === r.length-1 ? 0 : 4 }}>
+                <span style={{ fontSize:9, fontWeight:700, color:C.muted,
+                  letterSpacing:0.8, minWidth:64, flexShrink:0,
+                  paddingTop:1, textTransform:"uppercase" }}>
+                  {lab}
+                </span>
+                <span style={{ fontSize:11, color:C.text, lineHeight:1.5, flex:1 }}>
+                  <MdInline text={String(cell)} />
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Render markdown blocks as JSX, in the visual style of the rest of the
+// briefing card. Top-level headings get a dividing line above; paragraphs and
+// lists use a consistent text color.
+function MdBlocks({ blocks }) {
+  return (
+    <>{blocks.map((b, i) => {
+      if (b.type === "heading") {
+        const isTop = b.level <= 2;
+        const fontSize = b.level === 1 ? 12 : b.level === 2 ? 11 : 10;
+        return (
+          <div key={i} style={{
+            fontSize, fontWeight:900, color:C.textSec,
+            letterSpacing:1, textTransform:"uppercase",
+            marginTop: i === 0 ? 0 : (isTop ? 10 : 6),
+            marginBottom: 6,
+            paddingTop: i > 0 && isTop ? 8 : 0,
+            borderTop: i > 0 && isTop ? `1px solid ${C.borderSoft}` : "none"
+          }}>
+            <MdInline text={b.text} color={C.textSec} />
+          </div>
+        );
+      }
+      if (b.type === "hr") {
+        return <div key={i} style={{ height:1,
+          background:C.borderSoft, margin:"6px 0" }} />;
+      }
+      if (b.type === "list") {
+        return (
+          <ul key={i} style={{ margin:"4px 0 8px 18px", padding:0,
+            fontSize:13, color:C.text, lineHeight:1.55 }}>
+            {b.items.map((it, j) => (
+              <li key={j} style={{ marginBottom:2 }}>
+                <MdInline text={it} />
+              </li>
+            ))}
+          </ul>
+        );
+      }
+      if (b.type === "para") {
+        return (
+          <div key={i} style={{ fontSize:13, color:C.text,
+            lineHeight:1.55, marginBottom:6 }}>
+            <MdInline text={b.text} />
+          </div>
+        );
+      }
+      if (b.type === "table") {
+        return <MdTable key={i} header={b.header} rows={b.rows} />;
+      }
+      return null;
+    })}</>
+  );
 }
 
 function fmtUtc(ts) {
@@ -3027,8 +3361,6 @@ function App() {
     }
     const histSummary = (historicalAnalysis || "").trim();
 
-    const sectionDivider = `1px solid ${C.borderSoft}`;
-
     return (
       <div style={{ width:"100%", minWidth:360, display:"flex", flexDirection:"column", gap:8 }}>
         <div style={{ ...card, flexShrink:0, padding:"14px 16px",
@@ -3079,160 +3411,109 @@ function App() {
             </div>
           )}
 
-          {/* EXPERT OPINIONS */}
-          {(beSummary || histSummary) && (
-            <div style={{ marginBottom:14, paddingTop:12, borderTop:sectionDivider }}>
-              <div style={{ fontSize:11, fontWeight:800, color:C.textSec, letterSpacing:1.2,
-                textTransform:"uppercase", marginBottom:8 }}>Expert Opinions</div>
-              {beSummary && (
-                <div style={{ marginBottom:histSummary ? 10 : 0 }}>
-                  <div style={{ fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1, marginBottom:3 }}>
-                    Binance Microstructure Expert{binanceExpert?.signal ? ` — ${binanceExpert.signal}` : ""}
-                  </div>
-                  <div style={{ fontSize:13, color:C.text, lineHeight:1.6 }}>
-                    <BoldAnalysis text={beSummary} color={C.text} />
-                  </div>
-                </div>
-              )}
-              {histSummary && (() => {
-                const h = parseHistAnalysis(histSummary);
-                const pc = posColors(h.position);
-                const subLabel = { fontSize:9, fontWeight:700, color:C.muted,
-                  letterSpacing:1, textTransform:"uppercase", marginBottom:4 };
-                const kvBlock = (lab, val) => val ? (
-                  <div style={{ marginTop:8 }}>
-                    <div style={subLabel}>{lab}</div>
-                    <div style={{ fontSize:12, color:C.text, lineHeight:1.55 }}>
-                      <BoldAnalysis text={val} color={C.text} />
-                    </div>
-                  </div>
-                ) : null;
-                return (
-                  <div>
-                    <div style={{ fontSize:9, fontWeight:700, color:C.muted,
-                      letterSpacing:1, marginBottom:6 }}>
-                      Historical Similarity Analyst
-                    </div>
-
-                    {/* Position pill + confidence */}
-                    {(h.position || h.confidence) && (
-                      <div style={{ display:"flex", alignItems:"center",
-                        gap:8, marginBottom:8, flexWrap:"wrap" }}>
-                        {h.position && (
-                          <span style={{ fontSize:11, fontWeight:900,
-                            color:pc.color, background:pc.bg,
-                            border:`1px solid ${pc.border}`, borderRadius:4,
-                            padding:"2px 8px", letterSpacing:0.5 }}>
-                            {h.position.toUpperCase()}
-                          </span>
-                        )}
-                        {h.confidence && (
-                          <span style={{ fontSize:12, fontWeight:700, color:C.textSec }}>
-                            {h.confidence}
-                          </span>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Lean — the headline takeaway */}
-                    {h.lean && (
-                      <div style={{ fontSize:13, color:C.text, lineHeight:1.6,
-                        fontWeight:600, marginBottom:8 }}>
-                        <BoldAnalysis text={h.lean} color={C.text} />
-                      </div>
-                    )}
-
-                    {/* Base rates — compact stat strip */}
-                    {h.baseRates && (
-                      <div style={{ fontSize:11, color:C.textSec,
-                        background:"#FFFFFF", border:`1px solid ${C.borderSoft}`,
-                        borderRadius:5, padding:"5px 8px", marginBottom:8,
-                        fontVariantNumeric:"tabular-nums" }}>
-                        <BoldAnalysis text={h.baseRates} color={C.textSec} />
-                      </div>
-                    )}
-
-                    {/* Precedents — numbered rows */}
-                    {h.precedents.length > 0 && (
-                      <div style={{ marginBottom:8 }}>
-                        <div style={subLabel}>Precedents (Tier A)</div>
-                        <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
-                          {h.precedents.map((p, i) => {
-                            const opc = posColors(p.outcome);
-                            return (
-                              <div key={i} style={{ display:"flex", gap:8,
-                                alignItems:"flex-start",
-                                background:"#FFFFFF",
-                                border:`1px solid ${C.borderSoft}`,
-                                borderRadius:5, padding:"6px 8px" }}>
-                                <span style={{ fontSize:11, fontWeight:900,
-                                  color:C.muted, minWidth:28,
-                                  fontVariantNumeric:"tabular-nums" }}>
-                                  #{p.num}
-                                </span>
-                                <span style={{ fontSize:10, fontWeight:900,
-                                  color:opc.color, background:opc.bg,
-                                  border:`1px solid ${opc.border}`,
-                                  borderRadius:3, padding:"1px 6px",
-                                  letterSpacing:0.5, alignSelf:"flex-start",
-                                  marginTop:1 }}>
-                                  {p.outcome || "?"}
-                                </span>
-                                <div style={{ flex:1, minWidth:0,
-                                  fontSize:12, color:C.text, lineHeight:1.5 }}>
-                                  {p.align && (
-                                    <div>
-                                      <span style={{ fontSize:9, fontWeight:800,
-                                        color:C.green, letterSpacing:0.8,
-                                        marginRight:4 }}>ALIGN</span>
-                                      <BoldAnalysis text={p.align} color={C.text} />
-                                    </div>
-                                  )}
-                                  {p.diverge && (
-                                    <div style={{ marginTop:p.align ? 2 : 0 }}>
-                                      <span style={{ fontSize:9, fontWeight:800,
-                                        color:C.red, letterSpacing:0.8,
-                                        marginRight:4 }}>DIVERGE</span>
-                                      <BoldAnalysis text={p.diverge} color={C.text} />
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    {kvBlock("Against", h.against)}
-                    {kvBlock("Ensemble Reliability", h.ensemble)}
-                    {kvBlock("For", h.forText)}
-                    {kvBlock("Devil's Advocate", h.devil)}
-                    {kvBlock("Edge", h.edge)}
-                    {h.suggestion && h.suggestion.toUpperCase() !== "NONE" &&
-                      kvBlock("Suggestion", h.suggestion)}
-                    {h.extra && (
-                      <div style={{ marginTop:8, fontSize:12, color:C.textSec,
-                        lineHeight:1.55, whiteSpace:"pre-wrap" }}>
-                        <BoldAnalysis text={h.extra} color={C.textSec} />
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-            </div>
+          {/* BINANCE MICROSTRUCTURE — peer section */}
+          {beSummary && (
+            <BriefingSection
+              title="Binance Microstructure"
+              verdict={binanceExpert?.signal}
+            >
+              <div style={{ fontSize:13, color:C.text, lineHeight:1.6 }}>
+                <BoldAnalysis text={beSummary} color={C.text} />
+              </div>
+            </BriefingSection>
           )}
 
-          {/* REASONS */}
+          {/* HISTORICAL SIMILARITY — peer section. Strict POSITION:/CONFIDENCE:
+              schema gets the structured render; everything else falls through
+              to the generic markdown renderer. */}
+          {histSummary && (() => {
+            if (isStrictHistSchema(histSummary)) {
+              const h = parseHistAnalysis(histSummary);
+              return (
+                <BriefingSection
+                  title="Historical Similarity"
+                  verdict={h.position}
+                  confidence={h.confidence}
+                >
+                  {h.lean && (
+                    <div style={{ fontSize:14, fontWeight:600, color:C.text,
+                      lineHeight:1.55, marginBottom:10 }}>
+                      <BoldAnalysis text={h.lean} color={C.text} />
+                    </div>
+                  )}
+                  {h.baseRates && (
+                    <div style={{ fontSize:11, color:C.textSec,
+                      background:"#FFFFFF", border:`1px solid ${C.borderSoft}`,
+                      borderRadius:5, padding:"6px 10px",
+                      fontVariantNumeric:"tabular-nums" }}>
+                      <BoldAnalysis text={h.baseRates} color={C.textSec} />
+                    </div>
+                  )}
+                  {h.precedents.length > 0 && (
+                    <>
+                      <SubLabel>Precedents · Tier A</SubLabel>
+                      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                        {h.precedents.map((p, i) => (
+                          <PrecedentCard key={i} p={p} />
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {h.against && (
+                    <KvBlock label="Against" color={C.red}>
+                      <BoldAnalysis text={h.against} color={C.text} />
+                    </KvBlock>
+                  )}
+                  {h.ensemble && (
+                    <KvBlock label="Ensemble Reliability">
+                      <BoldAnalysis text={h.ensemble} color={C.text} />
+                    </KvBlock>
+                  )}
+                  {h.forText && (
+                    <KvBlock label="For" color={C.green}>
+                      <BoldAnalysis text={h.forText} color={C.text} />
+                    </KvBlock>
+                  )}
+                  {h.devil && (
+                    <KvBlock label="Devil's Advocate">
+                      <BoldAnalysis text={h.devil} color={C.text} />
+                    </KvBlock>
+                  )}
+                  {h.edge && (
+                    <KvBlock label="Edge">
+                      <BoldAnalysis text={h.edge} color={C.text} />
+                    </KvBlock>
+                  )}
+                  {h.suggestion && h.suggestion.toUpperCase() !== "NONE" && (
+                    <KvBlock label="Suggestion">
+                      <BoldAnalysis text={h.suggestion} color={C.text} />
+                    </KvBlock>
+                  )}
+                  {h.extra && (
+                    <div style={{ marginTop:10, fontSize:12, color:C.textSec,
+                      lineHeight:1.55, whiteSpace:"pre-wrap" }}>
+                      <BoldAnalysis text={h.extra} color={C.textSec} />
+                    </div>
+                  )}
+                </BriefingSection>
+              );
+            }
+            return (
+              <BriefingSection title="Historical Similarity">
+                <MdBlocks blocks={parseMarkdownBlocks(histSummary)} />
+              </BriefingSection>
+            );
+          })()}
+
+          {/* REASONING — peer section */}
           {reasonItems.length > 0 && (
-            <div style={{ paddingTop:12, borderTop:sectionDivider }}>
-              <div style={{ fontSize:11, fontWeight:800, color:C.textSec, letterSpacing:1.2,
-                textTransform:"uppercase", marginBottom:8 }}>Reasoning</div>
+            <BriefingSection title="Reasoning">
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                 {reasonItems.map((it, i) => (
                   <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
                     <span style={{ fontSize:11, fontWeight:900, color:C.muted,
-                      minWidth:14, marginTop:3 }}>
+                      minWidth:16, marginTop:3,
+                      fontVariantNumeric:"tabular-nums" }}>
                       {it.num}.
                     </span>
                     <div style={{ fontSize:13, color:C.text, lineHeight:1.6, flex:1 }}>
@@ -3241,7 +3522,7 @@ function App() {
                   </div>
                 ))}
               </div>
-            </div>
+            </BriefingSection>
           )}
 
           {/* Bar close badge */}
