@@ -157,8 +157,11 @@ def _emit_flags(source: str, raw_text: str, **ctx: Any) -> None:
             logger.debug("flag_callback(%s/%s) raised: %s", source, kind, exc)
 
 DEEPSEEK_API_URL   = "https://api.deepseek.com/v1/chat/completions"
-DEEPSEEK_MODEL     = "deepseek-reasoner"  # chain-of-thought — final prediction only
-DEEPSEEK_FAST_MODEL = "deepseek-chat"     # fast — specialists, analyst, expert, postmortem
+# All call sites use deepseek-chat. The "reasoner" path was removed because
+# chain-of-thought latency (30-60s) overran the 5-min bar window; chat
+# latency (5-15s) fits comfortably with all 5 specialists in series.
+DEEPSEEK_MODEL     = "deepseek-chat"      # alias kept for legacy admin call sites
+DEEPSEEK_FAST_MODEL = "deepseek-chat"     # all live calls use this
 
 # ── Venice fallback (emergency only) ────────────────────────────
 # When api.deepseek.com is unavailable (out of credits, 5xx, rate-limit), retry
@@ -168,15 +171,11 @@ DEEPSEEK_FAST_MODEL = "deepseek-chat"     # fast — specialists, analyst, exper
 # a one-line change.
 VENICE_API_URL = "https://api.venice.ai/api/v1/chat/completions"
 VENICE_MODEL_FOR_DEEPSEEK = {
-    # Production fast path uses deepseek-chat (V3.x). Closest Venice analog:
-    "deepseek-chat":     "deepseek-v4-flash",  # alternates: deepseek-v3.2, deepseek-v4-pro
-    # Production reasoning path uses deepseek-reasoner. Closest Venice analog:
-    "deepseek-reasoner": "deepseek-v4-pro",    # alternates: deepseek-v3.2, deepseek-v4-flash
-    # Opus 4.7 experiment (2026-04-25) reverted: Opus's per-call latency
-    # (40-60s) plus extended-thinking on the unified specialist consistently
-    # pushed pipeline serial timing past the 5-min bar window, discarding
-    # ~80% of bars to the overrun safeguard. claude-opus-4-7 still works
-    # for one-off calls — just not at this 5-min cadence.
+    # Both DeepSeek model identifiers map to deepseek-v4-flash on Venice.
+    # No reasoner-class models — chain-of-thought latency overruns the
+    # 5-min bar window. (Opus 4.7 / deepseek-v4-pro both blew the budget.)
+    "deepseek-chat":     "deepseek-v4-flash",
+    "deepseek-reasoner": "deepseek-v4-flash",
 }
 # HTTP status codes that signal "DeepSeek itself is unavailable" — fall back to
 # Venice. 4xx codes other than 401/402/429 are NOT retried (bad request will

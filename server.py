@@ -688,6 +688,46 @@ async def embed_missing(limit: int = 20):
 # Restore from git history if you ever need to rerun them.
 
 
+@app.post("/admin/delete-bar-range", dependencies=[Depends(require_admin)])
+async def delete_bar_range(start_ts: float, end_ts: float):
+    """One-shot deletion of bars whose window_start falls in [start_ts, end_ts].
+
+    Used to clean up the 2026-04-25 Opus 4.7 experiment
+    (start_ts=1777123500, end_ts=1777125900). Also removes the rolling
+    accuracy entries for those bars so the dashboard doesn't keep
+    counting them.
+
+    Returns: {predictions_deleted, deepseek_predictions_deleted, range}
+    """
+    from storage_pg import _conn, _put
+    if end_ts < start_ts:
+        return {"status": "error", "detail": "end_ts must be >= start_ts"}
+    if (end_ts - start_ts) > 86400 * 7:
+        return {"status": "error", "detail": "range > 7 days — refusing to delete"}
+    conn = _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM deepseek_predictions WHERE window_start BETWEEN %s AND %s",
+                (start_ts, end_ts),
+            )
+            ds_deleted = cur.rowcount
+            cur.execute(
+                "DELETE FROM predictions WHERE window_start BETWEEN %s AND %s",
+                (start_ts, end_ts),
+            )
+            p_deleted = cur.rowcount
+        conn.commit()
+        return {
+            "status": "ok",
+            "predictions_deleted":          p_deleted,
+            "deepseek_predictions_deleted": ds_deleted,
+            "range": {"start_ts": start_ts, "end_ts": end_ts},
+        }
+    finally:
+        _put(conn)
+
+
 # ── WebSocket ─────────────────────────────────────────────────
 
 @app.websocket("/ws")
