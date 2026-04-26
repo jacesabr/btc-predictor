@@ -1231,6 +1231,10 @@ STEP A — BLIND BASELINE (your own read, ignore specialists)
 Look ONLY at raw price structure, OHLCV, oscillators, and the last 50 bars CSV. Form your own
 directional lean and confidence based on price action alone. This is your anchor — if you end up
 agreeing with every specialist but your own baseline disagreed, something is wrong.
+A1 FRESH-REVERSAL CHECK (must be answered via the FRESH_REVERSAL_CHECK output block at the top
+of the response — see RESPOND format below). RULE: if FRESH_REVERSAL=YES, BLIND_BASELINE
+direction MUST match the FR_S2 sign — the longer-term drift is stale and the spike candle
+dominates the next 5 minutes.
 
 STEP B — SPECIALIST EVIDENCE WEIGHING (treat as Bayesian updates, not votes)
 For each specialist that fired (historical_analyst, binance_expert, unified_analyst, ensemble_vote):
@@ -1284,6 +1288,12 @@ apply a blanket confidence penalty. If a new UP call survives stricter scrutiny,
 ══════════════════════════════════════════════
 RESPOND EXACTLY IN THIS FORMAT:
 ══════════════════════════════════════════════
+FRESH_REVERSAL_CHECK (MUST WRITE THESE 4 FIELDS BEFORE ANY OTHER GATE — NO EXCEPTIONS. Each is a REQUIRED RESPONSE FIELD. Show arithmetic, not just YES/NO. The final FRESH_REVERSAL value is MECHANICALLY DERIVED from FR_S1 and FR_S4 — do NOT override with subjective judgment about chop / low-confidence / ranging market):
+  FR_S1_ratio: last_vol / median(prior 10 bars) = <last_vol> / <median> = <ratio>  ; ratio >= 5.0 ? YES/NO
+  FR_S2_sign:  this_close − this_open = <close> − <open> = <delta>  ; sign = + (UP) or − (DOWN)
+  FR_S3_drift: close[t-1] − close[t-6] = <c_tm1> − <c_tm6> = <drift>  ; sign = + (UP) or − (DOWN)
+  FR_S4_opposite: is FR_S2 sign OPPOSITE FR_S3 sign? YES if (+ vs −) or (− vs +); NO if same sign.
+  FRESH_REVERSAL: YES if and only if (FR_S1=YES AND FR_S4=YES); else NO. Re-cite the FR_S1 ratio and the FR_S4 verdict in this line. If FR_S1=YES AND FR_S4=YES you MUST write YES even if you feel the market is choppy or low-conviction.
 POST_SPIKE_GATE:
   G1 (volume spike ≥5× median in last 1–2 bars): YES/NO + cite spike bar time + spike volume + median
   G2 (RSI(4)/MFI(4) extreme AND BB %B outside [0,1]): YES/NO + cite numbers
@@ -1306,6 +1316,11 @@ PREMORTEM_GATE (fill BEFORE writing POSITION):
   P2 (P0 cites a low-volume extreme-flow noise-trap — taker total <2 BTC AND BSR>5 or <0.2 contradicting POSITION — AND spot whale flow does NOT corroborate POSITION): YES/NO + cite taker total + BSR + spot whale signal
   P3 (P0 cites a price-action structural counter that CONTRADICTS POSITION — rejection at named resistance for an UP/ABOVE draft, OR failed-breakdown at named support for a DOWN/BELOW draft — with ALL of: (a) named level within 0.20% of current close, (b) order-book imbalance ≤−10% on the rejection side (asks heavy) for resistance, OR ≥+10% (bids heavy) on the breakdown side for support, (c) ≥3 of the last 15 1-min bars in the CSV satisfy: high within 0.08% of level (rejection) OR low within 0.08% (breakdown), AND closed back on the rejecting side (close < level for resistance; close > level for support). Method: list every 1-min bar in the last 15 by Time, mark each YES/NO against (c), then count): YES/NO + cite level + imbalance % + bar-by-bar enumeration + final count
   IF P1=YES OR P2=YES OR P3=YES → POSITION must be NEUTRAL OR opposite the draft (CONFIDENCE ≤55% if you flip). PRECEDENCE: P3=YES overrides TREND_RESPECT_GATE (NEUTRAL/flip allowed even if T1=YES,T2=NO); P1/P2 alone do NOT override TREND_RESPECT_GATE.
+COMMIT_GATE (fires AFTER prior gates; composes with POST_SPIKE-all-4-YES & PREMORTEM-P1/P2=YES "NEUTRAL OR opposite" allowance; INACTIVE if TREND_RESPECT forced commit-in-trend):
+  C1 microstructure majority — list each (UP/DOWN, FLAT=neither): order_book_imbalance sign | taker BSR (>1=UP, <1=DOWN) | A/D slope sign | last 4-bar net price change sign | MACD histogram sign. ≥3 of 5 same way = YES + cite direction; else NO.
+  C2 P0-names-direction-with-imbalance — P0 names a directional target ("below $X" / "above $Y") in SAME direction as C1 AND cites an imbalance ≥10% (|OBI|≥10% OR BSR ≤0.2 / ≥5)? YES/NO + direction + number.
+  C3 spot-whale-strong-veto — spot whale flow ≥2.0 BTC OPPOSING C1 direction? YES → COMMIT_GATE inactive (strong whale veto, do not flip); NO → continue. Cite buy/sell BTC.
+  IF C1=YES AND C2=YES AND C3=NO AND TREND_RESPECT did not force commit → POSITION commits in C1 direction at 55–60% (override NEUTRAL; if POST_SPIKE-all-YES or PREMORTEM allowed "NEUTRAL OR opposite", pick opposite when = C1).
 POSITION: ABOVE | BELOW | NEUTRAL
 CONFIDENCE: XX%
 DATA_RECEIVED: [state which signals were available]
