@@ -1291,14 +1291,21 @@ POST_SPIKE_GATE:
   G4 (order-book imbalance OR A/D slope flipped sign vs spike bar): YES/NO + cite numbers
   IF all four = YES → POSITION must be opposite the spike direction OR NEUTRAL.
 TREND_RESPECT_GATE:
-  T1 (trend stack unanimous: Dow + Alligator + EMA21/55 + Micro 20-bar all same direction): YES/NO + cite each
-  T2 (counter-signals MAGNITUDE-material — ANY one of: whale net >2.5 BTC AND ≥70% opposite-trend; taker BSR on >2 BTC opposing; funding/OI delta in last 1–3 bars; trend exhausting (last 4-5 bars <0.05% net move + low volume)): YES/NO + cite numbers
+  T1a Dow Theory label EXACTLY matches "UPTREND" or "DOWNTREND" (EXPANDING RANGE / CONTRACTING RANGE / MIXED / RANGING / INSUFFICIENT DATA → NOT a trend): YES/NO + paste exact label string from prompt
+  T1b Alligator direction: UP / DOWN / FLAT
+  T1c EMA21 vs EMA55: UP (21>55) / DOWN (21<55) / EQUAL
+  T1d Micro 20-bar direction: UP / DOWN / FLAT
+  T1 (T1a=YES AND T1b,T1c,T1d all match T1a-direction — any FLAT/EQUAL/NOT-trend breaks unanimity): YES/NO
+  T2a whale_net_BTC = signed value; |whale_net| = magnitude; is |whale_net| > 2.5? YES/NO + cite both
+  T2b same_dir_share% = (buy% if trend UP, else sell%); opposite_share% = 100 − same_dir_share; is opposite_share ≥ 70? YES/NO + cite both
+  T2 (counter-signals MAGNITUDE-material — ANY: (T2a=YES AND T2b=YES); taker BSR on >2 BTC opposing; funding/OI delta last 1–3 bars; trend exhausting <0.05% net last 4-5 bars + low vol): YES/NO + cite numbers
   IF T1=YES AND T2=NO → POSITION must commit in the trend direction at 55–65% (NEUTRAL is not allowed).
 PREMORTEM_GATE (fill BEFORE writing POSITION):
   P0 premortem trigger sentence: [paste your Step-D premortem reason]
   P1 (P0 cites ≥2 INDEPENDENT oscillator extremes in CURRENT bar contradicting POSITION — RSI(4)<25 or >75, MFI(4)<20 or >80, BB %B<0 or >1; need 2+ from this list): YES/NO + cite each field + value + threshold
   P2 (P0 cites a low-volume extreme-flow noise-trap — taker total <2 BTC AND BSR>5 or <0.2 contradicting POSITION — AND spot whale flow does NOT corroborate POSITION): YES/NO + cite taker total + BSR + spot whale signal
-  IF P1=YES OR P2=YES → POSITION must be NEUTRAL OR opposite the draft (CONFIDENCE ≤55% if you flip).
+  P3 (P0 cites a price-action structural counter that CONTRADICTS POSITION — rejection at named resistance for an UP/ABOVE draft, OR failed-breakdown at named support for a DOWN/BELOW draft — with ALL of: (a) named level within 0.20% of current close, (b) order-book imbalance ≤−10% on the rejection side (asks heavy) for resistance, OR ≥+10% (bids heavy) on the breakdown side for support, (c) ≥3 of the last 15 1-min bars in the CSV satisfy: high within 0.08% of level (rejection) OR low within 0.08% (breakdown), AND closed back on the rejecting side (close < level for resistance; close > level for support). Method: list every 1-min bar in the last 15 by Time, mark each YES/NO against (c), then count): YES/NO + cite level + imbalance % + bar-by-bar enumeration + final count
+  IF P1=YES OR P2=YES OR P3=YES → POSITION must be NEUTRAL OR opposite the draft (CONFIDENCE ≤55% if you flip). PRECEDENCE: P3=YES overrides TREND_RESPECT_GATE (NEUTRAL/flip allowed even if T1=YES,T2=NO); P1/P2 alone do NOT override TREND_RESPECT_GATE.
 POSITION: ABOVE | BELOW | NEUTRAL
 CONFIDENCE: XX%
 DATA_RECEIVED: [state which signals were available]
