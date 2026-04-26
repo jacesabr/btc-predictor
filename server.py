@@ -643,7 +643,7 @@ async def embed_missing(limit: int = 20):
     Returns counts of: requested, attempted, succeeded, failed, and the
     window_starts that were processed.
     """
-    from ai import embed_text, _bar_embed_text
+    from ai import embed_text, _bar_embed_text, COHERE_EMBED_MODEL_ID
     from semantic_store import embedded_window_starts, load_all, store_embedding
     if not config.cohere_api_key:
         return {"status": "error", "detail": "COHERE_API_KEY not configured"}
@@ -663,7 +663,7 @@ async def embed_missing(limit: int = 20):
             try:
                 text = _bar_embed_text(bar)
                 vec  = await embed_text(config.cohere_api_key, text, input_type="search_document")
-                store_embedding(ws, vec)
+                store_embedding(ws, vec, embed_text=text, embed_model=COHERE_EMBED_MODEL_ID)
                 succeeded += 1
                 done_ws.append(ws)
                 await asyncio.sleep(0.1)   # ~10/sec rate limit

@@ -197,6 +197,14 @@ COHERE_EMBED_URL  = "https://api.cohere.com/v2/embed"
 COHERE_RERANK_URL = "https://api.cohere.com/v2/rerank"
 COHERE_EMBED_MODEL  = "embed-english-v3.0"
 COHERE_RERANK_MODEL = "rerank-english-v3.0"
+# Provider-prefixed identifier persisted alongside each embedding so backtests
+# can tell which embedder produced which vector.
+COHERE_EMBED_MODEL_ID = f"cohere/{COHERE_EMBED_MODEL}"
+
+# Prompt-template version stamped on every persisted main-predictor result.
+# Bump when the prompt structure or instructions materially change so future
+# backtests can group rows by template revision.
+MAIN_PREDICTOR_PROMPT_VERSION = "v1"
 COHERE_PRE_FILTER_K = 50   # cosine candidates before reranking
 COHERE_FINAL_K      = 10   # final bars sent to LLM after reranking (was 20 — tighter set = stronger signal per bar)
 
@@ -301,25 +309,34 @@ async def _api_call(
     max_tokens: int = 1000,
     timeout_s: Optional[float] = 90.0,
     model: str = DEEPSEEK_FAST_MODEL,
-) -> str:
+) -> Tuple[str, str]:
     """Primary chat-completions call. Routes through OpenRouter (deepseek/
     deepseek-chat-v3.1) when OPENROUTER_API_KEY is set; otherwise falls back
     to DeepSeek direct using the legacy `api_key` argument. On any
-    credit/rate-limit/server error, retries once via Venice."""
+    credit/rate-limit/server error, retries once via Venice.
+
+    Returns (response_text, model_id_actually_used). The model_id is provider-
+    prefixed (e.g. "openrouter/deepseek/deepseek-chat-v3.1", "deepseek/deepseek-chat",
+    "venice/deepseek-v4-flash") so callers can persist it alongside the prediction
+    and disambiguate which model produced which row at backtest time.
+    """
     or_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if or_key:
         primary_url   = OPENROUTER_API_URL
         primary_key   = or_key
         primary_model = OPENROUTER_MODEL_FOR_DEEPSEEK.get(model, "deepseek/deepseek-chat-v3.1")
         primary_label = "OpenRouter"
+        primary_id    = f"openrouter/{primary_model}"
     else:
         primary_url   = DEEPSEEK_API_URL
         primary_key   = api_key
         primary_model = model
         primary_label = "DeepSeek"
+        primary_id    = f"deepseek/{primary_model}"
 
     try:
-        return await _post_chat(primary_url, primary_key, primary_model, prompt, max_tokens, timeout_s)
+        text = await _post_chat(primary_url, primary_key, primary_model, prompt, max_tokens, timeout_s)
+        return text, primary_id
     except Exception as exc:
         venice_key = os.environ.get("VENICE_API_KEY", "").strip()
         if not venice_key or not _is_deepseek_fallback_error(exc):
@@ -327,7 +344,8 @@ async def _api_call(
         venice_model = VENICE_MODEL_FOR_DEEPSEEK.get(model, "deepseek-v4-flash")
         logger.warning("%s unavailable (%s) — falling back to Venice model=%s",
                        primary_label, _fmt_exc(exc), venice_model)
-        return await _post_chat(VENICE_API_URL, venice_key, venice_model, prompt, max_tokens, timeout_s)
+        text = await _post_chat(VENICE_API_URL, venice_key, venice_model, prompt, max_tokens, timeout_s)
+        return text, f"venice/{venice_model}"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -1563,7 +1581,7 @@ LESSON_FALSIFIER: [what observation would invalidate the rule]"""
 
     try:
         t0 = time.time()
-        raw = await _api_call(api_key, prompt, max_tokens=3500, timeout_s=70.0, model=DEEPSEEK_FAST_MODEL)
+        raw, _ = await _api_call(api_key, prompt, max_tokens=3500, timeout_s=70.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = int((time.time() - t0) * 1000)
         logger.info("Postmortem completed for bar %s (%s) in %dms", bar_ts, verdict, elapsed)
         _save(_PM_DIR / f"last_{int(window_start)}.txt", f"=== PROMPT ===\n{prompt}\n\n=== RESPONSE ===\n{raw}")
@@ -1694,7 +1712,7 @@ async def run_specialists(
     _save(_SPEC_PROMPT_OUT, f"# Sent at {ts_str}\n\n{prompt}")
 
     try:
-        raw = await _api_call(api_key, prompt, max_tokens=10000, timeout_s=140.0, model=DEEPSEEK_FAST_MODEL)
+        raw, _ = await _api_call(api_key, prompt, max_tokens=10000, timeout_s=140.0, model=DEEPSEEK_FAST_MODEL)
         _append(_SPEC_RESPONSE, f"\n{'='*60}\n# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}\n{'='*60}\n\n{raw}")
         strategies, suggestion = _parse_specialist_response(raw)
         if suggestion:
@@ -2686,7 +2704,7 @@ async def run_historical_analyst(
         # 120s cap: enough headroom for Opus 4.7 (slower than deepseek-v4-flash)
         # while still ensuring a hung Venice request can't freeze the prediction
         # loop (root cause of the 2026-04-25 12:00–13:00 outage).
-        raw     = await _api_call(api_key, prompt, max_tokens=4000, timeout_s=120.0, model=DEEPSEEK_FAST_MODEL)
+        raw, _  = await _api_call(api_key, prompt, max_tokens=4000, timeout_s=120.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = time.time() - t0
         _record("deepseek_call", _t)
         _save(_HIST_RESPONSE, f"# {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}  elapsed={elapsed:.1f}s\n\n{raw}")
@@ -2998,7 +3016,7 @@ async def run_binance_expert(
 
     t0 = time.time()
     try:
-        raw = await _api_call(api_key, prompt, max_tokens=4000, timeout_s=90.0, model=DEEPSEEK_FAST_MODEL)
+        raw, _ = await _api_call(api_key, prompt, max_tokens=4000, timeout_s=90.0, model=DEEPSEEK_FAST_MODEL)
         elapsed = time.time() - t0
         ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
         _save(_BNX_RESPONSE,
@@ -3073,9 +3091,12 @@ class DeepSeekPredictor:
         _save(_PRED_PROMPT, f"# {ts_str}  (window #{self.window_count})\n\n{prompt}")
 
         raw_response: Optional[str] = None
+        model_used: str = ""
         error_msg    = ""
         try:
-            raw_response = await _api_call(self.api_key, prompt, max_tokens=5000, timeout_s=90.0, model=DEEPSEEK_FAST_MODEL)
+            raw_response, model_used = await _api_call(
+                self.api_key, prompt, max_tokens=5000, timeout_s=90.0, model=DEEPSEEK_FAST_MODEL
+            )
         except Exception as exc:
             error_msg = repr(exc)
             logger.error("DeepSeek call failed: %r", exc)
@@ -3089,6 +3110,7 @@ class DeepSeekPredictor:
                 "window_start": window_start_str, "window_end": window_end_str,
                 "latency_ms": int((time.time() - t0) * 1000), "completed_at": time.time(),
                 "window_count": self.window_count,
+                "model_id": "", "prompt_version": MAIN_PREDICTOR_PROMPT_VERSION,
             }
 
         _append(_PRED_RESPONSE, f"\n{'='*60}\n# {ts_str}  (window #{self.window_count})\n{'='*60}\n\n{raw_response}")
@@ -3119,6 +3141,8 @@ class DeepSeekPredictor:
             "window_start": window_start_str,
             "window_end": window_end_str, "latency_ms": latency_ms,
             "completed_at": time.time(), "window_count": self.window_count,
+            "model_id": model_used,
+            "prompt_version": MAIN_PREDICTOR_PROMPT_VERSION,
         }
 
 
@@ -3304,7 +3328,7 @@ FULL_ANALYSIS:
 """
 
     try:
-        raw = await _api_call(
+        raw, _ = await _api_call(
             deepseek_api_key, prompt,
             max_tokens=4000, timeout_s=120.0,
             model=DEEPSEEK_MODEL,  # reasoner — full chain-of-thought

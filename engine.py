@@ -498,9 +498,10 @@ async def _embed_bar_background(window_start: float, bar_record: dict):
         logger.info("Cohere embed skipped — bar %.0f already has a vector", window_start)
         return
     try:
+        from ai import COHERE_EMBED_MODEL_ID
         text = _bar_embed_text(bar_record)
         vec  = await embed_text(config.cohere_api_key, text, input_type="search_document")
-        store_bar_embedding(window_start, vec)
+        store_bar_embedding(window_start, vec, embed_text=text, embed_model=COHERE_EMBED_MODEL_ID)
         logger.info("Cohere embedding stored in pgvector for bar %.0f (%d dims)", window_start, len(vec))
     except CohereUnavailableError as exc:
         logger.warning("Cohere embed background failed (bar %.0f): %s", window_start, exc)
@@ -589,6 +590,8 @@ async def _run_deepseek(
                 free_observation=result.get("free_observation", ""),
                 chart_path=chart_path or "",
                 dashboard_signals_snapshot=json.dumps(_json_safe(dashboard_signals or {})),
+                model_id=result.get("model_id", ""),
+                prompt_version=result.get("prompt_version", ""),
             )
 
         if result["signal"] not in ("ERROR", "UNAVAILABLE"):

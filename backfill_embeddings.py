@@ -25,7 +25,7 @@ except ImportError:
     pass
 
 from config import Config
-from ai import embed_text, _bar_embed_text
+from ai import embed_text, _bar_embed_text, COHERE_EMBED_MODEL_ID
 from semantic_store import load_all, store_embedding
 
 logging.basicConfig(
@@ -98,7 +98,7 @@ async def backfill_embeddings(limit: Optional[int] = None, start_from_end: bool 
             vec = await embed_text(config.cohere_api_key, text, input_type="search_document")
 
             # Store in database
-            store_embedding(ws, vec)
+            store_embedding(ws, vec, embed_text=text, embed_model=COHERE_EMBED_MODEL_ID)
 
             success += 1
             elapsed = time.time() - t0_total

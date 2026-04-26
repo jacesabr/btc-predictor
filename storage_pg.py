@@ -174,6 +174,8 @@ def migrate_deepseek_columns():
         ("postmortem",                 "TEXT"),
         ("polymarket_url",             "TEXT"),
         ("embedding",                  "TEXT"),
+        ("model_id",                   "TEXT"),
+        ("prompt_version",             "TEXT"),
     ]
     conn = _conn()
     try:
@@ -465,8 +467,9 @@ class StoragePG:
                     " narrative, free_observation, data_received, data_requests, "
                     " latency_ms, window_count, created_at, "
                     " chart_path, raw_response, full_prompt, strategy_snapshot, "
-                    " indicators_snapshot, dashboard_signals_snapshot, polymarket_url) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
+                    " indicators_snapshot, dashboard_signals_snapshot, polymarket_url, "
+                    " model_id, prompt_version) "
+                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) "
                     "ON CONFLICT (window_start) DO NOTHING",
                     (
                         float(record.get("window_start") or 0),
@@ -489,6 +492,8 @@ class StoragePG:
                         record.get("indicators_snapshot", ""),
                         record.get("dashboard_signals_snapshot", ""),
                         record.get("polymarket_url", ""),
+                        record.get("model_id", ""),
+                        record.get("prompt_version", ""),
                     ),
                 )
             conn.commit()

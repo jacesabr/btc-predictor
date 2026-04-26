@@ -3336,29 +3336,49 @@ function App() {
       }
     }
 
-    // REASONS — DeepSeek emits these as numbered prose lines joined with
-    // newlines into ds.reasoning. Pick lines starting with a digit + period.
+    // REASONS — DeepSeek emits 4 lines like "MICROSTRUCTURE: ...",
+    // "FUNDING + POSITIONING: ...", "TECHNICAL: ...", "SYNTHESIS: ...".
+    // The Python parser strips leading "1. " before storing. Auto-renumber
+    // here and split each line into (label, body) when a colon is present.
     const reasoningRaw = (ds.reasoning || "").trim();
     const reasonItems = reasoningRaw
       .split("\n")
       .map(s => s.trim())
-      .filter(s => /^\d+\./.test(s))
-      .map(s => {
-        const m = s.match(/^(\d+)\.\s*(.+)$/);
-        return m ? { num: m[1], text: m[2] } : { num: "•", text: s };
+      .filter(Boolean)
+      .map((s, i) => {
+        const stripped = s.replace(/^\d+\.\s*/, "");
+        const m = stripped.match(/^([A-Z][A-Z0-9 +/_-]{1,40}):\s*(.+)$/);
+        return {
+          num:   String(i + 1),
+          label: m ? m[1].trim() : "",
+          text:  m ? m[2].trim() : stripped,
+        };
       });
 
-    // Binance microstructure expert — pick the richest summary field that
-    // exists on the bar's expert dict. Order matters: edge > analysis >
-    // narrative > reasoning > confluence > taker_flow.
-    const beFields = ["edge", "analysis", "narrative", "reasoning", "confluence", "taker_flow"];
-    let beSummary = "";
+    // Binance microstructure expert — render every populated field as its
+    // own labeled row. Falls back to legacy `analysis`/`reasoning` blob if
+    // the structured fields are missing (older stored bars).
+    const beRows = [];
     if (binanceExpert) {
-      for (const f of beFields) {
-        const v = (binanceExpert[f] || "").toString().trim();
-        if (v) { beSummary = v; break; }
+      const beFieldOrder = [
+        ["taker_flow",  "Taker Flow"],
+        ["positioning", "Positioning"],
+        ["whale_flow",  "Whale Flow"],
+        ["oi_funding",  "OI / Funding"],
+        ["order_book",  "Order Book"],
+        ["confluence",  "Confluence"],
+      ];
+      for (const [k, lab] of beFieldOrder) {
+        const v = (binanceExpert[k] || "").toString().trim();
+        if (v) beRows.push({ key: k, label: lab, text: v });
       }
     }
+    const beEdge   = (binanceExpert?.edge  || "").toString().trim();
+    const beWatch  = (binanceExpert?.watch || "").toString().trim();
+    const beLegacy = !beRows.length && !beEdge && !beWatch
+      ? ((binanceExpert?.analysis || binanceExpert?.reasoning || binanceExpert?.narrative || "").toString().trim())
+      : "";
+    const beHasContent = beRows.length > 0 || beEdge || beWatch || beLegacy;
     const histSummary = (historicalAnalysis || "").trim();
 
     return (
@@ -3411,15 +3431,37 @@ function App() {
             </div>
           )}
 
-          {/* BINANCE MICROSTRUCTURE — peer section */}
-          {beSummary && (
+          {/* BINANCE MICROSTRUCTURE — peer section.
+              One KvBlock per populated field so each driver gets its own
+              labeled row instead of being collapsed into a single span. */}
+          {beHasContent && (
             <BriefingSection
               title="Binance Microstructure"
               verdict={binanceExpert?.signal}
             >
-              <div style={{ fontSize:13, color:C.text, lineHeight:1.6 }}>
-                <BoldAnalysis text={beSummary} color={C.text} />
-              </div>
+              {beRows.map(r => (
+                <KvBlock key={r.key} label={r.label}>
+                  <BoldAnalysis text={r.text} color={C.text} />
+                </KvBlock>
+              ))}
+              {beEdge && (
+                <KvBlock label="Edge"
+                  color={posColors(binanceExpert?.signal).color}>
+                  <BoldAnalysis text={beEdge} color={C.text} />
+                </KvBlock>
+              )}
+              {beWatch && (
+                <KvBlock label="Watch" color={C.muted}>
+                  <span style={{ fontStyle:"italic", color:C.textSec }}>
+                    <BoldAnalysis text={beWatch} color={C.textSec} />
+                  </span>
+                </KvBlock>
+              )}
+              {beLegacy && (
+                <div style={{ fontSize:13, color:C.text, lineHeight:1.6 }}>
+                  <BoldAnalysis text={beLegacy} color={C.text} />
+                </div>
+              )}
             </BriefingSection>
           )}
 
@@ -3505,19 +3547,33 @@ function App() {
             );
           })()}
 
-          {/* REASONING — peer section */}
+          {/* REASONING — peer section. Each item is a numbered row whose
+              right side stacks an optional uppercase LABEL above the body,
+              matching the KvBlock pattern used elsewhere in the briefing. */}
           {reasonItems.length > 0 && (
             <BriefingSection title="Reasoning">
-              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
                 {reasonItems.map((it, i) => (
-                  <div key={i} style={{ display:"flex", gap:10, alignItems:"flex-start" }}>
-                    <span style={{ fontSize:11, fontWeight:900, color:C.muted,
-                      minWidth:16, marginTop:3,
-                      fontVariantNumeric:"tabular-nums" }}>
+                  <div key={i} style={{ display:"flex", gap:12, alignItems:"flex-start" }}>
+                    <span style={{
+                      fontSize:11, fontWeight:900, color:C.muted,
+                      minWidth:18, marginTop: it.label ? 0 : 3,
+                      fontVariantNumeric:"tabular-nums",
+                      letterSpacing:0.5,
+                    }}>
                       {it.num}.
                     </span>
-                    <div style={{ fontSize:13, color:C.text, lineHeight:1.6, flex:1 }}>
-                      <BoldAnalysis text={it.text} color={C.text} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      {it.label && (
+                        <div style={{
+                          fontSize:9, fontWeight:800, color:C.muted,
+                          letterSpacing:1.2, textTransform:"uppercase",
+                          marginBottom:5,
+                        }}>{it.label}</div>
+                      )}
+                      <div style={{ fontSize:13, color:C.text, lineHeight:1.6 }}>
+                        <BoldAnalysis text={it.text} color={C.text} />
+                      </div>
                     </div>
                   </div>
                 ))}

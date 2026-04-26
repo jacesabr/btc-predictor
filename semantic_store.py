@@ -68,7 +68,9 @@ CREATE TABLE IF NOT EXISTS pattern_history (
     created_at   DOUBLE PRECISION NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pattern_history_ws ON pattern_history (window_start);
-ALTER TABLE pattern_history ADD COLUMN IF NOT EXISTS embedding REAL[];
+ALTER TABLE pattern_history ADD COLUMN IF NOT EXISTS embedding   REAL[];
+ALTER TABLE pattern_history ADD COLUMN IF NOT EXISTS embed_text  TEXT;
+ALTER TABLE pattern_history ADD COLUMN IF NOT EXISTS embed_model TEXT;
 """
 
 
@@ -234,8 +236,14 @@ def fetch_postmortems(window_starts: List[float]) -> Dict[float, str]:
 
 # ── Vector search ─────────────────────────────────────────────────────────────
 
-def store_embedding(window_start: float, vector: np.ndarray):
-    """Store a Cohere 1024-dim embedding for a resolved bar as a REAL[] array.
+def store_embedding(window_start: float, vector: np.ndarray,
+                    embed_text: str = "", embed_model: str = ""):
+    """Store a Cohere 1024-dim embedding for a resolved bar as a REAL[] array,
+    along with the exact text that was embedded and the model identifier.
+
+    The text + model_id are persisted alongside the vector so future backtests
+    can re-embed the same input through a different model without depending on
+    the live `_bar_embed_text(...)` builder (which may drift over time).
 
     Idempotent: the UPDATE refuses to overwrite an existing vector. Rationale —
     an earlier bug silently mass-re-embedded every bar on each deploy, burning
@@ -250,9 +258,11 @@ def store_embedding(window_start: float, vector: np.ndarray):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE pattern_history SET embedding = %s "
+                "UPDATE pattern_history "
+                "SET embedding = %s, embed_text = %s, embed_model = %s "
                 "WHERE window_start = %s AND embedding IS NULL",
-                (vector.astype(np.float32).tolist(), float(window_start)),
+                (vector.astype(np.float32).tolist(), embed_text or "", embed_model or "",
+                 float(window_start)),
             )
             if cur.rowcount == 0:
                 # Either the row doesn't exist, or it already has a vector.
