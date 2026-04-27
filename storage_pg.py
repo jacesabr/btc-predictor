@@ -555,6 +555,23 @@ class StoragePG:
         finally:
             _put(conn)
 
+    def update_deepseek_start_price(self, window_start: float, start_price: float):
+        """Backfill the bar's start_price with the kline open captured at resolution.
+        DeepSeek's row was first inserted mid-bar with whatever live tick the
+        collector held at bar boundary, which is sometimes a few seconds stale.
+        Once the bar closes and we fetch the official 5m kline, we replace the
+        row's start_price so admin/postmortem views show the same Δ as the chart."""
+        conn = _conn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE deepseek_predictions SET start_price=%s WHERE window_start=%s",
+                    (float(start_price), float(window_start)),
+                )
+            conn.commit()
+        finally:
+            _put(conn)
+
     def get_deepseek_accuracy(self) -> Dict:
         cutoff = get_reset_at()
         conn = _conn()

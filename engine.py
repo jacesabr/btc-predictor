@@ -19,7 +19,7 @@ import os
 import pathlib
 import time
 from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import aiohttp
 import numpy as np
@@ -1000,6 +1000,79 @@ async def _run_full_prediction(prices, is_force=False):
     return pred, strategy_preds, window_start_time, window_start_price
 
 
+async def _fetch_bar_ohlc(window_start_time: int) -> Optional[Tuple[float, float, str]]:
+    """Fetch the official 5m kline OHLC for the bar starting at window_start_time.
+    Returns (open, close, source) or None if every source fails. Used at resolution
+    so W/L is scored against the exchange's authoritative bar boundaries instead of
+    whatever stale tick the 2s REST collector happened to be holding when the bar
+    rolled over.
+    """
+    target_ms = int(window_start_time) * 1000
+
+    async def _try(url, params, parse):
+        try:
+            connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+            async with aiohttp.ClientSession(connector=connector) as s:
+                async with s.get(url, params=params, timeout=aiohttp.ClientTimeout(total=8)) as r:
+                    if r.status != 200:
+                        return None
+                    return parse(await r.json())
+        except Exception as exc:
+            logger.warning("Kline OHLC fetch failed (%s): %s", url, exc)
+            return None
+
+    # Bybit (primary — already used elsewhere)
+    def _parse_bybit(data):
+        for b in (data.get("result", {}).get("list") or []):
+            if int(b[0]) == target_ms:
+                return float(b[1]), float(b[4]), "bybit"
+        return None
+    out = await _try("https://api.bybit.com/v5/market/kline",
+                     {"category": "spot", "symbol": "BTCUSDT", "interval": "5",
+                      "start": str(target_ms), "end": str(target_ms + 300_000), "limit": "1"},
+                     _parse_bybit)
+    if out: return out
+
+    # OKX
+    def _parse_okx(data):
+        for row in (data.get("data") or []):
+            if int(row[0]) == target_ms:
+                return float(row[1]), float(row[4]), "okx"
+        return None
+    out = await _try("https://www.okx.com/api/v5/market/history-candles",
+                     {"instId": "BTC-USDT", "bar": "5m",
+                      "after": str(target_ms + 300_000),
+                      "before": str(target_ms - 1), "limit": "5"},
+                     _parse_okx)
+    if out: return out
+
+    # Binance direct (geo-blocked from Render today, but try — works once a proxy is in place)
+    def _parse_binance(rows):
+        for b in rows or []:
+            if int(b[0]) == target_ms:
+                return float(b[1]), float(b[4]), "binance"
+        return None
+    out = await _try("https://api.binance.com/api/v3/klines",
+                     {"symbol": "BTCUSDT", "interval": "5m",
+                      "startTime": str(target_ms),
+                      "endTime": str(target_ms + 299_999),
+                      "limit": "1"},
+                     _parse_binance)
+    return out
+
+
+async def _fetch_bar_ohlc_with_retry(window_start_time: int, retries: int = 3) -> Optional[Tuple[float, float, str]]:
+    """Wrap _fetch_bar_ohlc with retry — exchanges sometimes need a few seconds to
+    publish the kline for a just-closed bar. Sleep 5s between attempts."""
+    for attempt in range(retries):
+        ohlc = await _fetch_bar_ohlc(window_start_time)
+        if ohlc:
+            return ohlc
+        if attempt < retries - 1:
+            await asyncio.sleep(5)
+    return None
+
+
 async def _resolve_window(
     window_start_time, window_start_price, pred, strategy_preds,
 ):
@@ -1023,25 +1096,44 @@ async def _resolve_window(
     else:
         logger.warning("Bar %s closed — no pending DeepSeek result to reveal", bar_ts)
 
-    end_prices = collector.get_prices(1)
-    if end_prices:
-        end_price = end_prices[-1]
-        # Flat bars (end == start) are not directional — previously `>=`
-        # classified them as UP and inflated UP accuracy. Leave
-        # actual/correct NULL so they don't count in the W/L tally.
+    # Score the bar against the exchange's authoritative 5m kline OHLC. The
+    # previous tick-based comparison (collector's last cached tick at bar
+    # boundaries) misclassified bars when the live tick was 0–2s stale at
+    # boundary moments — a $20 gap-up between polls flipped DOWN bars to UP.
+    # Falls back to the tick method if every kline source is unreachable.
+    bar_ohlc = await _fetch_bar_ohlc_with_retry(int(window_start_time))
+    if bar_ohlc:
+        bar_open, bar_close, ohlc_source = bar_ohlc
+        if abs(bar_close - bar_open) < 1e-6:
+            actual  = None
+            correct = None
+        else:
+            actual  = "UP" if bar_close > bar_open else "DOWN"
+            correct = None if pred["signal"] == "NEUTRAL" else (actual == pred["signal"])
+        end_price = bar_close
+        resolved_start_price = bar_open
+        logger.info("Bar %s OHLC[%s]: O=%.2f C=%.2f Δ=%+.2f → actual=%s",
+                    bar_ts, ohlc_source, bar_open, bar_close, bar_close - bar_open, actual)
+    else:
+        end_prices = collector.get_prices(1)
+        end_price = end_prices[-1] if end_prices else None
         if not window_start_price or not end_price or \
-           abs(end_price - window_start_price) < 1e-6:
+           abs(end_price - (window_start_price or 0)) < 1e-6:
             actual  = None
             correct = None
         else:
             actual  = "UP" if end_price > window_start_price else "DOWN"
             correct = None if pred["signal"] == "NEUTRAL" else (actual == pred["signal"])
+        resolved_start_price = window_start_price
+        logger.warning("Bar %s — kline OHLC unavailable; fell back to tick comparison "
+                       "(may be wrong on volatile boundaries)", bar_ts)
 
+    if end_price is not None:
         await _safe_storage_async(
             storage.store_prediction,
             window_start=window_start_time,
             window_end=window_start_time + config.window_duration_seconds,
-            start_price=window_start_price, signal=pred["signal"],
+            start_price=resolved_start_price, signal=pred["signal"],
             confidence=pred["confidence"], strategy_votes=strategy_preds,
             market_odds=None, ev=None,
         )
@@ -1063,7 +1155,17 @@ async def _resolve_window(
         ds_correct   = (None if ds_pred_snap.get("signal") in (None, "ERROR", "UNAVAILABLE", "NEUTRAL")
                         else (actual == ds_pred_snap["signal"]))
 
-        await _safe_storage_async(storage.resolve_deepseek_prediction, window_start_time, end_price)
+        # Pass `actual` explicitly so the kline-derived direction is authoritative —
+        # otherwise resolve_deepseek_prediction recomputes from the tick-based
+        # start_price stored when DeepSeek returned mid-bar (back to the same bug).
+        await _safe_storage_async(storage.resolve_deepseek_prediction,
+                                  window_start_time, end_price, actual)
+        # Backfill the deepseek_predictions row's start_price to the kline open so
+        # the displayed Δ in admin/postmortem views matches the chart, not the
+        # stale tick captured when DeepSeek fired.
+        if bar_ohlc:
+            await _safe_storage_async(storage.update_deepseek_start_price,
+                                      window_start_time, resolved_start_price)
 
         # Safeguard: warn if no DeepSeek record was stored for this bar
         if ds_pred_snap.get("signal") in (None, "ERROR", "UNAVAILABLE"):
@@ -1097,7 +1199,7 @@ async def _resolve_window(
             "window_start":         window_start_time,
             "window_count":         ds_pred_snap.get("window_count") or (deepseek.window_count if deepseek else 0),
             "actual_direction":     actual,
-            "start_price":          window_start_price,
+            "start_price":          resolved_start_price,
             "end_price":            end_price,
             "latency_ms":           ds_pred_snap.get("latency_ms", 0),
             "ensemble_signal":      pred.get("signal", ""),
@@ -1126,7 +1228,7 @@ async def _resolve_window(
         # Embedding happens INSIDE the postmortem handler once the full record is complete.
         # For bars with no postmortem (None/ERROR/UNAVAILABLE), embed now with what we have.
         if ds_pred_snap.get("signal") not in (None, "ERROR", "UNAVAILABLE"):
-            _pm_record = {**ds_pred_snap, "window_start": window_start_time, "start_price": window_start_price}
+            _pm_record = {**ds_pred_snap, "window_start": window_start_time, "start_price": resolved_start_price}
             _pm_klines = list(binance_klines) if binance_klines else []
             _pm_features = dict(current_state.get("backend_snapshot", {}).get("features", {}))
             _pm_dash = current_state.get("backend_snapshot", {}).get("dashboard_signals")
