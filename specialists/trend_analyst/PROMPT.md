@@ -45,11 +45,23 @@ STEP 3 — VOLUME PROFILE
   • NORMAL — no notable volume pattern mentioned
 
 STEP 4 — TRAP PATTERNS
-  Scan the raw responses for recurring structural features: named price levels where price
-  repeatedly rejected or broke down, patterns of failed breakouts or breakdowns, stop hunt
-  language, funding squeeze mentions. Only include a trap in TRAPS_BUILDING if it appears
-  in at least 2 of the 20 bars AND has a named price level or measurable condition. Generic
-  phrases do not qualify. If nothing qualifies, write NONE.
+  Scan the raw responses for structural features: named price levels where price rejected
+  or failed to break, single high-volume spike events that immediately reversed, FRESH_REVERSAL
+  flags, failed breakouts/breakdowns. INCLUDE a trap if EITHER:
+    (a) the pattern appears in ≥2 of the 20 bars and has a named price level, OR
+    (b) it is a SINGLE high-leverage event with a named level — e.g. a volume spike ≥5×
+        median that immediately reversed (bull trap or bear trap), or a FRESH_REVERSAL=YES
+        bar with a clear inflection level.
+  Cite the exact price level and the bar time (HH:MM) where the trap pattern formed.
+  Generic phrases ("potential reversal", "overhead resistance") do NOT qualify — must be
+  a concrete named level. If nothing qualifies, write NONE.
+
+STEP 4b — VOLUME PROFILE PRECEDENCE
+  When applying the VOLUME_PROFILE rule from STEP 3: if any bar in the 20 had a volume
+  spike ≥5× the surrounding median AND subsequent bars were quieter, the correct label is
+  SPIKE_FADING — even if overall volume is also declining. SPIKE_FADING takes precedence
+  over FALLING when spikes are present. Only use FALLING when there is gradual volume decay
+  with no notable spike event.
 
 STEP 5 — NARRATIVE ARC
   Write 3–5 sentences describing the arc of the last ~100 minutes as if telling a story to
