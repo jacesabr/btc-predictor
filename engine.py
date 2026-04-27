@@ -50,7 +50,7 @@ from strategies import (
 )
 from ai import (
     DeepSeekPredictor, run_specialists, run_historical_analyst,
-    run_binance_expert, SPECIALIST_KEYS, _build_current_bar, run_postmortem,
+    run_binance_expert, run_trend_analyst, SPECIALIST_KEYS, _build_current_bar, run_postmortem,
     embed_text, _bar_embed_text, CohereUnavailableError,
     run_embedding_audit, load_embedding_audit_log as _load_embedding_audit_ndjson,
     set_flag_callback, set_audit_persist_callback,
@@ -306,6 +306,7 @@ current_state: Dict = {
     "bar_historical_context":     "",
     "bar_historical_analyst_fired": False,
     "bar_binance_expert":         {},
+    "bar_trend_analyst":          {},
     "service_unavailable":        False,
     "service_unavailable_reason": "",
     "embedding_audit_log":        [],
@@ -776,6 +777,33 @@ async def _run_full_prediction(prices, is_force=False):
             _record_stage("binance_expert", time.time() - _bx_t0, ok=False,
                           error=f"{type(bx_exc).__name__}: {bx_exc}")
 
+    # Trend analyst — synthesizes the last 20 resolved-bar responses into a
+    # regime/volatility/volume narrative. Reads only past responses, no current
+    # bar data needed. Soft-fails: if the call errors or there's <5 resolved
+    # bars in history, the main predictor just doesn't get a trend block.
+    trend_analyst_result = None
+    if deepseek:
+        _tr_t0 = time.time()
+        try:
+            past_responses = storage.get_recent_responses_for_tape(20) or []
+            trend_analyst_result = await asyncio.wait_for(
+                run_trend_analyst(config.deepseek_api_key, past_responses),
+                timeout=75.0,
+            )
+            if trend_analyst_result and trend_analyst_result.get("available"):
+                current_state["bar_trend_analyst"] = _json_safe(trend_analyst_result)
+                logger.info("Trend analyst done in %.1fs — regime=%s",
+                            time.time() - _tr_t0, trend_analyst_result.get("regime","?"))
+            _record_stage("trend_analyst", time.time() - _tr_t0,
+                          ok=bool(trend_analyst_result and trend_analyst_result.get("available")))
+        except asyncio.TimeoutError:
+            logger.warning("Trend analyst timed out (75s) — main predictor fires without trend block")
+            _record_stage("trend_analyst", time.time() - _tr_t0, ok=False, error="timeout 75s")
+        except Exception as tr_exc:
+            logger.warning("Trend analyst error: %s — main predictor fires without trend block", tr_exc)
+            _record_stage("trend_analyst", time.time() - _tr_t0, ok=False,
+                          error=f"{type(tr_exc).__name__}: {tr_exc}")
+
     # ── JOIN POINT — await the parallel unified-specialist task ─────────
     # By now (after dashboard ~5s + binance ~50s) the specialist task has
     # usually had ~55s of headstart. If it took ~70s total, we wait ~15s
@@ -955,6 +983,7 @@ async def _run_full_prediction(prices, is_force=False):
                 historical_analysis=historical_analysis,
                 dashboard_accuracy=dashboard_acc,
                 binance_expert_analysis=binance_expert_result,
+                trend_analyst_analysis=trend_analyst_result,
             )
         )
 

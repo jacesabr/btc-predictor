@@ -185,6 +185,7 @@ async def deepseek_status():
         "bar_historical_analysis":     current_state.get("bar_historical_analysis", ""),
         "bar_historical_context":      current_state.get("bar_historical_context", ""),
         "bar_binance_expert":          current_state.get("bar_binance_expert", {}),
+        "bar_trend_analyst":           current_state.get("bar_trend_analyst", {}),
         "service_unavailable":         current_state.get("service_unavailable", False),
         "service_unavailable_reason":  current_state.get("service_unavailable_reason", ""),
     }
@@ -822,6 +823,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "bar_historical_analysis":     current_state.get("bar_historical_analysis", ""),
                         "bar_historical_context":      current_state.get("bar_historical_context", ""),
                         "bar_binance_expert":          current_state.get("bar_binance_expert", {}),
+        "bar_trend_analyst":           current_state.get("bar_trend_analyst", {}),
                         "service_unavailable":         current_state.get("service_unavailable", False),
                         "service_unavailable_reason":  current_state.get("service_unavailable_reason", ""),
                         "dashboard_signals":           _dash,

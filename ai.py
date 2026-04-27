@@ -803,6 +803,7 @@ def build_prompt(
     indicator_accuracy=None, ensemble_weights=None, historical_analysis=None,
     dashboard_accuracy=None, neutral_analysis=None,
     binance_expert_analysis=None, historical_failure_note: str = "",
+    trend_analyst_analysis=None,
 ) -> str:
     f  = features
     fv = lambda k, d=0.0: f.get(k, d)
@@ -1000,6 +1001,22 @@ def build_prompt(
     else:
         binance_expert_block = "  (Binance expert did not complete this window)"
 
+    # Trend analyst block (last-20-bar synthesizer)
+    _ta = trend_analyst_analysis or {}
+    if _ta.get("available") and _ta.get("regime"):
+        _ta_lines = [
+            f"  Snapshot     : {_ta.get('trend_snapshot', '')}",
+            f"  Regime       : {_ta.get('regime', '')}",
+            f"  Volatility   : {_ta.get('volatility', '')}",
+            f"  Volume       : {_ta.get('volume_profile', '')}",
+            f"  Traps        : {_ta.get('traps_building', 'NONE')}",
+            "",
+            f"  {_ta.get('narrative', '')}",
+        ]
+        trend_analyst_block = "\n".join(_ta_lines)
+    else:
+        trend_analyst_block = "  (Trend analyst did not complete this window)"
+
     # NEUTRAL abstention performance block
     na = neutral_analysis or {}
     na_total = na.get("total", 0)
@@ -1164,6 +1181,11 @@ four gate questions G1–G4 in your output before stating POSITION (see RESPONSE
   HISTORICAL SIMILARITY ANALYST
 ──────────────────────────────────────────────
 {historical_block}
+
+══════════════════════════════════════════════
+  CURRENT ONGOING TREND  (last 20-bar synthesizer)
+══════════════════════════════════════════════
+{trend_analyst_block}
 
 ──────────────────────────────────────────────
   LAST 50 BARS  (1-min OHLCV, Bybit primary → OKX → Kraken → Binance)
@@ -2931,6 +2953,142 @@ async def run_binance_expert(
         elapsed = time.time() - t0
         logger.warning("Binance expert failed after %.1fs: %s", elapsed, _fmt_exc(exc))
         return None
+
+
+# ═══════════════════════════════════════════════════════════════
+# SECTION 3b — Trend Analyst (last-20-bar synthesizer)
+# ═══════════════════════════════════════════════════════════════
+
+_TRD_DIR      = _ROOT / "specialists" / "trend_analyst"
+_TRD_PROMPT   = _TRD_DIR / "PROMPT.md"
+_TRD_RESPONSE = _TRD_DIR / "last_response.txt"
+
+_TREND_SUFFICIENT_BARS = 5  # minimum resolved bars before we fire the LLM
+
+
+def _parse_trend_analyst_response(text: str) -> Dict:
+    """Parse TREND_SNAPSHOT / REGIME / VOLATILITY / VOLUME_PROFILE / TRAPS_BUILDING / NARRATIVE."""
+    fields: Dict[str, str] = {
+        "trend_snapshot": "",
+        "regime":         "",
+        "volatility":     "",
+        "volume_profile": "",
+        "traps_building": "",
+        "narrative":      "",
+    }
+    _KEY_MAP = {
+        "TREND_SNAPSHOT": "trend_snapshot",
+        "REGIME":         "regime",
+        "VOLATILITY":     "volatility",
+        "VOLUME_PROFILE": "volume_profile",
+        "TRAPS_BUILDING": "traps_building",
+        "NARRATIVE":      "narrative",
+    }
+    current_field: Optional[str] = None
+    for line in text.strip().splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        colon = s.find(":")
+        if colon > 0:
+            raw_key = s[:colon]
+            key_candidate = re.sub(r"[^A-Z0-9 _]", "", raw_key.upper()).strip().replace(" ", "_")
+            if key_candidate in _KEY_MAP:
+                fields[_KEY_MAP[key_candidate]] = s[colon + 1:].strip()
+                current_field = _KEY_MAP[key_candidate]
+                continue
+        if current_field and s:
+            fields[current_field] += " " + s
+    return {**fields, "raw_response": text}
+
+
+def _build_trend_tape(past_responses: List[Dict]) -> str:
+    """Render the last-N resolved bars as a chronological tape string.
+
+    Each row in past_responses is newest-first (from get_recent_responses_for_tape);
+    we reverse so the tape reads oldest → newest (bar -20 at top, bar -1 at bottom).
+    """
+    rows = list(reversed(past_responses))
+    lines: List[str] = []
+    n = len(rows)
+    for i, row in enumerate(rows):
+        bar_index = -(n - i)   # e.g. -20, -19, …, -1
+        # Timestamp
+        ws = row.get("window_start")
+        if ws is None:
+            ts_str = "??:?? UTC"
+        else:
+            try:
+                ts_epoch = ws.timestamp() if hasattr(ws, "timestamp") else float(ws)
+                ts_str = time.strftime("%H:%M UTC", time.gmtime(ts_epoch))
+            except Exception:
+                ts_str = str(ws)
+        ds_sig  = (row.get("signal") or "?").upper()
+        actual  = (row.get("actual_direction") or "?").upper()
+        # Compute price change %
+        sp = row.get("start_price"); ep = row.get("end_price")
+        try:
+            pct_str = f"{((float(ep) / float(sp)) - 1) * 100:+.3f}%"
+        except Exception:
+            pct_str = "?"
+        header = f"── Bar {bar_index} ({ts_str}) | DS={ds_sig} actual={actual} {pct_str} ──"
+        raw = (row.get("raw_response") or "").strip()
+        if len(raw) > 2500:
+            raw = raw[:2500] + "\n… [truncated]"
+        lines.append(header)
+        if raw:
+            lines.append(raw)
+        lines.append("")
+    return "\n".join(lines)
+
+
+async def run_trend_analyst(
+    api_key: str,
+    past_responses: List[Dict],
+) -> Dict:
+    """Synthesize the last 20 resolved bars into a trend/regime/volatility summary.
+
+    Returns a dict with keys: trend_snapshot, regime, volatility, volume_profile,
+    traps_building, narrative, raw_response.
+    Returns {"available": False, "reason": "..."} when there is insufficient history
+    or the LLM call fails.
+    """
+    if len(past_responses) < _TREND_SUFFICIENT_BARS:
+        return {"available": False, "reason": f"insufficient history ({len(past_responses)} bars, need {_TREND_SUFFICIENT_BARS})"}
+
+    try:
+        template = _TRD_PROMPT.read_text(encoding="utf-8")
+    except Exception as exc:
+        logger.error("Trend analyst: could not load PROMPT.md: %s", exc)
+        return {"available": False, "reason": f"prompt load error: {exc}"}
+
+    tape_block = _build_trend_tape(past_responses)
+    prompt = template.format(tape_block=tape_block)
+
+    t0 = time.time()
+    try:
+        raw, _ = await _api_call(api_key, prompt, max_tokens=1500, timeout_s=90.0, model=DEEPSEEK_FAST_MODEL)
+        elapsed = time.time() - t0
+        ts_str = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
+        _save(_TRD_RESPONSE,
+              f"# {ts_str}  elapsed={elapsed:.1f}s  n={len(past_responses)}\n\n"
+              f"=== PROMPT ===\n{prompt}\n\n=== RESPONSE ===\n{raw}")
+        result = _parse_trend_analyst_response(raw)
+        result["available"] = True
+        logger.info(
+            "Trend analyst %.1fs → regime=%s vol=%s vol_profile=%s",
+            elapsed, result.get("regime", "?"),
+            result.get("volatility", "?"), result.get("volume_profile", "?"),
+        )
+        return result
+    except asyncio.TimeoutError:
+        elapsed = time.time() - t0
+        logger.warning("Trend analyst TIMEOUT after %.1fs — main prompt will skip trend block", elapsed)
+        return {"available": False, "reason": f"timeout after {elapsed:.1f}s"}
+    except Exception as exc:
+        elapsed = time.time() - t0
+        logger.warning("Trend analyst failed after %.1fs: %s", elapsed, _fmt_exc(exc))
+        return {"available": False, "reason": _fmt_exc(exc)}
 
 
 # ═══════════════════════════════════════════════════════════════

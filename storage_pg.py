@@ -742,6 +742,26 @@ class StoragePG:
         finally:
             _put(conn)
 
+    def get_recent_responses_for_tape(self, n: int = 20) -> List[Dict]:
+        """Return the last N resolved deepseek predictions ordered newest-first
+        with the fields needed to build a chronological tape: window_start,
+        signal, actual_direction, start_price, end_price, raw_response."""
+        conn = _conn()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT window_start, signal, actual_direction, start_price, end_price, raw_response "
+                    "FROM deepseek_predictions "
+                    "WHERE actual_direction IS NOT NULL "
+                    "  AND raw_response IS NOT NULL "
+                    "  AND raw_response != '' "
+                    "ORDER BY window_start DESC LIMIT %s",
+                    (n,),
+                )
+                return [dict(r) for r in cur.fetchall()]
+        finally:
+            _put(conn)
+
     def load_embedding_audits(self, limit: int = 20) -> List[Dict]:
         """Return recent embedding audits (newest first)."""
         conn = _conn()
