@@ -747,6 +747,108 @@ async def prune_keep_recent(keep: int = 100):
         _put(conn)
 
 
+@app.post("/admin/backfill-bar-resolutions", dependencies=[Depends(require_admin)])
+async def backfill_bar_resolutions(limit: int = 500):
+    """Re-resolve historical bars against the exchange's official 5m kline OHLC.
+    For each row in deepseek_predictions / predictions whose window_start is in
+    the most recent `limit` distinct windows, fetch the kline OHLC and rewrite
+    start_price / end_price / actual_direction / correct.
+
+    Idempotent — safe to run multiple times. Skips bars where every kline source
+    fails (rare; only if Bybit AND OKX AND Binance are all unreachable for that
+    window). Does not touch embeddings or pattern_history.
+    """
+    from engine import _fetch_bar_ohlc_with_retry
+    from storage_pg import _conn, _put
+
+    flipped_ds, flipped_p = [], []
+    updated_ds = updated_p = skipped = 0
+
+    conn = _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT DISTINCT window_start FROM ("
+                "  SELECT window_start FROM deepseek_predictions "
+                "  UNION SELECT window_start FROM predictions"
+                ") t ORDER BY window_start DESC LIMIT %s",
+                (limit,),
+            )
+            window_starts = [r[0] for r in cur.fetchall()]
+
+        for ws in window_starts:
+            # retries=1 — old bars either have a kline already or never will,
+            # no point sleeping 5s between attempts on stale data.
+            ohlc = await _fetch_bar_ohlc_with_retry(int(ws), retries=1)
+            if not ohlc:
+                skipped += 1
+                continue
+            new_open, new_close, src = ohlc
+            if abs(new_close - new_open) < 1e-6:
+                new_actual = None
+            else:
+                new_actual = "UP" if new_close > new_open else "DOWN"
+
+            # deepseek_predictions
+            with conn.cursor() as cur:
+                cur.execute("SELECT signal, actual_direction, start_price FROM deepseek_predictions WHERE window_start=%s", (ws,))
+                row = cur.fetchone()
+                if row:
+                    ds_sig, ds_old_actual, ds_old_start = row
+                    ds_correct = None if (ds_sig == "NEUTRAL" or new_actual is None) else (new_actual == ds_sig)
+                    cur.execute(
+                        "UPDATE deepseek_predictions "
+                        "SET start_price=%s, end_price=%s, actual_direction=%s, correct=%s "
+                        "WHERE window_start=%s",
+                        (new_open, new_close, new_actual, ds_correct, ws),
+                    )
+                    updated_ds += 1
+                    if ds_old_actual != new_actual:
+                        flipped_ds.append({
+                            "window_start": ws, "signal": ds_sig,
+                            "old_actual": ds_old_actual, "new_actual": new_actual,
+                            "old_start": float(ds_old_start) if ds_old_start else None,
+                            "new_start": new_open, "new_close": new_close,
+                            "kline_source": src,
+                        })
+
+            # predictions (math-ensemble)
+            with conn.cursor() as cur:
+                cur.execute("SELECT signal, actual_direction FROM predictions WHERE window_start=%s", (ws,))
+                row = cur.fetchone()
+                if row:
+                    p_sig, p_old_actual = row
+                    p_correct = None if (p_sig == "NEUTRAL" or new_actual is None) else (new_actual == p_sig)
+                    cur.execute(
+                        "UPDATE predictions "
+                        "SET start_price=%s, end_price=%s, actual_direction=%s, correct=%s "
+                        "WHERE window_start=%s",
+                        (new_open, new_close, new_actual, p_correct, ws),
+                    )
+                    updated_p += 1
+                    if p_old_actual != new_actual:
+                        flipped_p.append({
+                            "window_start": ws, "signal": p_sig,
+                            "old_actual": p_old_actual, "new_actual": new_actual,
+                            "kline_source": src,
+                        })
+
+        conn.commit()
+        return {
+            "status": "ok",
+            "windows_examined": len(window_starts),
+            "deepseek_predictions_updated": updated_ds,
+            "predictions_updated": updated_p,
+            "windows_skipped_no_kline": skipped,
+            "deepseek_flipped_count": len(flipped_ds),
+            "ensemble_flipped_count": len(flipped_p),
+            "deepseek_flipped": flipped_ds,
+            "ensemble_flipped": flipped_p,
+        }
+    finally:
+        _put(conn)
+
+
 @app.post("/admin/delete-bar-range", dependencies=[Depends(require_admin)])
 async def delete_bar_range(start_ts: float, end_ts: float):
     """One-shot deletion of bars whose window_start falls in [start_ts, end_ts].
