@@ -1290,7 +1290,10 @@ PREMORTEM_GATE (fill BEFORE writing POSITION):
   IF P1=YES OR P2=YES OR P3=YES → POSITION must be NEUTRAL OR opposite the draft (if you flip, SURVIVES_STEELMAN must be YES with a specific rebuttal).
 COMMIT_GATE (fires AFTER prior gates; composes with POST_SPIKE-all-4-YES & PREMORTEM-P1/P2=YES "NEUTRAL OR opposite" allowance):
   C1 microstructure majority — list each (UP/DOWN, FLAT=neither): order_book_imbalance sign | taker BSR (>1=UP, <1=DOWN) | A/D slope sign | last 4-bar net price change sign | MACD histogram sign. ≥3 of 5 same way = YES + cite direction; else NO.
-  C2 P0-names-direction-with-imbalance — P0 names a directional target ("below $X" / "above $Y") in SAME direction as C1 AND cites an imbalance ≥10% (|OBI|≥10% OR BSR ≤0.2 / ≥5)? YES/NO + direction + number.
+  C2 directional-commit-condition — fire C2=YES if ANY of paths (a)/(b)/(c) below holds (cite which path fired and ALL required values for that path verbatim from the prompt; if none fire, C2=NO):
+    path (a) strict-imbalance — P0 names a directional target (below $X / above $Y) in SAME direction as C1 AND cites an imbalance >=10 percent (absOBI >=10 percent OR BSR <=0.2 OR BSR >=5).
+    path (b) broad-supermajority — at least 4 of the 5 C1 microstructure signals point the SAME way as C1 direction (re-list the 5 signs from C1 and count).
+    path (c) moderate-imbalance-confluence — C1=YES (>=3 of 5) AND absOBI >=7.0 percent AND (BSR <=0.75 OR BSR >=1.33) AND A/D slope sign matches C1 direction. Cite OBI percent, BSR, and A/D slope value.
   C3 spot-whale-strong-veto — spot whale flow ≥2.0 BTC OPPOSING C1 direction? YES → COMMIT_GATE inactive (strong whale veto, do not flip); NO → continue. Cite buy/sell BTC.
   IF C1=YES AND C2=YES AND C3=NO → POSITION commits in C1 direction (override NEUTRAL; if POST_SPIKE-all-YES or PREMORTEM allowed "NEUTRAL OR opposite", pick opposite when = C1).
 SPECIALIST_AUTHORITY_GATE (fill BEFORE POSITION; verdict can OVERRIDE a NEUTRAL draft):
