@@ -1293,6 +1293,12 @@ COMMIT_GATE (fires AFTER prior gates; composes with POST_SPIKE-all-4-YES & PREMO
   C2 P0-names-direction-with-imbalance — P0 names a directional target ("below $X" / "above $Y") in SAME direction as C1 AND cites an imbalance ≥10% (|OBI|≥10% OR BSR ≤0.2 / ≥5)? YES/NO + direction + number.
   C3 spot-whale-strong-veto — spot whale flow ≥2.0 BTC OPPOSING C1 direction? YES → COMMIT_GATE inactive (strong whale veto, do not flip); NO → continue. Cite buy/sell BTC.
   IF C1=YES AND C2=YES AND C3=NO → POSITION commits in C1 direction (override NEUTRAL; if POST_SPIKE-all-YES or PREMORTEM allowed "NEUTRAL OR opposite", pick opposite when = C1).
+SPECIALIST_AUTHORITY_GATE (fill BEFORE POSITION; verdict can OVERRIDE a NEUTRAL draft):
+  SAG1 ensemble strength — cite Ensemble Confidence + Weighted UP + Weighted DN verbatim from ENSEMBLE WEIGHTED VOTE. ratio = max(W_UP,W_DN)/min(W_UP,W_DN). Trigger = (Confidence ≥ 70.0%) AND (ratio ≥ 1.50). YES/NO + cite all three numbers + ensemble direction.
+  SAG2 draft was NEUTRAL — was your tentative POSITION before this gate NEUTRAL? YES/NO. If tentative call is already directional, answer NO → SAG5=GATE_INACTIVE.
+  SAG3 historical_analyst sufficiency — quote the historical_analyst row from INDICATOR TRACK RECORD verbatim. If tag is [LEARNING] OR n < 10 → INSUFFICIENT. Else SUFFICIENT.
+  SAG4 credible opposing specialist — list every individual-strategy specialist with accuracy ≥ 55.0% AND n ≥ 10 AND tag IN {[MARGINAL],[RELIABLE],[EXCELLENT]} whose live signal in INDIVIDUAL STRATEGY SIGNALS opposes the SAG1 ensemble direction. Quote each "name acc% (x/n) [tag]" line. Accuracy ≤ 50.0% does NOT qualify; [WEAK]/[DISABLED]/[LEARNING] do NOT qualify. If none, write NONE.
+  SAG5 verdict — IF SAG1=YES AND SAG2=YES AND SAG3=INSUFFICIENT AND SAG4=NONE → POSITION MUST be ABOVE (ensemble UP) or BELOW (ensemble DOWN); ARGUMENT MUST lead with the ensemble's weighted vote; SURVIVES_STEELMAN MUST be YES. Any "(#NNN POSTMORTEM)" or "X% rate" claim NOT literally in the HISTORICAL SIMILARITY ANALYST block is a hallucination — do not cite. Else GATE_INACTIVE.
 POSITION: ABOVE | BELOW | NEUTRAL
 DATA_RECEIVED: [state which signals were available]
 DATA_REQUESTS: [NONE — or list additional data needed]
