@@ -65,3 +65,4 @@ _stage_bars.py
 _write_audit_md.py
 _audit_table.json
 _bars_pulled.json
+_total_winrate.py
