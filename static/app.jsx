@@ -3240,12 +3240,15 @@ function App() {
         const r = await fetch("/deepseek-status");
         if (!r.ok) return;
         const d = await r.json();
+        if (d.window_start_time != null)   setWinStartTime(d.window_start_time);
         if (d.pending_deepseek_prediction) setPendingDeepseekPred(d.pending_deepseek_prediction);
         if (d.pending_deepseek_ready !== undefined) setPendingDeepseekReady(d.pending_deepseek_ready);
         if (d.deepseek_prediction)         setDeepseekPred(d.deepseek_prediction);
         if (d.service_unavailable !== undefined)     setServiceUnavailable(!!d.service_unavailable);
         if (d.service_unavailable_reason !== undefined) setServiceUnavailReason(d.service_unavailable_reason || "");
         if (d.bar_trend_analyst !== undefined) setBarTrendAnalyst(d.bar_trend_analyst);
+        if (d.bar_binance_expert && d.bar_binance_expert.signal) setBinanceExpert(d.bar_binance_expert);
+        if (typeof d.bar_historical_analysis === "string") setHistoricalAnalysis(d.bar_historical_analysis);
       } catch(_) {}
     }
     pollDS();
