@@ -325,6 +325,110 @@ function parseHistAnalysis(raw) {
   return out;
 }
 
+// ── CurrentOngoingTrendPanel ─────────────────────────────────
+// Surfaces the bar_trend_analyst specialist's 20-bar qualitative read.
+// Returns null when the specialist has insufficient history (available=false)
+// or when the field is absent — fully backwards compatible.
+function CurrentOngoingTrendPanel({ trendAnalyst }) {
+  if (!trendAnalyst || !trendAnalyst.available) return null;
+
+  const ta = trendAnalyst;
+
+  // REGIME pill colour
+  let regimeBg, regimeClr, regimeBorder;
+  if (ta.regime === "TRENDING_UP") {
+    regimeBg = C.greenBg; regimeClr = C.green; regimeBorder = C.greenBorder;
+  } else if (ta.regime === "TRENDING_DOWN") {
+    regimeBg = C.redBg; regimeClr = C.red; regimeBorder = C.redBorder;
+  } else {
+    regimeBg = C.amberBg; regimeClr = C.amber; regimeBorder = C.amberBorder;
+  }
+
+  const pillBase = {
+    display:"inline-block", fontSize:10, fontWeight:800, padding:"2px 9px",
+    borderRadius:4, letterSpacing:0.7, textTransform:"uppercase",
+  };
+
+  const hasTraps = ta.traps_building && ta.traps_building.toUpperCase() !== "NONE"
+    && ta.traps_building.trim() !== "";
+
+  return (
+    <div style={{
+      background:C.amberBg,
+      border:`1px solid ${C.amberBorder}`,
+      borderLeft:`3px solid ${C.amber}`,
+      borderRadius:6,
+      padding:"10px 12px",
+      marginBottom:12,
+    }}>
+      {/* Header row */}
+      <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", marginBottom:8 }}>
+        <span style={{ fontSize:10, fontWeight:900, color:C.amber,
+          letterSpacing:1.2, textTransform:"uppercase" }}>
+          Current Ongoing Trend
+        </span>
+        <span style={{ fontSize:9, color:C.muted, fontStyle:"italic" }}>
+          last 20-bar synthesizer
+        </span>
+      </div>
+
+      {/* Pills row: REGIME + VOLATILITY + VOLUME */}
+      <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:8 }}>
+        {ta.regime && (
+          <span style={{ ...pillBase,
+            background:regimeBg, color:regimeClr, border:`1px solid ${regimeBorder}` }}>
+            {ta.regime.replace(/_/g," ")}
+          </span>
+        )}
+        {ta.volatility && (
+          <span style={{ ...pillBase,
+            background:"#F5F4F2", color:C.textSec, border:`1px solid ${C.border}` }}>
+            Vol: {ta.volatility}
+          </span>
+        )}
+        {ta.volume_profile && (
+          <span style={{ ...pillBase,
+            background:"#F5F4F2", color:C.textSec, border:`1px solid ${C.border}` }}>
+            Volume: {ta.volume_profile.replace(/_/g," ")}
+          </span>
+        )}
+      </div>
+
+      {/* TRAPS line */}
+      {(ta.traps_building !== undefined) && (
+        <div style={{ fontSize:11, color: hasTraps ? C.red : C.muted,
+          marginBottom:8, lineHeight:1.5 }}>
+          {hasTraps
+            ? <span><span style={{ fontWeight:700 }}>&#9888; Traps:</span> {ta.traps_building}</span>
+            : <span style={{ fontStyle:"italic" }}>No traps identified</span>
+          }
+        </div>
+      )}
+
+      {/* SNAPSHOT — bold one-liner */}
+      {ta.trend_snapshot && (
+        <div style={{
+          fontSize:14, fontWeight:700, color:C.text, lineHeight:1.5,
+          marginBottom: ta.narrative ? 8 : 0,
+          overflowWrap:"anywhere", wordBreak:"break-word",
+        }}>
+          {ta.trend_snapshot}
+        </div>
+      )}
+
+      {/* NARRATIVE — full story paragraph */}
+      {ta.narrative && (
+        <div style={{
+          fontSize:12, fontWeight:400, color:C.textSec, lineHeight:1.65,
+          overflowWrap:"anywhere", wordBreak:"break-word",
+        }}>
+          {ta.narrative}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Briefing section helpers ────────────────────────────────
 // A peer top-level section in the analysis card: bold uppercase title with a
 // thin accent bar and an optional verdict pill / confidence on the right.
@@ -3027,6 +3131,7 @@ function App() {
   const [serviceUnavailReason,  setServiceUnavailReason]  = useState("");
   const [binanceExpert,         setBinanceExpert]         = useState(null);
   const [historicalAnalysis,    setHistoricalAnalysis]    = useState("");
+  const [barTrendAnalyst,       setBarTrendAnalyst]       = useState(null);
   const [tab,                   setTab]                   = useState(
     // If the URL arrives with #sources (from a briefing pill), land the
     // user on the public SOURCES tab — no admin login required.
@@ -3090,6 +3195,7 @@ function App() {
         if (d.service_unavailable_reason !== undefined) setServiceUnavailReason(d.service_unavailable_reason || "");
         if (d.bar_binance_expert && d.bar_binance_expert.signal) setBinanceExpert(d.bar_binance_expert);
         if (typeof d.bar_historical_analysis === "string") setHistoricalAnalysis(d.bar_historical_analysis);
+        if (d.bar_trend_analyst !== undefined) setBarTrendAnalyst(d.bar_trend_analyst);
         // Live dashboard_signals from the WS tick — every user (admin OR
         // anon) gets the current order_book / whale_flow / funding / OI /
         // liquidations / basis / skew values the metric() lookup reads.
@@ -3139,6 +3245,7 @@ function App() {
         if (d.deepseek_prediction)         setDeepseekPred(d.deepseek_prediction);
         if (d.service_unavailable !== undefined)     setServiceUnavailable(!!d.service_unavailable);
         if (d.service_unavailable_reason !== undefined) setServiceUnavailReason(d.service_unavailable_reason || "");
+        if (d.bar_trend_analyst !== undefined) setBarTrendAnalyst(d.bar_trend_analyst);
       } catch(_) {}
     }
     pollDS();
@@ -3556,6 +3663,11 @@ function App() {
             </span>
           </div>
 
+          {/* CURRENT ONGOING TREND — 20-bar qualitative synthesizer.
+              Renders before the DeepSeek narrative so it's the first
+              qualitative thing the user reads on each bar. */}
+          <CurrentOngoingTrendPanel trendAnalyst={barTrendAnalyst} />
+
           {/* TOP — narrative takeaway + detail */}
           {narrative && (
             <div style={{ marginBottom: ds.free_observation ? 10 : 14 }}>
@@ -3763,7 +3875,7 @@ function App() {
   // `price` and the live microstructure feeds (tk/ob/oif/ls) intentionally
   // omitted from deps — they tick every ~1s and putting them in deps would
   // rebuild the entire card tree on every tick.
-  }, [pendingDeepseekReady, activeDeepseekPred, binanceExpert, historicalAnalysis, barCloseUTC]);
+  }, [pendingDeepseekReady, activeDeepseekPred, binanceExpert, historicalAnalysis, barCloseUTC, barTrendAnalyst]);
 
   // Cross-exchange divergence (for microstructure display)
   if (serviceUnavailable) return (
