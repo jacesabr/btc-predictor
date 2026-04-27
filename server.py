@@ -688,6 +688,27 @@ async def embed_missing(limit: int = 20):
 # Restore from git history if you ever need to rerun them.
 
 
+@app.post("/admin/reset-score", dependencies=[Depends(require_admin)])
+async def reset_score(note: str = ""):
+    """Reset the dashboard accuracy counter — sets reset_at to current time.
+    Past prediction rows stay in the DB (the historical analyst's retrieval
+    pool is unaffected); only the dashboard W/L/N counter starts fresh from
+    the next bar onward.
+    """
+    import time as _t
+    from storage_pg import _conn, _put
+    now = _t.time()
+    conn = _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE score_reset SET reset_at=%s, reset_note=%s WHERE id=1",
+                        (now, (note or "")[:200]))
+        conn.commit()
+        return {"status": "ok", "reset_at": now, "note": note or ""}
+    finally:
+        _put(conn)
+
+
 @app.post("/admin/prune-keep-recent", dependencies=[Depends(require_admin)])
 async def prune_keep_recent(keep: int = 100):
     """Keep only the `keep` most recent rows in predictions / deepseek_predictions
