@@ -115,15 +115,15 @@ Every REASON must:
   • One sentence only. ≤ 35 words.
 
 ══════════════════════════════════════════════
-  STEP 6 — CONFIDENCE CALIBRATION  (per framework)
+  STEP 6 — ARGUMENT QUALITY  (per framework)
 ══════════════════════════════════════════════
-  • 80–85%: criteria fully met, regime and Wyckoff phase agree, volume confirms.
-  • 70–79%: criteria met but one element weak (small sample, marginal volume, slight regime tension).
-  • 60–69%: directional lean but evidence is mixed or unconfirmed by volume.
-  • 45–59%: weak read — call the less-bad direction only because parser requires ABOVE or BELOW.
+For each framework, evaluate whether the directional case survives its strongest counter-argument:
+  • Strong: criteria fully met, regime and Wyckoff phase agree, volume confirms → SURVIVES_STEELMAN YES.
+  • Marginal: criteria met but one element weak (small sample, marginal volume, slight regime tension) → YES only with specific rebuttal.
+  • Weak/balanced: evidence mixed, unconfirmed by volume, or criteria barely met → SURVIVES_STEELMAN NO → call NEUTRAL for that framework.
 
-Hard rule: if EXHAUSTION_TEST passed against your framework's direction (explicit pivot rejection on volume), that is contradicting evidence — reflect it in confidence.
-Hard rule: when REGIME_CHANGE to distribution is declared, an ABOVE call requires a named, falsifiable absorption event (cite the bar time and volume) — otherwise the call lacks support.
+Hard rule: if EXHAUSTION_TEST passed against your framework's direction (explicit pivot rejection on volume), that is contradicting evidence — cite it in COUNTER.
+Hard rule: when REGIME_CHANGE to distribution is declared, an ABOVE call requires a named, falsifiable absorption event (cite the bar time and volume) — otherwise SURVIVES_STEELMAN = NO.
 
 ══════════════════════════════════════════════
   RESPOND EXACTLY IN THIS FORMAT  (strict — no extra text before or between blocks)
@@ -136,27 +136,27 @@ EXHAUSTION_TEST: [PASSED or FAILED — if passed, name the direction it threaten
 ABSORPTION_TEST: [PASSED at $price or FAILED]
 
 DOW_POSITION: ABOVE
-DOW_CONFIDENCE: XX%
+DOW_SURVIVES: YES | NO
 DOW_STRUCTURE: [UPTREND HH+HL / DOWNTREND LH+LL / RANGING — max 20 chars]
 DOW_REASON: [one sentence per Step 5 discipline, citing swings by Time(UTC)]
 
 FIB_POSITION: ABOVE
-FIB_CONFIDENCE: XX%
+FIB_SURVIVES: YES | NO
 FIB_LEVEL: [e.g. "at 61.8% retracement $83,420" — max 20 chars]
 FIB_REASON: [one sentence citing the swing start/end and current bar level]
 
 ALG_POSITION: ABOVE
-ALG_CONFIDENCE: XX%
+ALG_SURVIVES: YES | NO
 ALG_STATE: [FANNED_BULL / FANNED_BEAR / TANGLED / SLEEPING — max 20 chars]
 ALG_REASON: [one sentence with Jaw/Teeth/Lips numeric values and their order]
 
 ACD_POSITION: ABOVE
-ACD_CONFIDENCE: XX%
+ACD_SURVIVES: YES | NO
 ACD_VALUE: [RISING / FALLING / DIVERGING_BULL / DIVERGING_BEAR — max 20 chars]
 ACD_REASON: [one sentence citing the two bars where A/D vs price diverges or confirms]
 
 HAR_POSITION: ABOVE
-HAR_CONFIDENCE: XX%
+HAR_SURVIVES: YES | NO
 HAR_PATTERN: [pattern name + PRZ price, or NONE — max 20 chars]
 HAR_REASON: [one sentence — either the pattern's X/A/B/C/D swing prices, or why no valid pattern]
 

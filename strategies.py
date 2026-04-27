@@ -766,7 +766,7 @@ class LinearRegressionChannel(BaseStrategy):
 # ── Registry ──────────────────────────────────────────────────────────────────
 
 ALL_STRATEGIES = [
-    RSIStrategy(), MACDStrategy(), StochasticStrategy(),
+    MACDStrategy(), StochasticStrategy(),
     EMACrossStrategy(), SupertrendStrategy(), ADXStrategy(),
     WilliamsAlligatorStrategy(), AccDistStrategy(), DowTheoryStrategy(),
     FibPullbackStrategy(), HarmonicPatternStrategy(),

@@ -113,9 +113,9 @@ Gradations matter: +0.3 for weak lean, +0.7 for solid, ±1.0 reserved for unambi
 Composite = Σ (weight × score) across the 7 layers, using the regime-adjusted weights from Step 3.
 
 Conviction tiers (ABSENT trap overrides):
-  |composite| ≥ 0.55 → HIGH  (→ 72–85% confidence)
-  0.35 ≤ |composite| < 0.55 → MEDIUM  (→ 62–71% confidence)
-  |composite| < 0.35 → NO_TRADE  (→ NEUTRAL, confidence reported as 50–60%)
+  |composite| ≥ 0.55 → HIGH  (strong argument — SURVIVES_STEELMAN likely YES)
+  0.35 ≤ |composite| < 0.55 → MEDIUM  (marginal — SURVIVES_STEELMAN only if rebuttal is specific)
+  |composite| < 0.35 → NO_TRADE  (→ NEUTRAL, both sides coin-flip)
 
 MINIMUM-CONVICTION GATE: at least 3 layers from DIFFERENT families must each score |value| ≥ 0.4 in the
 same direction. Families = [flow, positioning, liquidity/book, funding/premium, whale]. If one family
@@ -127,7 +127,7 @@ HARD VETOES (override composite entirely, go NEUTRAL or flip direction):
   V3. Mark-premium disagrees with direction AND funding is extreme → NEUTRAL (likely squeeze trap).
   V4. OI-price quadrant is WEAK (OI↓ rally or OI↓ decline) AND call agrees with the weakness → NEUTRAL
       unless spot CVD confirms.
-  V5. Aggregate cross-exchange funding disagrees with direction → cap confidence at 65%.
+  V5. Aggregate cross-exchange funding disagrees with direction → note as a counter in COUNTER field; SURVIVES_STEELMAN requires explicit rebuttal.
 
 ══════════════════════════════════════════════
   STEP 5 — PREMORTEM  (must complete before final answer)
@@ -140,12 +140,14 @@ downgrade your confidence one tier (or go NEUTRAL).
   OUTPUT FORMAT  (strict — parser depends on these exact field names and ORDER)
 ══════════════════════════════════════════════
 POSITION: ABOVE | BELOW | NEUTRAL
-CONFIDENCE: XX%
 TAKER_FLOW: [BSR number, 3-bar trend, accel/decel, score ±X.X, implication for next 5m]
 POSITIONING: [top-trader L/S vs retail L/S, divergence pp and direction of change, score ±X.X, which side has edge]
 WHALE_FLOW: [mode (ABSORPTION/MOMENTUM/DISTRIBUTION/ACCUMULATION), cluster/size, score ±X.X, aligns or diverges from futures]
 OI_FUNDING: [OI velocity, funding local + aggregate, quadrant, premium, score ±X.X, squeeze/reversal state]
 ORDER_BOOK: [bid vs ask BTC, imbalance%, absorbing or ephemeral, score ±X.X, immediate lean]
 CONFLUENCE: [composite to 2 dp | tier HIGH/MED/NO_TRADE | contributing families | veto fired? | trap fired (name) or NONE]
+ARGUMENT: [2-3 sentences for POSITION. Cite at least 2 specific field values (e.g. "BSR 1.42, OBI +18%, composite +0.61"). Name the single most decisive layer.]
+COUNTER: [1-2 sentences for the strongest case AGAINST POSITION. Cite at least 1 specific field value.]
+SURVIVES_STEELMAN: YES | NO + one sentence why ARGUMENT does or does not survive COUNTER.
 EDGE: [the sharpest single driver this bar — one number + one mechanism. If a trap fired in Step 2, cite it here with the exact precondition + confirmation element that proved it.]
 WATCH: [the single observation that would flip or kill the thesis in the next 5m. PREMORTEM: append one short clause naming the most likely reason this call is wrong (layer + number).]

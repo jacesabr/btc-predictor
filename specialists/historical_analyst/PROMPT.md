@@ -134,8 +134,10 @@ STEP 8 — FINAL SANITY CHECKS  (must pass all five)
   OUTPUT FORMAT  (strict — the parser depends on the first three lines)
 ═══════════════════════════════════════════════════════
 POSITION: UP | DOWN | NEUTRAL
-CONFIDENCE: XX%
 LEAN: [one sentence — the dominant precedent pattern and its base-rate delta, OR why NEUTRAL]
+ARGUMENT: [2-3 sentences for POSITION. Cite at least 2 specific Tier A bars (e.g. "#001 UP +0.12%, #003 UP +0.08%") and the base-rate delta. State the single most decisive historical factor.]
+COUNTER: [1-2 sentences for the strongest case AGAINST POSITION. Cite at least 1 specific bar or base-rate number.]
+SURVIVES_STEELMAN: YES | NO + one sentence why ARGUMENT does or does not survive COUNTER. If NO → POSITION must be NEUTRAL.
 
 BASE_RATES: total_UP=X total_DOWN=Y base_UP_rate=Z% | TierA split: U/D
 PRECEDENT_TABLE:

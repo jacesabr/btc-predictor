@@ -1931,17 +1931,17 @@ async def fetch_dashboard_signals(
         "order_book":         _fetch_order_book(),
         "long_short":         _fetch_long_short(),
         "taker_flow":         _fetch_taker_flow(),
-        "oi_funding":         _fetch_oi_funding(),
+        # "oi_funding":         _fetch_oi_funding(),          # below-random — removed
         "liquidations":       _fetch_liquidations(),
         "fear_greed":         _fetch_fear_greed(),
-        "mempool":            _fetch_mempool(),
-        "coingecko":          _fetch_coingecko(),
-        "kraken_premium":     _fetch_kraken_premium(),
+        # "mempool":            _fetch_mempool(),              # below-random — removed
+        # "coingecko":          _fetch_coingecko(),            # below-random — removed
+        # "kraken_premium":     _fetch_kraken_premium(),       # below-random — removed
         "oi_velocity":        _fetch_oi_velocity(),
-        "spot_whale_flow":    _fetch_spot_whale_flow(),
+        # "spot_whale_flow":    _fetch_spot_whale_flow(),      # below-random — removed
         "bybit_liquidations": _fetch_okx_isolated_liquidations(),
-        "okx_funding":        _fetch_okx_funding(),
-        "btc_dominance":      _fetch_btc_dominance(),
+        # "okx_funding":        _fetch_okx_funding(),          # below-random — removed
+        # "btc_dominance":      _fetch_btc_dominance(),        # below-random — removed
         "top_position_ratio": _fetch_top_position_ratio(),
         "funding_trend":      _fetch_funding_trend(),
         "deribit_dvol":       _fetch_deribit_dvol(),
@@ -1953,7 +1953,7 @@ async def fetch_dashboard_signals(
     }
     if coinalyze_key:
         tasks["coinalyze"] = _fetch_coinalyze(coinalyze_key)
-        tasks["coinalyze_aggregate"] = _fetch_coinalyze_aggregate(coinalyze_key)
+        # tasks["coinalyze_aggregate"] = _fetch_coinalyze_aggregate(coinalyze_key)  # below-random — removed
     if coinglass_key:
         tasks["coinglass_liquidations"] = _fetch_coinglass_liquidations(coinglass_key)
 

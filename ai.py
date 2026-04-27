@@ -59,6 +59,7 @@ _FLAG_PREFIXES: List[Tuple[str, Tuple[str, ...]]] = [
 # Lines that always end multi-line capture of the previous flag's body
 _FLAG_TERMINATORS = (
     "POSITION:", "CONFIDENCE:", "REASONS:", "REASON:", "NARRATIVE:",
+    "ARGUMENT:", "COUNTER:", "SURVIVES_STEELMAN:",
     "PREMORTEM:", "TRAP_CHECK:", "BLIND_BASELINE:", "SPECIALIST_AGREEMENT:",
     "DATA_RECEIVED:", "DATA RECEIVED:", "VERDICT:", "BLIND_CALL:",
     "ERROR_CLASS:", "ROOT_CAUSE:", "COUNTERFACTUAL:", "MISLEADING_SIGNAL:",
@@ -603,7 +604,6 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
         try: return float(v.get(sub, default))
         except: return default
 
-    oif = ds.get("oi_funding") or {}
     lines = []
 
     ob = ds.get("order_book") or {}
@@ -666,25 +666,11 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
     else:
         lines += ["  [LIQUIDATIONS] unavailable", ""]
 
-    if oif.get("data_available") is False or oif.get("signal") == "UNAVAILABLE":
-        lines += [f"  [OI + FUNDING] unavailable — {oif.get('interpretation','fetch failed')}", ""]
-    elif oif:
-        lines += [
-            "  [OPEN INTEREST + FUNDING — Binance Futures perpetual]",
-            f"  OI: {oif.get('open_interest_btc',0):,.0f} BTC    Funding (8h): {oif.get('funding_rate_8h_pct',0):+.5f}%  [{oif.get('funding_signal','NEUTRAL')}{_acc_tag('oi_funding')}]",
-            f"  Mark: ${oif.get('mark_price',0):,.2f}   Index: ${oif.get('index_price',0):,.2f}   Mark premium: {oif.get('mark_premium_vs_index_pct',0):+.4f}%  [{oif.get('premium_signal','NEUTRAL')}]",
-            "",
-        ]
-    else:
-        lines += ["  [OI + FUNDING] unavailable", ""]
-
     cz = ds.get("coinalyze")
     if cz:
-        bn_fr = oif.get("funding_rate_8h_pct") if oif else None
-        delta = f"  Δ vs Binance: {cz.get('funding_rate_8h_pct',0) - bn_fr:+.5f}%" if bn_fr is not None else ""
         lines += [
             "  [COINALYZE — Cross-exchange aggregate funding (BTCUSDT perp)]",
-            f"  Aggregate funding (8h): {cz.get('funding_rate_8h_pct',0):+.5f}%   Signal: {cz.get('signal','NEUTRAL')}{_acc_tag('coinalyze')}{delta}",
+            f"  Aggregate funding (8h): {cz.get('funding_rate_8h_pct',0):+.5f}%   Signal: {cz.get('signal','NEUTRAL')}{_acc_tag('coinalyze')}",
             f"  → {cz.get('interpretation','')}", "",
         ]
 
@@ -707,34 +693,9 @@ def _build_dashboard_block(ds, window_start_price, dashboard_accuracy=None):
     else:
         lines += ["  [FEAR & GREED] unavailable", ""]
 
-    cg = ds.get("coingecko")
-    if cg:
-        lines += [
-            "  [COINGECKO MARKET OVERVIEW]",
-            f"  Market cap : {_fmt_usd(cg.get('market_cap_usd',0))}   24h vol : {_fmt_usd(cg.get('volume_24h_usd',0))}   "
-            f"Vol/MCap: {cg.get('vol_to_mcap_ratio_pct',0):.2f}%",
-            f"  24h change : {cg.get('change_24h_pct',0):+.3f}%{_acc_tag('coingecko')}",
-            f"  → {cg.get('interpretation','')}", "",
-        ]
-
-    mp = ds.get("mempool") or {}
-    if mp.get("data_available") is False or mp.get("signal") == "UNAVAILABLE":
-        lines += [f"  [MEMPOOL] unavailable — {mp.get('interpretation','fetch failed')}", ""]
-    elif mp:
-        lines += [
-            "  [MEMPOOL — mempool.space on-chain fee pressure]",
-            f"  Fastest: {mp.get('fastest_fee_sat_vb',0)} sat/vB   30min: {mp.get('half_hour_fee_sat_vb',0)} sat/vB   1hr: {mp.get('hour_fee_sat_vb',0)} sat/vB",
-            f"  Pending: {mp.get('pending_tx_count',0):,} txs   Size: {mp.get('mempool_size_mb',0):.2f} MB   Signal: {mp.get('signal','NEUTRAL')}{_acc_tag('mempool')}",
-            f"  → {mp.get('interpretation','')}", "",
-        ]
-
     for key, label in [
-        ("kraken_premium",     "[KRAKEN PREMIUM — Kraken vs OKX institutional spread]"),
         ("oi_velocity",        "[OI VELOCITY — Binance Futures OI change rate over 30 min]"),
-        ("spot_whale_flow",    "[SPOT WHALE FLOW — Binance spot aggTrades ≥5 BTC]"),
         ("bybit_liquidations", "[OKX ISOLATED-MARGIN LIQUIDATIONS — independent cross-margin validation]"),
-        ("okx_funding",        "[OKX FUNDING RATE — independent cross-exchange funding]"),
-        ("btc_dominance",      "[BTC DOMINANCE — CoinGecko global market share]"),
         ("top_position_ratio", "[TOP TRADER POSITION RATIO — Binance Futures notional-weighted]"),
         ("funding_trend",      "[FUNDING RATE TREND — Binance 6-period history]"),
     ]:
@@ -788,12 +749,11 @@ def _build_dashboard_accuracy_block(dashboard_accuracy):
         return "  (no microstructure history yet)"
     _NAMES = {
         "order_book": "Order Book", "long_short": "Long/Short", "taker_flow": "Taker Flow",
-        "oi_funding": "OI + Funding", "liquidations": "Liquidations", "fear_greed": "Fear & Greed",
-        "mempool": "Mempool", "coinalyze": "Coinalyze", "coingecko": "CoinGecko",
+        "liquidations": "Liquidations", "fear_greed": "Fear & Greed",
+        "coinalyze": "Coinalyze",
         "deribit_dvol": "Deribit DVOL",
-        "kraken_premium": "Kraken Premium", "oi_velocity": "OI Velocity",
-        "spot_whale_flow": "Spot Whale Flow", "bybit_liquidations": "OKX Isolated Liqs",
-        "okx_funding": "OKX Funding", "btc_dominance": "BTC Dominance",
+        "oi_velocity": "OI Velocity",
+        "bybit_liquidations": "OKX Isolated Liqs",
         "top_position_ratio": "Top Position Ratio", "funding_trend": "Funding Rate Trend",
         "deribit_options": "Deribit Options P/C", "btc_onchain": "BTC On-Chain SOPR",
         "coinglass_liquidations": "CoinGlass Liquidations",
@@ -1028,7 +988,6 @@ def build_prompt(
             ("Taker flow  ", "taker_flow"),
             ("Positioning ", "positioning"),
             ("Whale flow  ", "whale_flow"),
-            ("OI/Funding  ", "oi_funding"),
             ("Order book  ", "order_book"),
             ("Confluence  ", "confluence"),
             ("Key edge    ", "edge"),
@@ -1109,20 +1068,6 @@ BB %B outside [0,1], A/D slope flip, order-book imbalance flip, current bar clos
 its open — describe the next 5 minutes. When forward signals all agree OPPOSITE the spike, take
 the bounce side at 55–69%; do not commit in the spike's direction. You will explicitly answer the
 four gate questions G1–G4 in your output before stating POSITION (see RESPONSE FORMAT).
-
-TREND-RESPECT RULE (fires when the trend stack is unanimous): The "trend stack" = Dow Theory
-direction + Williams Alligator state + EMA21/55 direction + 20-bar micro-trend direction.
-When all four agree (T1=YES), counter-signals only justify NEUTRAL if MAGNITUDE-material.
-Material counter-signals (any one passes): spot-whale net flow >2.5 BTC AND ≥70% in
-opposite-of-trend direction; taker BSR on >2 BTC aggressive volume opposing trend; a
-funding/OI delta that ARRIVED in the last 1–3 bars (not a structural rate held constant);
-OR "trend exhausting" — last 4-5 bars show <0.05% net move and volume <50% of trend-active
-median (price flat-lined, sellers/buyers gone). A 1.8 BTC whale cluster or a -0.57%
-aggregate funding rate unchanged across the window is NOT material — it is background
-already priced in by the trend stack. When T1=YES and counter-signals fail this magnitude
-test (T2=NO), POSITION must commit in the trend direction at 55–65%. "Signals conflict"
-alone is not grounds for NEUTRAL when one side is weighed in BTC and the other in residual
-basis points. Answer T1–T2 in your output before stating POSITION.
 
 ══════════════════════════════════════════════
   WINDOW #{window_num}
@@ -1281,23 +1226,20 @@ and visible that it actually inverts the case.
 STEP E — FAITHFULNESS CHECK
 Restate your call while omitting your strongest cited signal. Does the conclusion still follow from
 the remaining evidence? If yes: your stated reasoning is solid. If no: your reasoning is single-factor
-and fragile → cap confidence at 70%.
+and fragile → reflect this weakness in your COUNTER field and consider SURVIVES_STEELMAN=NO.
 
-STEP F — CONFIDENCE CALIBRATION
-Confidence is the strength of your argument *after* steelmanning the opposing side — not raw
-enthusiasm. There is NO confidence floor for committing. If you have a defensible argument with a
-concrete rebuttal to the strongest counter-case, take the call at whatever confidence the argument
-earns. The bands below are descriptive — guides for how to *label* a call, not gates for whether
-to make one.
-  • 85–95%: blind baseline + ≥3 non-correlated specialists agree, no trap fires, premortem reason
-    is weak or not visible. Counter-case is thin.
-  • 70–84%: ≥2 non-correlated specialists agree with blind baseline, no trap, minor conflict, you
-    can rebut the opposing case cleanly.
-  • 55–69%: marginal but real edge — specialists partially agree, premortem has real ammunition,
-    but your rebuttal still holds and one side is honestly stronger than the other. Take the call
-    if the overall argument is defensible.
-  • Below 55%: the two sides are genuinely balanced and you cannot honestly defend either over the
-    other. Output NEUTRAL — not as a hedge, but because there is no edge to capture.
+STEP F — ARGUMENT-QUALITY RUBRIC
+Evaluate the quality of your ARGUMENT after honestly steelmanning the opposing side. There is NO
+confidence number to produce — instead, decide whether ARGUMENT survives COUNTER:
+  • Strong case: 3+ non-correlated signals all agree, the COUNTER's strongest field is rebuttable
+    with a cited fact, and the trap-check is NONE. Take the call.
+  • Marginal case: 2 signals agree, COUNTER cites a real risk you can rebut but not eliminate.
+    Take the call ONLY if SURVIVES_STEELMAN=YES with a specific reason.
+  • Balanced case: ARGUMENT and COUNTER cite roughly equal-strength evidence.
+    SURVIVES_STEELMAN=NO → POSITION = NEUTRAL.
+
+NEUTRAL is not a hedge — it is the correct answer when you cannot honestly defend ARGUMENT against
+COUNTER. Do not commit when both sides are coin-flip.
 
 ASYMMETRIC ERROR CHECK: if your recent track record shows a pattern (e.g., "last 10 bars: 4 FALSE_UP,
 1 FALSE_DOWN"), let that information sharpen your scrutiny of new same-direction calls — but do not
@@ -1318,52 +1260,49 @@ POST_SPIKE_GATE:
   G3 (current bar closed on OPPOSITE side of its open vs spike direction): YES/NO + cite open + close
   G4 (order-book imbalance OR A/D slope flipped sign vs spike bar): YES/NO + cite numbers
   IF all four = YES → POSITION must be opposite the spike direction OR NEUTRAL.
-TREND_RESPECT_GATE:
-  T1a Dow Theory label EXACTLY matches "UPTREND" or "DOWNTREND" (EXPANDING RANGE / CONTRACTING RANGE / MIXED / RANGING / INSUFFICIENT DATA → NOT a trend): YES/NO + paste exact label string from prompt
-  T1b Alligator direction: UP / DOWN / FLAT
-  T1c EMA21 vs EMA55: UP (21>55) / DOWN (21<55) / EQUAL
-  T1d Micro 20-bar direction: UP / DOWN / FLAT
-  T1 (T1a=YES AND T1b,T1c,T1d all match T1a-direction — any FLAT/EQUAL/NOT-trend breaks unanimity): YES/NO
-  T2a whale_net_BTC = signed value; |whale_net| = magnitude; is |whale_net| > 2.5? YES/NO + cite both
-  T2b same_dir_share% = (buy% if trend UP, else sell%); opposite_share% = 100 − same_dir_share; is opposite_share ≥ 70? YES/NO + cite both
-  T2 (counter-signals MAGNITUDE-material — ANY: (T2a=YES AND T2b=YES); taker BSR on >2 BTC opposing; funding/OI delta last 1–3 bars; trend exhausting <0.05% net last 4-5 bars + low vol): YES/NO + cite numbers
-  IF T1=YES AND T2=NO → POSITION must commit in the trend direction at 55–65% (NEUTRAL is not allowed).
 PREMORTEM_GATE (fill BEFORE writing POSITION):
   P0 premortem trigger sentence: [paste your Step-D premortem reason]
   P1 (P0 cites ≥2 INDEPENDENT oscillator extremes in CURRENT bar contradicting POSITION — RSI(4)<25 or >75, MFI(4)<20 or >80, BB %B<0 or >1; need 2+ from this list): YES/NO + cite each field + value + threshold
   P2 (P0 cites a low-volume extreme-flow noise-trap — taker total <2 BTC AND BSR>5 or <0.2 contradicting POSITION — AND spot whale flow does NOT corroborate POSITION): YES/NO + cite taker total + BSR + spot whale signal
   P3 (P0 cites a price-action structural counter that CONTRADICTS POSITION — rejection at named resistance for an UP/ABOVE draft, OR failed-breakdown at named support for a DOWN/BELOW draft — with ALL of: (a) named level within 0.20% of current close, (b) order-book imbalance ≤−10% on the rejection side (asks heavy) for resistance, OR ≥+10% (bids heavy) on the breakdown side for support, (c) ≥3 of the last 15 1-min bars in the CSV satisfy: high within 0.08% of level (rejection) OR low within 0.08% (breakdown), AND closed back on the rejecting side (close < level for resistance; close > level for support). Method: list every 1-min bar in the last 15 by Time, mark each YES/NO against (c), then count): YES/NO + cite level + imbalance % + bar-by-bar enumeration + final count
-  IF P1=YES OR P2=YES OR P3=YES → POSITION must be NEUTRAL OR opposite the draft (CONFIDENCE ≤55% if you flip). PRECEDENCE: P3=YES overrides TREND_RESPECT_GATE (NEUTRAL/flip allowed even if T1=YES,T2=NO); P1/P2 alone do NOT override TREND_RESPECT_GATE.
-COMMIT_GATE (fires AFTER prior gates; composes with POST_SPIKE-all-4-YES & PREMORTEM-P1/P2=YES "NEUTRAL OR opposite" allowance; INACTIVE if TREND_RESPECT forced commit-in-trend):
+  IF P1=YES OR P2=YES OR P3=YES → POSITION must be NEUTRAL OR opposite the draft (if you flip, SURVIVES_STEELMAN must be YES with a specific rebuttal).
+COMMIT_GATE (fires AFTER prior gates; composes with POST_SPIKE-all-4-YES & PREMORTEM-P1/P2=YES "NEUTRAL OR opposite" allowance):
   C1 microstructure majority — list each (UP/DOWN, FLAT=neither): order_book_imbalance sign | taker BSR (>1=UP, <1=DOWN) | A/D slope sign | last 4-bar net price change sign | MACD histogram sign. ≥3 of 5 same way = YES + cite direction; else NO.
   C2 P0-names-direction-with-imbalance — P0 names a directional target ("below $X" / "above $Y") in SAME direction as C1 AND cites an imbalance ≥10% (|OBI|≥10% OR BSR ≤0.2 / ≥5)? YES/NO + direction + number.
   C3 spot-whale-strong-veto — spot whale flow ≥2.0 BTC OPPOSING C1 direction? YES → COMMIT_GATE inactive (strong whale veto, do not flip); NO → continue. Cite buy/sell BTC.
-  IF C1=YES AND C2=YES AND C3=NO AND TREND_RESPECT did not force commit → POSITION commits in C1 direction at 55–60% (override NEUTRAL; if POST_SPIKE-all-YES or PREMORTEM allowed "NEUTRAL OR opposite", pick opposite when = C1).
+  IF C1=YES AND C2=YES AND C3=NO → POSITION commits in C1 direction (override NEUTRAL; if POST_SPIKE-all-YES or PREMORTEM allowed "NEUTRAL OR opposite", pick opposite when = C1).
 POSITION: ABOVE | BELOW | NEUTRAL
-CONFIDENCE: XX%
 DATA_RECEIVED: [state which signals were available]
 DATA_REQUESTS: [NONE — or list additional data needed]
 NARRATIVE: [2-4 sentences telling the STORY of the chart. Name specific prices and TIMES from Time(UTC) column. IMPORTANT: Only reference historical bar patterns if they appear in the HISTORICAL SIMILARITY ANALYST section above.]
 FREE_OBSERVATION: [1-2 sentences on anything unusual or most significant convergence of signals. CRITICAL: Do NOT cite specific bar numbers (#001, #002, etc.) or claim historical win rates unless those explicitly appear in the HISTORICAL SIMILARITY ANALYST section above. Only describe patterns visible in the current data provided.]
-REASONS:
-1. [MICROSTRUCTURE: Order book, taker flow, liquidations, spot whale flow — cite Binance expert's composite score if provided]
-2. [FUNDING + POSITIONING: Funding rates (local AND aggregate if both given), OI velocity, L/S ratio, top position ratio]
-3. [TECHNICAL: RSI/Stoch/MACD, Alligator, Fib, ensemble. Note unified-analyst Wyckoff phase + exhaustion/absorption test results if provided.]
-4. [SYNTHESIS: Dominant bias. Single most decisive factor. Biggest risk. Final conviction. State which specialists agreed with your blind baseline vs disagreed.]
-BLIND_BASELINE: [direction + confidence your own price-action read gave BEFORE consulting specialists]
+ARGUMENT: [3-5 sentence summarized argument for POSITION. MUST cite at least 3 specific field names with their numeric values from the prompt (e.g., "BSR 0.179, OBI -19.18%, micro-trend slope -0.0119%/bar"). Synthesize them into ONE coherent thesis — not a list of bullets. State which signal is the most decisive and why.]
+COUNTER: [2-3 sentence summarized strongest case AGAINST POSITION. MUST cite at least 2 specific field values. This is the steelman — make the opposing case as strong as you honestly can.]
+SURVIVES_STEELMAN: YES | NO + one sentence stating why the ARGUMENT does or does not survive the COUNTER.
+IF SURVIVES_STEELMAN = NO → POSITION must be NEUTRAL.
+BLIND_BASELINE: [direction your own price-action read gave BEFORE consulting specialists]
 SPECIALIST_AGREEMENT: [how many specialists agreed with your final call / how many fired]
 TRAP_CHECK: [named trap pattern if one fired, or NONE]
 PREMORTEM: [one sentence naming the most likely reason this call is wrong in 5 minutes, with field + number]"""
 
 
 def parse_response(text: str) -> Tuple[str, int, str, str, str, str, str]:
-    """Parse DeepSeek response → (signal, confidence, reasoning, data_received, data_requests, narrative, free_observation)."""
-    signal, confidence = "UNKNOWN", 50
+    """Parse DeepSeek response → (signal, confidence, reasoning, data_received, data_requests, narrative, free_observation).
+
+    Handles both new format (ARGUMENT/COUNTER/SURVIVES_STEELMAN) and legacy format (CONFIDENCE/REASONS).
+    - confidence defaults to 60 when not present (new format); old rows with CONFIDENCE: XX% still parse correctly.
+    - If SURVIVES_STEELMAN parses as NO, signal is forced to NEUTRAL (defense-in-depth).
+    - ARGUMENT + COUNTER are concatenated into reasoning so they surface in the DB/UI.
+    """
+    signal, confidence = "UNKNOWN", 60  # default 60 for new format (no CONFIDENCE line)
     numbered: List[str] = []
     data_received = data_requests = narrative = free_observation = ""
+    argument = counter = survives_steelman = ""
     in_reasons = False
     in_narrative = False
     in_free_obs  = False
+    in_argument  = False
+    in_counter   = False
 
     for line in text.strip().splitlines():
         s = line.strip()
@@ -1373,29 +1312,44 @@ def parse_response(text: str) -> Tuple[str, int, str, str, str, str, str]:
             if "ABOVE" in val:     signal = "UP"
             elif "BELOW" in val:   signal = "DOWN"
             elif "NEUTRAL" in val: signal = "NEUTRAL"
-            in_narrative = in_free_obs = in_reasons = False
+            in_narrative = in_free_obs = in_reasons = in_argument = in_counter = False
         elif u.startswith("CONFIDENCE:"):
+            # Legacy format — parse but don't fail on new format where it's absent
             try: confidence = int(float(u.replace("CONFIDENCE:", "").replace("%", "").strip()))
             except: pass
-            in_narrative = in_free_obs = in_reasons = False
+            in_narrative = in_free_obs = in_reasons = in_argument = in_counter = False
         elif s.upper().startswith("DATA_RECEIVED:"):
             data_received = s[len("DATA_RECEIVED:"):].strip()
-            in_narrative = in_free_obs = in_reasons = False
+            in_narrative = in_free_obs = in_reasons = in_argument = in_counter = False
         elif s.upper().startswith("DATA_REQUESTS:"):
             data_requests = s[len("DATA_REQUESTS:"):].strip()
-            in_narrative = in_free_obs = in_reasons = False
+            in_narrative = in_free_obs = in_reasons = in_argument = in_counter = False
         elif s.upper().startswith("NARRATIVE:"):
             narrative = s[len("NARRATIVE:"):].strip()
-            in_narrative = True; in_free_obs = in_reasons = False
+            in_narrative = True; in_free_obs = in_reasons = in_argument = in_counter = False
         elif s.upper().startswith("FREE_OBSERVATION:"):
             free_observation = s[len("FREE_OBSERVATION:"):].strip()
-            in_free_obs = True; in_narrative = in_reasons = False
+            in_free_obs = True; in_narrative = in_reasons = in_argument = in_counter = False
+        elif u.startswith("ARGUMENT:"):
+            argument = s[len("ARGUMENT:"):].strip()
+            in_argument = True; in_narrative = in_free_obs = in_reasons = in_counter = False
+        elif u.startswith("COUNTER:"):
+            counter = s[len("COUNTER:"):].strip()
+            in_counter = True; in_narrative = in_free_obs = in_reasons = in_argument = False
+        elif u.startswith("SURVIVES_STEELMAN:"):
+            survives_steelman = s[len("SURVIVES_STEELMAN:"):].strip()
+            in_narrative = in_free_obs = in_reasons = in_argument = in_counter = False
         elif u.startswith("REASONS:") or u.startswith("REASON:"):
-            in_reasons = True; in_narrative = in_free_obs = False
+            # Legacy format support
+            in_reasons = True; in_narrative = in_free_obs = in_argument = in_counter = False
         elif in_narrative and s:
             narrative += " " + s
         elif in_free_obs and s:
             free_observation += " " + s
+        elif in_argument and s:
+            argument += " " + s
+        elif in_counter and s:
+            counter += " " + s
         elif in_reasons and re.match(r"^\d+\.", s):
             numbered.append(re.sub(r"^\d+\.\s*", "", s))
         elif in_reasons and s and not numbered:
@@ -1407,10 +1361,22 @@ def parse_response(text: str) -> Tuple[str, int, str, str, str, str, str]:
         elif "POSITION: BELOW" in tu:   signal = "DOWN"
         elif "POSITION: NEUTRAL" in tu: signal = "NEUTRAL"
 
-    reasoning = "\n".join(numbered).strip()
-    if not reasoning:
-        m = re.search(r"REASONS?:\s*(.*)", text, re.IGNORECASE | re.DOTALL)
-        if m: reasoning = m.group(1).strip()
+    # Defense-in-depth: if SURVIVES_STEELMAN=NO, force NEUTRAL regardless of POSITION
+    if survives_steelman and survives_steelman.upper().startswith("NO"):
+        signal = "NEUTRAL"
+
+    # Build reasoning: new format uses ARGUMENT+COUNTER; legacy uses REASONS numbered list
+    if argument or counter:
+        parts = []
+        if argument: parts.append(f"ARGUMENT: {argument}")
+        if counter:  parts.append(f"COUNTER: {counter}")
+        if survives_steelman: parts.append(f"SURVIVES_STEELMAN: {survives_steelman}")
+        reasoning = "\n".join(parts).strip()
+    else:
+        reasoning = "\n".join(numbered).strip()
+        if not reasoning:
+            m = re.search(r"REASONS?:\s*(.*)", text, re.IGNORECASE | re.DOTALL)
+            if m: reasoning = m.group(1).strip()
 
     return signal, confidence, reasoning, data_received, data_requests, narrative, free_observation
 
@@ -1790,11 +1756,11 @@ def _fmt_specialists(sp: Dict) -> str:
 
 def _fmt_dashboard_directions(dash: Dict) -> str:
     _ABBREV = {
-        "order_book":"ob","long_short":"ls","taker_flow":"tf","oi_funding":"oif",
-        "liquidations":"liq","fear_greed":"fg","mempool":"mem","coinalyze":"cz",
-        "coingecko":"cg","deribit_dvol":"dvol",
-        "kraken_premium":"krak","oi_velocity":"oiv","spot_whale_flow":"swf",
-        "bybit_liquidations":"bybit","okx_funding":"okx","btc_dominance":"btcd",
+        "order_book":"ob","long_short":"ls","taker_flow":"tf",
+        "liquidations":"liq","fear_greed":"fg","coinalyze":"cz",
+        "deribit_dvol":"dvol",
+        "oi_velocity":"oiv",
+        "bybit_liquidations":"bybit",
         "top_position_ratio":"tpr","funding_trend":"ft",
     }
     parts = []
@@ -1997,17 +1963,10 @@ def _bar_embed_text(record: Dict) -> str:
         ("long_short","Long/short ratio"),
         ("taker_flow","Taker buy/sell flow"),
         ("fear_greed","Fear & greed index"),
-        ("mempool","Bitcoin mempool congestion"),
-        ("oi_funding","Open interest funding rate"),
-        ("okx_funding","OKX funding rate"),
-        ("btc_dominance","BTC market dominance"),
         ("liquidations","Liquidation events"),
         ("coinalyze","Coinalyze OI signal"),
-        ("coingecko","CoinGecko market sentiment"),
         ("deribit_dvol","Deribit implied volatility"),
-        ("kraken_premium","Kraken BTC premium"),
         ("oi_velocity","Open interest velocity"),
-        ("spot_whale_flow","Spot whale order flow"),
         ("bybit_liquidations","OKX isolated-margin liquidations"),
         ("top_position_ratio","Top trader position ratio"),
         ("funding_trend","Funding rate trend"),
@@ -2155,7 +2114,7 @@ def _bar_embed_text(record: Dict) -> str:
 
 _KEY_DASH_COMPACT = [
     ("order_book","ob"),("long_short","ls"),("taker_flow","tf"),
-    ("fear_greed","fg"),("mempool","mem"),
+    ("fear_greed","fg"),
 ]
 
 def _build_history_table(records: List[Dict], compact: bool = False) -> str:
@@ -2405,33 +2364,6 @@ def _build_current_bar(
             f"perp ${spb.get('perp_mark','?')} vs spot ${spb.get('spot_mid','?')}). "
             f"{spb.get('interpretation','')}{_src('spot_perp_basis')}".strip()
         )
-    swf = dash.get("spot_whale_flow") or {}
-    if swf.get("whale_buy_btc") is not None:
-        venues_data = swf.get("venues_with_data") or []
-        parts.append(
-            f"SPOT WHALE FLOW (5m, ≥0.5 BTC, {','.join(venues_data) or 'no venues'}): "
-            f"{swf.get('whale_buy_btc','?')} BTC buys / {swf.get('whale_sell_btc','?')} BTC sells "
-            f"({swf.get('whale_buy_pct','?')}% buy-side, {swf.get('whale_trade_count',0)} trades). "
-            f"{swf.get('interpretation','')}{_src('spot_whale_flow')}".strip()
-        )
-    oif = dash.get("oi_funding") or {}
-    if oif.get("funding_rate_8h_pct") is not None:
-        parts.append(
-            f"OPEN INTEREST & FUNDING (Binance-perp): OI {oif.get('open_interest_btc','?')} BTC, 8h funding {oif.get('funding_rate_8h_pct'):+.4f}%, "
-            f"mark premium vs index {oif.get('mark_premium_vs_index_pct',0):+.4f}%. "
-            f"{oif.get('interpretation','')}{_src('oi_funding')}".strip()
-        )
-    cza = dash.get("coinalyze_aggregate") or {}
-    if cza.get("agg_oi_usd"):
-        span = cza.get("agg_oi_change_span_min", 0)
-        chg  = cza.get("agg_oi_change_pct")
-        chg_txt = f", {chg:+.3f}% over {span:.0f}min" if chg is not None else ""
-        parts.append(
-            f"AGGREGATE OI ({cza.get('agg_oi_venues_count',0)}-venue, Coinalyze): "
-            f"${cza.get('agg_oi_usd',0):,.0f}{chg_txt}. "
-            f"Liquidations 5m: long ${cza.get('agg_long_liq_usd_5m',0):,.0f} / short ${cza.get('agg_short_liq_usd_5m',0):,.0f}. "
-            f"{cza.get('interpretation','')}{_src('coinalyze_aggregate')}".strip()
-        )
     oiv = dash.get("oi_velocity") or {}
     if oiv.get("oi_change_30m_pct") is not None:
         parts.append(
@@ -2462,12 +2394,6 @@ def _build_current_bar(
             f"SOPR {oc.get('sopr'):.4f} (daily, {oc.get('sopr_date','?')}), "
             f"MVRV Z-Score {oc.get('mvrv_zscore','?')} (daily, {oc.get('mvrv_date','?')}). "
             f"{oc.get('sopr_interpretation','')}".strip()
-        )
-    dom = dash.get("btc_dominance") or {}
-    if dom.get("btc_dominance_pct") is not None:
-        macro_parts.append(
-            f"BTC dominance {dom.get('btc_dominance_pct')}% (CoinGecko, hourly). "
-            f"24h market cap change {dom.get('market_change_24h_pct',0):+.2f}%."
         )
     if macro_parts:
         parts.append(
@@ -2826,18 +2752,6 @@ def _build_binance_expert_block(ds: Optional[Dict]) -> str:
             "",
         ]
 
-    oif = ds.get("oi_funding") or {}
-    if oif.get("data_available") is False or oif.get("signal") == "UNAVAILABLE":
-        lines += [f"[OPEN INTEREST + FUNDING — Binance perpetual] unavailable — {oif.get('interpretation','fetch failed')}", ""]
-    elif oif:
-        lines += [
-            "[OPEN INTEREST + FUNDING — Binance perpetual]",
-            f"  OI: {oif.get('open_interest_btc', 0):,.0f} BTC  Funding (8h): {oif.get('funding_rate_8h_pct', 0):+.5f}%  [{oif.get('funding_signal', 'NEUTRAL')}]",
-            f"  Mark: ${oif.get('mark_price', 0):,.2f}  Index: ${oif.get('index_price', 0):,.2f}  Premium: {oif.get('mark_premium_vs_index_pct', 0):+.4f}%  [{oif.get('premium_signal', 'NEUTRAL')}]",
-            _src_line("oi_funding") or "",
-            "",
-        ]
-
     # ── Bar-level signals (new + existing) ──────────────────────────────
     spb = ds.get("spot_perp_basis") or {}
     if spb.get("basis_pct") is not None:
@@ -2862,20 +2776,6 @@ def _build_binance_expert_block(ds: Optional[Dict]) -> str:
             "",
         ]
 
-    cza = ds.get("coinalyze_aggregate") or {}
-    if cza and cza.get("agg_oi_usd"):
-        lines += [
-            f"[AGGREGATE OI + LIQUIDATIONS — {cza.get('agg_oi_venues_count',0)}-venue, Coinalyze]",
-            f"  Aggregate OI: ${cza.get('agg_oi_usd',0):,.0f}   "
-            + (f"Change: {cza.get('agg_oi_change_pct'):+.3f}% over {cza.get('agg_oi_change_span_min',0):.0f}min"
-               if cza.get('agg_oi_change_pct') is not None else "(no delta — insufficient aligned history)"),
-            f"  Liquidations 5m: long ${cza.get('agg_long_liq_usd_5m',0):,.0f} / short ${cza.get('agg_short_liq_usd_5m',0):,.0f}",
-            f"  Liquidations 15m: long ${cza.get('agg_long_liq_usd_15m',0):,.0f} / short ${cza.get('agg_short_liq_usd_15m',0):,.0f}",
-            f"  Signal: {cza.get('signal','NEUTRAL')} — {cza.get('interpretation','')}",
-            _src_line("coinalyze_aggregate") or "",
-            "",
-        ]
-
     dst = ds.get("deribit_skew_term") or {}
     if dst.get("data_available"):
         lines += [
@@ -2894,7 +2794,6 @@ def _build_binance_expert_block(ds: Optional[Dict]) -> str:
         ("top_position_ratio", "[TOP-ACCOUNTS POSITION RATIO — Binance, notional-weighted top 20% by margin]"),
         ("funding_trend",      "[FUNDING RATE TREND — Binance 6-period history]"),
         ("oi_velocity",        "[OI VELOCITY — Binance-perp 30-min change rate]"),
-        ("spot_whale_flow",    "[SPOT WHALE FLOW — 3-venue aggTrades ≥0.5 BTC, 5m window]"),
     ]:
         v = ds.get(key)
         if v:
@@ -2915,12 +2814,6 @@ def _build_binance_expert_block(ds: Optional[Dict]) -> str:
         macro_lines.append(
             f"  SOPR {oc.get('sopr'):.4f} ({oc.get('sopr_date','?')}, daily)  "
             f"MVRV Z-Score {oc.get('mvrv_zscore','?')} ({oc.get('mvrv_date','?')}, daily)"
-        )
-    dom = ds.get("btc_dominance") or {}
-    if dom and dom.get("btc_dominance_pct") is not None:
-        macro_lines.append(
-            f"  BTC dominance {dom.get('btc_dominance_pct')}% (CoinGecko, hourly)  "
-            f"24h market cap change {dom.get('market_change_24h_pct',0):+.2f}%"
         )
     if macro_lines:
         lines += [
