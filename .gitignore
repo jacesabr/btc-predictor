@@ -54,3 +54,14 @@ _bars_pulled.json
 ../audit_run/
 specialists/embedding_audit/audit_log.ndjson
 specialists/embedding_audit/last_raw.txt
+_neutral_streak_audit.py
+_pull_recent_bars.py
+_audit_scope*.py
+_baseline_vs_final*.py
+_consolidate_audit.py
+_mine_patterns.py
+_rotate_openrouter_key.py
+_stage_bars.py
+_write_audit_md.py
+_audit_table.json
+_bars_pulled.json
