@@ -45,3 +45,10 @@ railway_backup.sql
 # OS
 .DS_Store
 Thumbs.db
+# Local audit tooling — kept on disk, not committed
+_live_audit.py
+_audit_table.json
+_bars_pulled.json
+
+# Audit run artifacts (large prompt files, outcomes, etc. — local-only)
+../audit_run/
