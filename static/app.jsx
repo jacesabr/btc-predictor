@@ -4027,7 +4027,6 @@ function App() {
                 const wBarPct = barTotal > 0 ? wins / barTotal * 100 : 0;
                 const lBarPct = barTotal > 0 ? losses / barTotal * 100 : 0;
                 const nBarPct = barTotal > 0 ? neutral / barTotal * 100 : 0;
-                const noAccData = !deepseekAcc?.total;
                 return (
                   <div style={{ ...card, flexShrink:0, padding:"10px 14px" }}>
                     {/* TITLE + signal + meta (lightweight) */}
@@ -4055,21 +4054,15 @@ function App() {
                         All at matching size so the trader's eye takes everything in at once. */}
                     <div style={{ borderTop:`1px solid ${C.borderSoft}`, marginTop:8, paddingTop:6 }} />
                     <div style={{ display:"flex", alignItems:"baseline", justifyContent:"space-between", gap:14, flexWrap:"wrap" }}>
-                      {/* LEFT — DeepSeek accuracy % + counts */}
+                      {/* LEFT — DeepSeek accuracy % + counts (always shown so 0/0/0 is the visible starting state) */}
                       <div style={{ display:"flex", alignItems:"baseline", gap:10 }}>
-                        {!noAccData ? (
-                          <>
-                            <span style={{ fontSize:11, fontWeight:700, color:C.muted, letterSpacing:1.2, textTransform:"uppercase" }}>Accuracy</span>
-                            <span style={{ fontSize:28, fontWeight:900, color:accPct>=50?C.green:C.red, letterSpacing:1, lineHeight:1 }}>{accPct.toFixed(1)}%</span>
-                            <span style={{ fontSize:12, fontWeight:800, color:C.green }}>{wins}W</span>
-                            <span style={{ fontSize:12, color:C.muted }}>/</span>
-                            <span style={{ fontSize:12, fontWeight:800, color:C.red }}>{losses}L</span>
-                            <span style={{ fontSize:12, color:C.muted }}>/</span>
-                            <span style={{ fontSize:12, fontWeight:800, color:C.muted }}>{neutral}N</span>
-                          </>
-                        ) : (
-                          <span style={{ fontSize:12, color:C.muted }}>No historical data yet</span>
-                        )}
+                        <span style={{ fontSize:11, fontWeight:700, color:C.muted, letterSpacing:1.2, textTransform:"uppercase" }}>Accuracy</span>
+                        <span style={{ fontSize:28, fontWeight:900, color:(deepseekAcc?.directional ?? 0) === 0 ? C.muted : (accPct>=50?C.green:C.red), letterSpacing:1, lineHeight:1 }}>{(deepseekAcc?.directional ?? 0) === 0 ? "—" : `${accPct.toFixed(1)}%`}</span>
+                        <span style={{ fontSize:12, fontWeight:800, color:C.green }}>{wins}W</span>
+                        <span style={{ fontSize:12, color:C.muted }}>/</span>
+                        <span style={{ fontSize:12, fontWeight:800, color:C.red }}>{losses}L</span>
+                        <span style={{ fontSize:12, color:C.muted }}>/</span>
+                        <span style={{ fontSize:12, fontWeight:800, color:C.muted }}>{neutral}N</span>
                       </div>
                       {/* RIGHT — countdown + LIVE/ADMIN tabs at matching large size */}
                       <div style={{ display:"flex", alignItems:"baseline", gap:16 }}>
@@ -4097,14 +4090,12 @@ function App() {
                         </div>
                       </div>
                     </div>
-                    {/* Accuracy progress bar */}
-                    {!noAccData && (
-                      <div style={{ display:"flex", height:5, borderRadius:3, overflow:"hidden", marginTop:4, background:C.borderSoft }}>
-                        {wBarPct > 0 && <div style={{ width:`${wBarPct}%`, background:C.green }} />}
-                        {lBarPct > 0 && <div style={{ width:`${lBarPct}%`, background:C.red }} />}
-                        {nBarPct > 0 && <div style={{ width:`${nBarPct}%`, background:C.muted }} />}
-                      </div>
-                    )}
+                    {/* Accuracy progress bar — always rendered; segments only appear once data arrives */}
+                    <div style={{ display:"flex", height:5, borderRadius:3, overflow:"hidden", marginTop:4, background:C.borderSoft }}>
+                      {wBarPct > 0 && <div style={{ width:`${wBarPct}%`, background:C.green }} />}
+                      {lBarPct > 0 && <div style={{ width:`${lBarPct}%`, background:C.red }} />}
+                      {nBarPct > 0 && <div style={{ width:`${nBarPct}%`, background:C.muted }} />}
+                    </div>
                   </div>
                 );
               })()}
