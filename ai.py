@@ -3117,6 +3117,7 @@ class DeepSeekPredictor:
         indicator_accuracy=None, ensemble_weights=None,
         historical_analysis=None, dashboard_accuracy=None,
         neutral_analysis=None, binance_expert_analysis=None,
+        trend_analyst_analysis=None,
         historical_failure_note: str = "",
     ) -> Dict:
         self.window_count += 1
@@ -3135,6 +3136,7 @@ class DeepSeekPredictor:
             ensemble_weights=ensemble_weights, historical_analysis=historical_analysis,
             dashboard_accuracy=dashboard_accuracy,
             neutral_analysis=neutral_analysis, binance_expert_analysis=binance_expert_analysis,
+            trend_analyst_analysis=trend_analyst_analysis,
             historical_failure_note=historical_failure_note,
         )
 

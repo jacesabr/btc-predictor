@@ -519,10 +519,13 @@ async def _run_deepseek(
     indicator_accuracy=None, ensemble_weights=None,
     historical_analysis=None, dashboard_accuracy=None,
     dry_run=False, binance_expert_analysis=None,
+    trend_analyst_analysis=None,
 ):
     """Fire DeepSeek at bar open; stage result until bar closes.
     binance_expert_analysis is now the materialised dict (ran serially before
     historical analyst earlier in the pipeline), not an in-flight task.
+    trend_analyst_analysis is the synthesized 20-bar regime/trend summary,
+    same materialised-dict pattern.
     """
     bar_ts = time.strftime("%H:%M:%S UTC", time.gmtime(window_start_time))
     logger.info(">>> DeepSeek FIRED for bar %s", bar_ts)
@@ -539,6 +542,7 @@ async def _run_deepseek(
             historical_analysis=historical_analysis,
             dashboard_accuracy=dashboard_accuracy, neutral_analysis=neutral_analysis,
             binance_expert_analysis=binance_expert_analysis or current_state.get("bar_binance_expert") or None,
+            trend_analyst_analysis=trend_analyst_analysis or current_state.get("bar_trend_analyst") or None,
             historical_failure_note=current_state.get("bar_historical_failure_note", ""),
         )
         _record_stage("main_deepseek", time.time() - _main_t0, ok=(result.get("signal") not in ("ERROR", "UNAVAILABLE")),
