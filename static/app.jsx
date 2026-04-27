@@ -201,6 +201,46 @@ function posColors(pos) {
   return { color: C.amber, bg: C.amberBg, border: C.amberBorder };
 }
 
+// Parse the new ARGUMENT/COUNTER/SURVIVES_STEELMAN schema from reasoning.
+// Multi-line aware: each field spans until the next field prefix (or end of string).
+// Returns { argument, counter, survives, survivesReason, isStructured }.
+// If none of the new fields appear, isStructured=false and caller falls back
+// to the legacy numbered-list renderer.
+function parseStructuredReasoning(reasoning) {
+  const raw = (reasoning || "").trim();
+  const FIELDS = ["ARGUMENT", "COUNTER", "SURVIVES_STEELMAN"];
+  const fieldRe = new RegExp("^(" + FIELDS.join("|") + "):\\s*", "m");
+  if (!fieldRe.test(raw)) return { isStructured: false };
+
+  // Build a map: find each FIELD: prefix and collect text until next prefix or end.
+  const result = { isStructured: true, argument: "", counter: "", survives: "", survivesReason: "" };
+  const lines = raw.split("\n");
+  let current = null;
+  const acc = { ARGUMENT: [], COUNTER: [], SURVIVES_STEELMAN: [] };
+  for (const line of lines) {
+    const m = line.match(/^(ARGUMENT|COUNTER|SURVIVES_STEELMAN):\s*(.*)/);
+    if (m) {
+      current = m[1];
+      if (m[2].trim()) acc[current].push(m[2].trim());
+    } else if (current) {
+      acc[current].push(line);
+    }
+  }
+  result.argument = acc.ARGUMENT.join(" ").trim();
+  result.counter  = acc.COUNTER.join(" ").trim();
+  const svRaw = acc.SURVIVES_STEELMAN.join(" ").trim();
+  // svRaw may be "YES — because X" or "NO — because X" or just "YES"/"NO"
+  const svMatch = svRaw.match(/^(YES|NO)[^a-zA-Z]*(.*)/i);
+  if (svMatch) {
+    result.survives       = svMatch[1].toUpperCase();
+    result.survivesReason = svMatch[2].replace(/^[—–\-\s]+/, "").trim();
+  } else {
+    result.survives       = svRaw.slice(0, 3).toUpperCase().startsWith("YES") ? "YES" : "NO";
+    result.survivesReason = svRaw;
+  }
+  return result;
+}
+
 // Parse the strict Historical Similarity Analyst schema (POSITION/CONFIDENCE/
 // LEAN/BASE_RATES/PRECEDENT_TABLE/AGAINST/ENSEMBLE_RELIABILITY/FOR/DEVIL/EDGE/
 // SUGGESTION). The model alternates between this and free-form markdown, so
@@ -345,6 +385,111 @@ function KvBlock({ label, color, children }) {
     <div style={{ marginTop:10 }}>
       <SubLabel color={color} marginTop={0}>{label}</SubLabel>
       <div style={{ fontSize:12, color:C.text, lineHeight:1.55 }}>{children}</div>
+    </div>
+  );
+}
+
+// ── SteelmanDecisionBlock ─────────────────────────────────────
+// Renders the ARGUMENT / COUNTER / SURVIVES_STEELMAN structured output
+// from the new DeepSeek prompt schema. Shows:
+//   • Position badge + TAKE/PASS pill
+//   • Green-tinted ARGUMENT box
+//   • Red-tinted COUNTER box
+//   • Compact SURVIVES pill + one-line reason
+// Falls back to nothing when `sr.isStructured` is false (legacy bars).
+function SteelmanDecisionBlock({ signal, sr }) {
+  if (!sr || !sr.isStructured) return null;
+  const isUp      = signal === "UP";
+  const isDown    = signal === "DOWN";
+  const isNeutral = signal === "NEUTRAL";
+  const survived  = sr.survives === "YES";
+
+  // TAKE pill = directional + survives. PASS = survives but we've passed (shouldn't happen).
+  // NEUTRAL = model abstained.
+  let decisionLabel, decisionBg, decisionColor, decisionBorder;
+  if (isNeutral) {
+    decisionLabel  = "NEUTRAL";
+    decisionBg     = C.amberBg;
+    decisionColor  = C.amber;
+    decisionBorder = C.amberBorder;
+  } else if (survived) {
+    decisionLabel  = "TAKE";
+    decisionBg     = C.greenBg;
+    decisionColor  = C.green;
+    decisionBorder = C.greenBorder;
+  } else {
+    decisionLabel  = "PASS";
+    decisionBg     = C.amberBg;
+    decisionColor  = C.amber;
+    decisionBorder = C.amberBorder;
+  }
+
+  const posClr = isUp ? C.green : isDown ? C.red : C.amber;
+
+  return (
+    <div style={{ marginBottom:14 }}>
+      {/* Position + decision pill row */}
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+        <span style={{ fontSize:20, fontWeight:900, color:posClr, lineHeight:1 }}>
+          {isUp ? "▲ UP" : isDown ? "▼ DOWN" : "— NEUTRAL"}
+        </span>
+        <span style={{
+          fontSize:11, fontWeight:900, padding:"2px 10px", borderRadius:4,
+          color:decisionColor, background:decisionBg, border:`1px solid ${decisionBorder}`,
+          letterSpacing:0.8,
+        }}>{decisionLabel}</span>
+      </div>
+
+      {/* ARGUMENT box */}
+      {sr.argument && (
+        <div style={{
+          background:C.greenBg, border:`1px solid ${C.greenBorder}`,
+          borderLeft:`3px solid ${C.green}`, borderRadius:5,
+          padding:"8px 10px", marginBottom:8,
+        }}>
+          <div style={{ fontSize:9, fontWeight:800, color:C.green,
+            letterSpacing:1.2, textTransform:"uppercase", marginBottom:4 }}>
+            Why this call
+          </div>
+          <div style={{ fontSize:12, color:"#14532D", lineHeight:1.6 }}>
+            {sr.argument}
+          </div>
+        </div>
+      )}
+
+      {/* COUNTER box */}
+      {sr.counter && (
+        <div style={{
+          background:C.redBg, border:`1px solid ${C.redBorder}`,
+          borderLeft:`3px solid ${C.red}`, borderRadius:5,
+          padding:"8px 10px", marginBottom:8,
+        }}>
+          <div style={{ fontSize:9, fontWeight:800, color:C.red,
+            letterSpacing:1.2, textTransform:"uppercase", marginBottom:4 }}>
+            Strongest case against
+          </div>
+          <div style={{ fontSize:12, color:"#7F1D1D", lineHeight:1.6 }}>
+            {sr.counter}
+          </div>
+        </div>
+      )}
+
+      {/* SURVIVES_STEELMAN pill + reason */}
+      <div style={{ display:"flex", alignItems:"flex-start", gap:8, flexWrap:"wrap" }}>
+        <span style={{
+          fontSize:10, fontWeight:900, padding:"2px 8px", borderRadius:4, flexShrink:0,
+          color: survived ? C.green : C.amber,
+          background: survived ? C.greenBg : C.amberBg,
+          border:`1px solid ${survived ? C.greenBorder : C.amberBorder}`,
+        }}>
+          {survived ? "✓ SURVIVES STEELMAN" : "⚠ DOES NOT SURVIVE"}
+        </span>
+        {sr.survivesReason && (
+          <span style={{ fontSize:11, color:C.textSec, lineHeight:1.5, fontStyle:"italic" }}>
+            {sr.survivesReason}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
@@ -1817,12 +1962,25 @@ function BackendTab({ backendSnap, deepseekPred }) {
               <div style={{ fontSize:26, fontWeight:900, color:ds.signal==="UP"?C.green:ds.signal==="NEUTRAL"?C.amber:C.red }}>
                 {ds.signal==="UP"?"▲ UP":ds.signal==="NEUTRAL"?"— NEUTRAL":"▼ DOWN"}
               </div>
-              <div>
-                <div style={{ fontSize:20, fontWeight:900, color:C.text }}>{ds.confidence}%</div>
-                <div style={{ height:4, background:C.borderSoft, borderRadius:2, width:100, marginTop:2 }}>
-                  <div style={{ width:`${ds.confidence}%`, height:"100%", background:ds.signal==="UP"?C.green:ds.signal==="NEUTRAL"?C.amber:C.red, borderRadius:2 }} />
-                </div>
-              </div>
+              {(() => {
+                const _sr = parseStructuredReasoning(ds.reasoning || "");
+                const _isNeutral = ds.signal === "NEUTRAL";
+                let _lbl, _bg, _clr, _bdr;
+                if (_isNeutral) { _lbl="NEUTRAL"; _bg=C.amberBg; _clr=C.amber; _bdr=C.amberBorder; }
+                else if (_sr.isStructured) {
+                  const _ok = _sr.survives === "YES";
+                  _lbl=_ok?"TAKE":"PASS"; _bg=_ok?C.greenBg:C.amberBg; _clr=_ok?C.green:C.amber; _bdr=_ok?C.greenBorder:C.amberBorder;
+                } else { _lbl="TAKE"; _bg=C.greenBg; _clr=C.green; _bdr=C.greenBorder; }
+                return (
+                  <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                    <span style={{ fontSize:13, fontWeight:900, padding:"3px 10px", borderRadius:4,
+                      color:_clr, background:_bg, border:`1px solid ${_bdr}`, letterSpacing:0.8 }}>{_lbl}</span>
+                    {ds.confidence != null && (
+                      <span style={{ fontSize:9, color:C.muted, fontVariantNumeric:"tabular-nums" }}>{ds.confidence}%</span>
+                    )}
+                  </div>
+                );
+              })()}
               {ds.data_received && (
                 <div style={{ flex:1, minWidth:180, background:C.blueBg, border:`1px solid ${C.blueBorder}`, borderRadius:4, padding:"4px 8px" }}>
                   <div style={{ fontSize:8, color:C.blue, fontWeight:700, textTransform:"uppercase", marginBottom:1 }}>AI confirmed receiving</div>
@@ -3336,24 +3494,27 @@ function App() {
       }
     }
 
-    // REASONS — DeepSeek emits 4 lines like "MICROSTRUCTURE: ...",
-    // "FUNDING + POSITIONING: ...", "TECHNICAL: ...", "SYNTHESIS: ...".
-    // The Python parser strips leading "1. " before storing. Auto-renumber
-    // here and split each line into (label, body) when a colon is present.
+    // REASONS — DeepSeek emits either:
+    //   (new)  ARGUMENT: ... / COUNTER: ... / SURVIVES_STEELMAN: YES|NO ...
+    //   (old)  4 lines like "MICROSTRUCTURE: ...", "SYNTHESIS: ...", etc.
+    // Try new structured schema first; fall back to numbered-list if not found.
     const reasoningRaw = (ds.reasoning || "").trim();
-    const reasonItems = reasoningRaw
-      .split("\n")
-      .map(s => s.trim())
-      .filter(Boolean)
-      .map((s, i) => {
-        const stripped = s.replace(/^\d+\.\s*/, "");
-        const m = stripped.match(/^([A-Z][A-Z0-9 +/_-]{1,40}):\s*(.+)$/);
-        return {
-          num:   String(i + 1),
-          label: m ? m[1].trim() : "",
-          text:  m ? m[2].trim() : stripped,
-        };
-      });
+    const structuredReasoning = parseStructuredReasoning(reasoningRaw);
+    const reasonItems = structuredReasoning.isStructured
+      ? []   // new bars: ARGUMENT/COUNTER rendered by SteelmanDecisionBlock above
+      : reasoningRaw
+          .split("\n")
+          .map(s => s.trim())
+          .filter(Boolean)
+          .map((s, i) => {
+            const stripped = s.replace(/^\d+\.\s*/, "");
+            const m = stripped.match(/^([A-Z][A-Z0-9 +/_-]{1,40}):\s*(.+)$/);
+            return {
+              num:   String(i + 1),
+              label: m ? m[1].trim() : "",
+              text:  m ? m[2].trim() : stripped,
+            };
+          });
 
     // Binance microstructure expert — render every populated field as its
     // own labeled row. Falls back to legacy `analysis`/`reasoning` blob if
@@ -3430,6 +3591,11 @@ function App() {
               </div>
             </div>
           )}
+
+          {/* STEELMAN DECISION — new ARGUMENT/COUNTER/SURVIVES block.
+              Rendered AFTER the narrative, BEFORE Binance Microstructure.
+              SteelmanDecisionBlock returns null for legacy bars. */}
+          <SteelmanDecisionBlock signal={ds.signal} sr={structuredReasoning} />
 
           {/* BINANCE MICROSTRUCTURE — peer section.
               One KvBlock per populated field so each driver gets its own
@@ -3688,28 +3854,41 @@ function App() {
                     }
                   </>);
                 }
-                function SignalRow({ sig, conf, confStr }) {
+                function SignalRow({ sig, reasoning, conf }) {
                   const up      = sig === "UP";
                   const neutral = sig === "NEUTRAL";
                   const clr     = neutral ? C.amber : up ? C.green : C.red;
-                  // Use the real confidence number even for NEUTRAL — NEUTRAL
-                  // at 58% is a meaningful "abstain-with-some-information"
-                  // call, NOT "0%". Prior hard-coded "0%" was causing the
-                  // header to briefly flash "NEUTRAL 0%" during state
-                  // transitions, which looked like a bug to the trader.
-                  const pct     = confStr ?? (conf != null ? conf.toFixed(1)+"%" : null);
-                  const barW    = conf != null ? conf : (up ? 65 : neutral ? 50 : 35);
-                  return (<>
-                    <div style={{ display:"flex", alignItems:"baseline", gap:8 }}>
+                  // Derive TAKE/PASS/NEUTRAL from structured reasoning if present.
+                  // Fall back to a debug confidence label (small, muted) for compat.
+                  const sr = parseStructuredReasoning(reasoning || "");
+                  let decisionLabel, decisionBg, decisionColor, decisionBorder;
+                  if (neutral) {
+                    decisionLabel = "NEUTRAL"; decisionBg = C.amberBg; decisionColor = C.amber; decisionBorder = C.amberBorder;
+                  } else if (sr.isStructured) {
+                    const survived = sr.survives === "YES";
+                    decisionLabel = survived ? "TAKE" : "PASS";
+                    decisionBg    = survived ? C.greenBg : C.amberBg;
+                    decisionColor = survived ? C.green   : C.amber;
+                    decisionBorder= survived ? C.greenBorder : C.amberBorder;
+                  } else {
+                    // Legacy bar: no structured reasoning — just show TAKE if directional
+                    decisionLabel = "TAKE"; decisionBg = C.greenBg; decisionColor = C.green; decisionBorder = C.greenBorder;
+                  }
+                  return (
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                       <span style={{ fontSize:26, fontWeight:900, color:clr, lineHeight:1 }}>
                         {neutral ? "— NEUTRAL" : up ? "▲ UP" : "▼ DOWN"}
                       </span>
-                      {pct && <span style={{ fontSize:20, fontWeight:900, color:C.text }}>{pct}</span>}
+                      <span style={{
+                        fontSize:12, fontWeight:900, padding:"3px 10px", borderRadius:4,
+                        color:decisionColor, background:decisionBg, border:`1px solid ${decisionBorder}`,
+                        letterSpacing:0.8,
+                      }}>{decisionLabel}</span>
+                      {conf != null && (
+                        <span style={{ fontSize:9, color:C.muted, fontVariantNumeric:"tabular-nums" }}>{conf}%</span>
+                      )}
                     </div>
-                    <div style={{ height:3, background:C.borderSoft, borderRadius:2, margin:"3px 0" }}>
-                      <div style={{ width:`${barW}%`, height:"100%", borderRadius:2, background:clr }} />
-                    </div>
-                  </>);
+                  );
                 }
                 const colTitle = { fontSize:9, fontWeight:700, color:C.muted, letterSpacing:1.5, textTransform:"uppercase", marginBottom:6 };
                 const metaRow = { height:26, display:"flex", alignItems:"center", gap:6, flexWrap:"nowrap", overflow:"hidden" };
@@ -3756,7 +3935,7 @@ function App() {
                         text + 3px bar + 3px gap = ~38px). */}
                     <div style={{ minHeight:38, display:"flex", flexDirection:"column", justifyContent:"center" }}>
                       {dsErr ? <div style={{ fontSize:11, color:C.red }}>{activeDeepseekPred.reasoning||"API error"}</div>
-                        : c2sig ? <SignalRow sig={c2sig} conf={c2conf} />
+                        : c2sig ? <SignalRow sig={c2sig} conf={c2conf} reasoning={c2src?.reasoning} />
                         : <div style={{ fontSize:11, color:C.muted }}>Analyzing…</div>}
                     </div>
 

@@ -1,7 +1,0 @@
-# Deps only needed by bot.py (Polymarket live trading).
-# The web service on Render does not install these — keeps build lean.
-# To run the bot:  pip install -r requirements.txt -r requirements-bot.txt && python bot.py
--r requirements.txt
-py-clob-client==0.17.5
-eth-account==0.13.3
-httpx==0.27.2

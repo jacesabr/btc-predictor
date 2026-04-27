@@ -52,3 +52,5 @@ _bars_pulled.json
 
 # Audit run artifacts (large prompt files, outcomes, etc. — local-only)
 ../audit_run/
+specialists/embedding_audit/audit_log.ndjson
+specialists/embedding_audit/last_raw.txt
