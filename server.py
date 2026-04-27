@@ -818,7 +818,12 @@ async def backfill_bar_resolutions(limit: int = 500):
                 row = cur.fetchone()
                 if row:
                     p_sig, p_old_actual = row
-                    p_correct = None if (p_sig == "NEUTRAL" or new_actual is None) else (new_actual == p_sig)
+                    # predictions.correct is INTEGER (vs deepseek_predictions.correct = BOOLEAN);
+                    # cast to 1/0/NULL so psycopg2 doesn't reject the bool literal.
+                    if p_sig == "NEUTRAL" or new_actual is None:
+                        p_correct = None
+                    else:
+                        p_correct = 1 if new_actual == p_sig else 0
                     cur.execute(
                         "UPDATE predictions "
                         "SET start_price=%s, end_price=%s, actual_direction=%s, correct=%s "
