@@ -688,6 +688,43 @@ async def embed_missing(limit: int = 20):
 # Restore from git history if you ever need to rerun them.
 
 
+@app.post("/admin/prune-keep-recent", dependencies=[Depends(require_admin)])
+async def prune_keep_recent(keep: int = 100):
+    """Keep only the `keep` most recent rows in predictions / deepseek_predictions
+    / pattern_history. Older rows (with their embeddings) are deleted permanently.
+
+    One-shot cleanup used to flush a polluted corpus. Refuses if `keep` < 50.
+    """
+    from storage_pg import _conn, _put
+    if keep < 50:
+        return {"status": "error", "detail": "refusing to keep fewer than 50 rows"}
+    conn = _conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT window_start FROM deepseek_predictions ORDER BY window_start DESC LIMIT %s", (keep,))
+            rows = cur.fetchall()
+            if len(rows) < keep:
+                return {"status": "noop", "detail": f"only {len(rows)} rows present, ≤ keep={keep}; nothing to delete"}
+            cutoff = rows[-1][0]
+            cur.execute("DELETE FROM deepseek_predictions WHERE window_start < %s", (cutoff,))
+            ds_deleted = cur.rowcount
+            cur.execute("DELETE FROM predictions WHERE window_start < %s", (cutoff,))
+            p_deleted = cur.rowcount
+            cur.execute("DELETE FROM pattern_history WHERE window_start < %s", (cutoff,))
+            ph_deleted = cur.rowcount
+        conn.commit()
+        return {
+            "status": "ok",
+            "cutoff_window_start":           cutoff,
+            "deepseek_predictions_deleted":  ds_deleted,
+            "predictions_deleted":           p_deleted,
+            "pattern_history_deleted":       ph_deleted,
+            "rows_kept":                     keep,
+        }
+    finally:
+        _put(conn)
+
+
 @app.post("/admin/delete-bar-range", dependencies=[Depends(require_admin)])
 async def delete_bar_range(start_ts: float, end_ts: float):
     """One-shot deletion of bars whose window_start falls in [start_ts, end_ts].
