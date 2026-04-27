@@ -44,17 +44,37 @@ STEP 3 — VOLUME PROFILE
   • SPIKE_FADING — one or two large-volume bars followed by quieter tape
   • NORMAL — no notable volume pattern mentioned
 
-STEP 4 — TRAP PATTERNS
-  Scan the raw responses for structural features: named price levels where price rejected
-  or failed to break, single high-volume spike events that immediately reversed, FRESH_REVERSAL
-  flags, failed breakouts/breakdowns. INCLUDE a trap if EITHER:
-    (a) the pattern appears in ≥2 of the 20 bars and has a named price level, OR
-    (b) it is a SINGLE high-leverage event with a named level — e.g. a volume spike ≥5×
-        median that immediately reversed (bull trap or bear trap), or a FRESH_REVERSAL=YES
-        bar with a clear inflection level.
-  Cite the exact price level and the bar time (HH:MM) where the trap pattern formed.
-  Generic phrases ("potential reversal", "overhead resistance") do NOT qualify — must be
-  a concrete named level. If nothing qualifies, write NONE.
+STEP 4 — TRAP PATTERNS (note: the field is TRAPS_BUILDING but it covers BOTH still-forming and recently-played-out traps that define the current regime)
+
+A "trap" is any setup where price suckered participants in one direction, then reversed.
+This includes:
+  • Bear traps — a sharp sell-off / capitulation low that immediately reverses upward,
+    leaving sellers trapped
+  • Bull traps — a sharp surge / blow-off high that immediately reverses downward,
+    leaving buyers trapped
+  • Failed breakouts / breakdowns — price pierced a level, then closed back through it
+  • Stop hunts — wick into a key level, instant reversal
+  • Repeated rejections — price tested the same named level ≥2 times and failed each time
+
+INCLUDE a trap in TRAPS_BUILDING if ANY of these:
+  (a) The pattern repeats in ≥2 of the 20 bars at the same named level
+  (b) A SINGLE high-leverage event: volume spike ≥5× median that immediately reversed,
+      OR a FRESH_REVERSAL=YES bar at a named inflection level
+  (c) A recent capitulation / blow-off bar (within the 20-bar window) where the
+      anticipated follow-through never materialized — i.e. the spike marked a local
+      extreme that has since failed to extend. Cite the spike time + price + the level
+      it failed to extend below/above.
+
+CRITICAL: even if the trap event happened 30+ minutes ago, INCLUDE IT if it explains
+the current ranging / consolidation behavior. The whole point of this field is to tell
+the main predictor "the chop you're seeing right now is the aftermath of THIS specific
+event at THIS specific level." A market in post-trap consolidation is exactly the
+pattern the main predictor needs surfaced.
+
+Cite the exact price level + the bar time (HH:MM) for each trap.
+Generic phrases ("potential reversal", "overhead resistance") do NOT qualify.
+If after applying ALL of the above criteria there are genuinely no qualifying patterns,
+write NONE — but err toward identifying patterns when the narrative describes one.
 
 STEP 4b — VOLUME PROFILE PRECEDENCE
   When applying the VOLUME_PROFILE rule from STEP 3: if any bar in the 20 had a volume
