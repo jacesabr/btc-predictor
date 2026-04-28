@@ -751,38 +751,23 @@ async def _run_full_prediction(prices, is_force=False):
         dash_preds = _dashboard_signals_to_preds(dashboard_signals)
         strategy_preds.update(dash_preds)
 
-    # Step 5a — Binance expert + Trend analyst run in PARALLEL.
-    # Binance must finish before historical analyst (its conclusion feeds the
-    # retrieval query). Trend only feeds the main DeepSeek call, but joining
-    # it here keeps the control flow simple. They share no inputs:
-    # Binance reads dashboard_signals, Trend reads past resolved-bar responses.
-    # Total time = max(binance, trend) instead of sum.
+    # Step 5a — Binance expert runs BEFORE historical analyst so the historical
+    # query can include the expert's conclusion. This adds ~8s to the sequential
+    # path but gives retrieval a materially richer signal: past bars are scored
+    # against not just raw features but also the Binance expert's read.
     dash_directions: Dict = {}
     if dashboard_signals:
         try: dash_directions = extract_signal_directions(dashboard_signals)
         except: pass
 
-    binance_task = None
-    trend_task = None
-    _bx_t0 = _tr_t0 = time.time()
-
-    if deepseek and dashboard_signals:
-        binance_task = asyncio.create_task(asyncio.wait_for(
-            run_binance_expert(config.deepseek_api_key, dashboard_signals),
-            timeout=75.0,
-        ))
-
-    if deepseek:
-        past_responses = storage.get_recent_responses_for_tape(20) or []
-        trend_task = asyncio.create_task(asyncio.wait_for(
-            run_trend_analyst(config.deepseek_api_key, past_responses),
-            timeout=75.0,
-        ))
-
     binance_expert_result = None
-    if binance_task is not None:
+    if deepseek and dashboard_signals:
+        _bx_t0 = time.time()
         try:
-            binance_expert_result = await binance_task
+            binance_expert_result = await asyncio.wait_for(
+                run_binance_expert(config.deepseek_api_key, dashboard_signals),
+                timeout=75.0,
+            )
             if binance_expert_result:
                 current_state["bar_binance_expert"] = _json_safe(binance_expert_result)
                 logger.info("Binance expert done in %.1fs — feeding to historical analyst",
@@ -796,10 +781,19 @@ async def _run_full_prediction(prices, is_force=False):
             _record_stage("binance_expert", time.time() - _bx_t0, ok=False,
                           error=f"{type(bx_exc).__name__}: {bx_exc}")
 
+    # Trend analyst — synthesizes the last 20 resolved-bar responses into a
+    # regime/volatility/volume narrative. Reads only past responses, no current
+    # bar data needed. Soft-fails: if the call errors or there's <5 resolved
+    # bars in history, the main predictor just doesn't get a trend block.
     trend_analyst_result = None
-    if trend_task is not None:
+    if deepseek:
+        _tr_t0 = time.time()
         try:
-            trend_analyst_result = await trend_task
+            past_responses = storage.get_recent_responses_for_tape(20) or []
+            trend_analyst_result = await asyncio.wait_for(
+                run_trend_analyst(config.deepseek_api_key, past_responses),
+                timeout=75.0,
+            )
             if trend_analyst_result and trend_analyst_result.get("available"):
                 current_state["bar_trend_analyst"] = _json_safe(trend_analyst_result)
                 logger.info("Trend analyst done in %.1fs — regime=%s",
@@ -815,10 +809,10 @@ async def _run_full_prediction(prices, is_force=False):
                           error=f"{type(tr_exc).__name__}: {tr_exc}")
 
     # ── JOIN POINT — await the parallel unified-specialist task ─────────
-    # By now (after dashboard ~5s + max(binance, trend) ~30-60s) the specialist
-    # task has usually had ~35-65s of headstart. If it took ~70s total, we wait
-    # a few seconds here. If the join fails (timeout/error), we proceed with
-    # empty specialist_results — historical analyst tolerates that.
+    # By now (after dashboard ~5s + binance ~50s) the specialist task has
+    # usually had ~55s of headstart. If it took ~70s total, we wait ~15s
+    # here. If the join fails (timeout/error), we proceed with empty
+    # specialist_results — historical analyst tolerates that.
     if specialist_task is not None:
         try:
             spec_raw = await specialist_task
