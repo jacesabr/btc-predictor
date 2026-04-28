@@ -189,9 +189,23 @@ OPENROUTER_MODEL_FOR_DEEPSEEK = {
     "deepseek-chat":     "deepseek/deepseek-chat-v3.1",  # pure chat, no reasoning
     "deepseek-reasoner": "deepseek/deepseek-chat-v3.1",  # reasoner removed everywhere
 }
-# HTTP status codes that signal "DeepSeek itself is unavailable" — fall back to
-# Venice. 4xx codes other than 401/402/429 are NOT retried (bad request will
-# fail on Venice too with the same prompt).
+
+# ── Gemini / Gemma free-tier path (when GEMINI_API_KEY is set) ──
+# Google AI Studio's Generative Language API. Schema differs from OpenAI-
+# compatible providers (contents/parts instead of messages, generationConfig
+# instead of top-level params, ?key= URL auth instead of Bearer header).
+# Gemma 3 27B has 14.4K RPD on the free tier — chosen as the only model in
+# the user's quota that sustains 5 calls/bar × 288 bars/day = 1440 RPD with
+# headroom.
+GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
+GEMINI_MODEL_FOR_DEEPSEEK = {
+    "deepseek-chat":     "gemma-3-27b-it",
+    "deepseek-reasoner": "gemma-3-27b-it",
+}
+
+# HTTP status codes that signal "primary LLM is unavailable" — fall back to
+# the next provider in the chain. 4xx other than 401/402/429 are NOT retried
+# (bad request will fail on every provider with the same prompt).
 _DEEPSEEK_FALLBACK_STATUS = {401, 402, 429, 500, 502, 503, 504}
 
 COHERE_EMBED_URL  = "https://api.cohere.com/v2/embed"
@@ -286,6 +300,51 @@ async def _post_chat(url: str, api_key: str, model: str, prompt: str,
             return content
 
 
+async def _post_gemini(api_key: str, model: str, prompt: str,
+                       max_tokens: int, timeout_s: Optional[float]) -> str:
+    """One POST to Google's Generative Language API generateContent endpoint.
+    Returns the model's text. Raises RuntimeError("HTTP <status>: ...") on
+    non-200 — caller decides whether to retry/fallback.
+
+    Differs from _post_chat: contents/parts schema, ?key= URL auth (no Bearer),
+    generationConfig wrapper, finishReason instead of finish_reason."""
+    url = f"{GEMINI_API_BASE_URL}/{model}:generateContent?key={api_key}"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "maxOutputTokens": max_tokens,
+            "temperature":     0.1,
+        },
+    }
+    timeout   = aiohttp.ClientTimeout(total=timeout_s)
+    connector = aiohttp.TCPConnector(resolver=aiohttp.ThreadedResolver())
+    async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+        async with session.post(url, headers=headers, json=payload) as resp:
+            body = await resp.text()
+            if resp.status != 200:
+                raise RuntimeError(f"HTTP {resp.status}: {body[:300]}")
+            data = await resp.json(content_type=None)
+            cands = data.get("candidates") or []
+            if not cands:
+                logger.warning("_post_gemini: no candidates (model=%s body=%s)",
+                               model, body[:200])
+                return ""
+            cand = cands[0]
+            finish = cand.get("finishReason")
+            if finish == "MAX_TOKENS":
+                logger.warning("_post_gemini: response truncated at MAX_TOKENS (max_tokens=%d)", max_tokens)
+            elif finish in {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT"}:
+                logger.warning("_post_gemini: response blocked (finish=%s model=%s)", finish, model)
+                return ""
+            parts = (cand.get("content") or {}).get("parts") or []
+            text = "".join(p.get("text", "") for p in parts if isinstance(p, dict))
+            if not text:
+                logger.warning("_post_gemini: empty content (model=%s finish=%s body=%s)",
+                               model, finish, json.dumps(cand)[:200])
+            return text
+
+
 def _is_deepseek_fallback_error(exc: BaseException) -> bool:
     """True if the exception indicates DeepSeek is unavailable (credits, rate
     limit, server error) — falling back to Venice may succeed. False for prompt
@@ -311,16 +370,30 @@ async def _api_call(
     timeout_s: Optional[float] = 90.0,
     model: str = DEEPSEEK_FAST_MODEL,
 ) -> Tuple[str, str]:
-    """Primary chat-completions call. Routes through OpenRouter (deepseek/
-    deepseek-chat-v3.1) when OPENROUTER_API_KEY is set; otherwise falls back
-    to DeepSeek direct using the legacy `api_key` argument. On any
-    credit/rate-limit/server error, retries once via Venice.
+    """Primary chat-completions call. Provider chain (first set wins, falls
+    through to next on 401/402/429/5xx/timeout):
+      1. Gemini (gemma-3-27b-it) when GEMINI_API_KEY is set — free-tier path.
+      2. OpenRouter (deepseek/deepseek-chat-v3.1) when OPENROUTER_API_KEY is set.
+      3. DeepSeek direct using the legacy `api_key` argument.
+      4. Venice (deepseek-v4-flash) when VENICE_API_KEY is set.
 
     Returns (response_text, model_id_actually_used). The model_id is provider-
-    prefixed (e.g. "openrouter/deepseek/deepseek-chat-v3.1", "deepseek/deepseek-chat",
-    "venice/deepseek-v4-flash") so callers can persist it alongside the prediction
-    and disambiguate which model produced which row at backtest time.
+    prefixed (e.g. "gemini/gemma-3-27b-it", "openrouter/deepseek/deepseek-chat-v3.1",
+    "deepseek/deepseek-chat", "venice/deepseek-v4-flash") so callers can persist
+    it alongside the prediction and disambiguate which model produced which row
+    at backtest time.
     """
+    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if gemini_key:
+        gem_model = GEMINI_MODEL_FOR_DEEPSEEK.get(model, "gemma-3-27b-it")
+        try:
+            text = await _post_gemini(gemini_key, gem_model, prompt, max_tokens, timeout_s)
+            return text, f"gemini/{gem_model}"
+        except Exception as exc:
+            if not _is_deepseek_fallback_error(exc):
+                raise
+            logger.warning("Gemini unavailable (%s) — falling back", _fmt_exc(exc))
+
     or_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
     if or_key:
         primary_url   = OPENROUTER_API_URL
