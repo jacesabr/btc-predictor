@@ -1,0 +1,40 @@
+# Render Blueprint — provisions Postgres + the web service in one shot.
+#
+# Local dev: copy the pip line in buildCommand verbatim into your terminal,
+# or run `pip install $(grep -oP '(?<=pip install )[^#]+' infra/render.yaml)`.
+# Deps are pinned to exact versions so Render can use cached wheels (fast builds)
+# and so a fresh local install matches prod byte-for-byte.
+
+databases:
+  - name: btc-predictor-pg
+    plan: starter             # free tier expires after 90 days — starter is persistent
+    postgresMajorVersion: "17"   # Render's current max; pgvector ships with the image
+
+services:
+  - type: web
+    name: btc-predictor
+    runtime: python
+    plan: starter             # free tier sleeps; the 5-min bar loop needs 24/7 uptime
+    region: oregon            # match the DB region to avoid cross-region latency
+    buildCommand: pip install numpy==1.26.4 psycopg2-binary==2.9.9 pgvector==0.3.5 fastapi==0.115.0 uvicorn[standard]==0.30.6 aiohttp==3.10.10 pydantic==2.9.2 websockets==13.1 python-dotenv==1.0.1
+    startCommand: uvicorn btc_predictor:app --host 0.0.0.0 --port $PORT --loop asyncio
+    healthCheckPath: /price
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: btc-predictor-pg
+          property: connectionString
+      - key: PYTHON_VERSION
+        value: "3.11"
+      # Secrets — set these in the Render dashboard, not committed.
+      # Locally they live in .env at the repo root.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: COHERE_API_KEY
+        sync: false
+      - key: COINALYZE_KEY
+        sync: false
+      - key: COINGLASS_KEY
+        sync: false
